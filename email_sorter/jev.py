@@ -91,6 +91,20 @@ def parse_response(data: dict, categories: dict[str, str]) -> Decision:
     return Decision(choice, confidence, probabilities, needs_action, cost)
 
 
+MAX_BACKOFF_SECONDS = 60
+
+
+def _retry_delay(response, attempt: int) -> float:
+    """Honor Retry-After (seconds) if the gateway sends it, else exponential backoff."""
+    header = response.headers.get("Retry-After") if response is not None else None
+    if header:
+        try:
+            return min(max(float(header), 1.0), MAX_BACKOFF_SECONDS)
+        except ValueError:
+            pass  # HTTP-date form; fall back to backoff
+    return min(2**attempt, MAX_BACKOFF_SECONDS)
+
+
 class JevClient:
     def __init__(
         self,
@@ -98,13 +112,16 @@ class JevClient:
         endpoint: str,
         model: str,
         timeout: float = 20,
-        retries: int = 3,
+        retries: int = 6,
+        min_interval: float = 0.0,
         session: requests.Session | None = None,
     ):
         self.endpoint = endpoint
         self.model = model
         self.timeout = timeout
         self.retries = retries
+        self.min_interval = min_interval
+        self._last_request = 0.0
         self.session = session or requests.Session()
         self.session.headers.update(
             {
@@ -117,6 +134,8 @@ class JevClient:
         payload = build_request(self.model, state, categories)
         last_error = ""
         for attempt in range(1, self.retries + 1):
+            self._pace()
+            r = None
             try:
                 r = self.session.post(self.endpoint, json=payload, timeout=self.timeout)
             except requests.RequestException as e:
@@ -130,7 +149,14 @@ class JevClient:
                     raise JevError(f"HTTP {r.status_code}: {r.text[:300]}")
                 last_error = f"HTTP {r.status_code}"
             if attempt < self.retries:
-                delay = 2**attempt
-                log.info("Jev request failed (%s), retrying in %ss", last_error, delay)
+                delay = _retry_delay(r, attempt)
+                log.info("Jev request failed (%s), retrying in %.0fs", last_error, delay)
                 time.sleep(delay)
         raise JevError(f"giving up after {self.retries} attempts: {last_error}")
+
+    def _pace(self) -> None:
+        """Keep at least min_interval seconds between requests (gateway rate limits)."""
+        wait = self._last_request + self.min_interval - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        self._last_request = time.monotonic()

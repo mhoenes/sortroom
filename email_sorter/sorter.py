@@ -7,6 +7,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Callable
 
 from imap_tools import AND, MailBox, MailMessageFlags
 
@@ -60,7 +61,14 @@ def _ensure_folder(mb: MailBox, name: str) -> None:
         mb.folder.subscribe(name, True)
 
 
-def classify_new(mb: MailBox, cfg: Config, jev: JevClient, store: Store, limit: int) -> tuple[list[Outcome], int]:
+def classify_new(
+    mb: MailBox,
+    cfg: Config,
+    jev: JevClient,
+    store: Store,
+    limit: int,
+    on_outcome: Callable[[Outcome], None] | None = None,
+) -> tuple[list[Outcome], int]:
     since = date.today() - timedelta(days=cfg.lookback_days)
     pending: dict[str, str] = {}  # uid -> message key
     for head in mb.fetch(AND(date_gte=since), mark_seen=False, headers_only=True, bulk=True):
@@ -85,19 +93,20 @@ def classify_new(mb: MailBox, cfg: Config, jev: JevClient, store: Store, limit: 
             log.warning("could not classify %r: %s", msg.subject, e)
             continue
         folder, flag, note = plan(decision, cfg)
-        outcomes.append(
-            Outcome(
-                key=pending[msg.uid],
-                uid=msg.uid,
-                received=msg.date.isoformat(timespec="minutes") if msg.date else msg.date_str,
-                sender=msg.from_,
-                subject=msg.subject,
-                decision=decision,
-                folder=folder,
-                flag=flag,
-                note=note,
-            )
+        outcome = Outcome(
+            key=pending[msg.uid],
+            uid=msg.uid,
+            received=msg.date.isoformat(timespec="minutes") if msg.date else msg.date_str,
+            sender=msg.from_,
+            subject=msg.subject,
+            decision=decision,
+            folder=folder,
+            flag=flag,
+            note=note,
         )
+        outcomes.append(outcome)
+        if on_outcome:
+            on_outcome(outcome)
         log.debug("%.2f %-18s %s", decision.confidence, decision.category, msg.subject)
     return outcomes, errors
 
@@ -138,23 +147,36 @@ def apply(mb: MailBox, outcomes: list[Outcome], store: Store) -> int:
     return failures
 
 
-def write_report(outcomes: list[Outcome], reports_dir: Path) -> Path:
-    reports_dir.mkdir(parents=True, exist_ok=True)
-    path = reports_dir / f"dry-run-{datetime.now():%Y%m%d-%H%M%S}.csv"
-    # utf-8-sig + ";" so German Excel opens it correctly with a double click
-    with open(path, "w", newline="", encoding="utf-8-sig") as f:
-        w = csv.writer(f, delimiter=";")
-        w.writerow(["received", "from", "subject", "category", "confidence", "runner_up",
-                    "needs_action", "would_move_to", "would_flag", "note"])
-        for o in outcomes:
-            d = o.decision
-            ru = d.runner_up
-            w.writerow([
-                o.received, o.sender, o.subject, d.category, f"{d.confidence:.2f}",
-                f"{ru[0]} ({ru[1]:.2f})" if ru else "", f"{d.needs_action:.2f}",
-                o.folder or "(inbox)", "yes" if o.flag else "", o.note,
-            ])
-    return path
+class ReportWriter:
+    """Dry-run CSV, written row by row so an interrupted run still leaves a report."""
+
+    HEADER = ["received", "from", "subject", "category", "confidence", "runner_up",
+              "needs_action", "would_move_to", "would_flag", "note"]
+
+    def __init__(self, reports_dir: Path):
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        self.path = reports_dir / f"dry-run-{datetime.now():%Y%m%d-%H%M%S}.csv"
+        self.rows = 0
+        # utf-8-sig + ";" so German Excel opens it correctly with a double click
+        self._file = open(self.path, "w", newline="", encoding="utf-8-sig")
+        self._csv = csv.writer(self._file, delimiter=";")
+        self._csv.writerow(self.HEADER)
+
+    def write(self, o: Outcome) -> None:
+        d = o.decision
+        ru = d.runner_up
+        self._csv.writerow([
+            o.received, o.sender, o.subject, d.category, f"{d.confidence:.2f}",
+            f"{ru[0]} ({ru[1]:.2f})" if ru else "", f"{d.needs_action:.2f}",
+            o.folder or "(inbox)", "yes" if o.flag else "", o.note,
+        ])
+        self._file.flush()
+        self.rows += 1
+
+    def close(self) -> None:
+        self._file.close()
+        if self.rows == 0:
+            self.path.unlink(missing_ok=True)
 
 
 def summarize(outcomes: list[Outcome], live: bool) -> None:
@@ -173,14 +195,16 @@ def summarize(outcomes: list[Outcome], live: bool) -> None:
 def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int | None) -> int:
     """Returns a process exit code."""
     store = Store(base_dir / "data" / "state.db")
-    jev = JevClient(creds.jev_api_key, cfg.jev_endpoint, cfg.jev_model, cfg.timeout_seconds)
+    jev = cfg.jev_client(creds.jev_api_key)
     limit = min(limit or cfg.max_per_run, cfg.max_per_run)
+    report = None if live else ReportWriter(base_dir / "reports")
     try:
         with MailBox(cfg.imap_host, cfg.imap_port).login(
             creds.imap_user, creds.imap_password, initial_folder=cfg.source_folder
         ) as mb:
             try:
-                outcomes, errors = classify_new(mb, cfg, jev, store, limit)
+                outcomes, errors = classify_new(mb, cfg, jev, store, limit,
+                                                on_outcome=report.write if report else None)
             except JevAuthError as e:
                 log.error("%s - check %s in .env and your gateway credits", e, cfg.jev_api_key_env)
                 return 2
@@ -188,8 +212,10 @@ def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int 
             if live:
                 failures = apply(mb, outcomes, store)
             elif outcomes:
-                log.info("dry run - nothing changed. Report: %s", write_report(outcomes, base_dir / "reports"))
+                log.info("dry run - nothing changed. Report: %s", report.path)
             summarize(outcomes, live)
     finally:
         store.close()
+        if report:
+            report.close()
     return 1 if (errors or failures) else 0

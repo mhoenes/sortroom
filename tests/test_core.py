@@ -87,8 +87,9 @@ def test_parse_response_rejects_garbage():
 
 
 class FakeResponse:
-    def __init__(self, status, body=None):
+    def __init__(self, status, body=None, headers=None):
         self.status_code, self._body, self.text = status, body, str(body)
+        self.headers = headers or {}
 
     def json(self):
         return self._body
@@ -111,6 +112,37 @@ def test_client_retries_on_rate_limit(monkeypatch):
     client = JevClient("key", "https://example", "m", session=session)
     assert client.decide({}, CFG.descriptions).category == "finanzen"
     assert session.calls == 2
+
+
+def test_client_honors_retry_after(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(jev_mod.time, "sleep", sleeps.append)
+    session = FakeSession([FakeResponse(429, headers={"Retry-After": "7"}), FakeResponse(200, SAMPLE_RESPONSE)])
+    JevClient("key", "https://example", "m", session=session).decide({}, CFG.descriptions)
+    assert sleeps == [7.0]
+
+
+def test_client_backoff_is_capped(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(jev_mod.time, "sleep", sleeps.append)
+    session = FakeSession([FakeResponse(429)] * 8)
+    client = JevClient("key", "https://example", "m", retries=8, session=session)
+    with pytest.raises(JevError, match="giving up after 8"):
+        client.decide({}, CFG.descriptions)
+    assert sleeps == [2, 4, 8, 16, 32, 60, 60]
+
+
+def test_client_paces_requests(monkeypatch):
+    clock = [100.0]
+    sleeps = []
+    monkeypatch.setattr(jev_mod.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(jev_mod.time, "sleep", lambda s: (sleeps.append(s), clock.__setitem__(0, clock[0] + s)))
+    session = FakeSession([FakeResponse(200, SAMPLE_RESPONSE)] * 2)
+    client = JevClient("key", "https://example", "m", min_interval=2.0, session=session)
+    client.decide({}, CFG.descriptions)
+    clock[0] += 0.5  # next mail comes 0.5s later
+    client.decide({}, CFG.descriptions)
+    assert sleeps == [pytest.approx(1.5)]
 
 
 def test_client_does_not_retry_auth_errors():

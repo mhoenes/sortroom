@@ -17,6 +17,7 @@ api_key_env = "AI_GATEWAY_API_KEY"   # name of the .env variable holding the key
 # api_key_env = "OPENROUTER_API_KEY"
 max_body_chars = 3000     # body text sent to Jev is cut to this length
 timeout_seconds = 20
+min_interval_seconds = 2.0  # pause between requests; Vercel returns 429 when calls come back to back
 
 [rules]
 min_confidence = 0.70         # below this, mail stays in the inbox untouched

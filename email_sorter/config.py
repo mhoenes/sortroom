@@ -31,6 +31,7 @@ class Config:
     jev_api_key_env: str
     max_body_chars: int
     timeout_seconds: float
+    min_interval_seconds: float
     min_confidence: float
     action_flag_threshold: float
     lookback_days: int
@@ -40,6 +41,12 @@ class Config:
     @property
     def descriptions(self) -> dict[str, str]:
         return {key: cat.description for key, cat in self.categories.items()}
+
+    def jev_client(self, api_key: str):
+        from .jev import JevClient
+
+        return JevClient(api_key, self.jev_endpoint, self.jev_model,
+                         timeout=self.timeout_seconds, min_interval=self.min_interval_seconds)
 
 
 @dataclass(frozen=True)
@@ -81,6 +88,7 @@ def load_config(path: Path) -> Config:
             jev_api_key_env=jev.get("api_key_env", "AI_GATEWAY_API_KEY"),
             max_body_chars=int(jev.get("max_body_chars", 3000)),
             timeout_seconds=float(jev.get("timeout_seconds", 20)),
+            min_interval_seconds=float(jev.get("min_interval_seconds", 0.0)),
             min_confidence=float(rules["min_confidence"]),
             action_flag_threshold=float(rules["action_flag_threshold"]),
             lookback_days=int(rules["lookback_days"]),

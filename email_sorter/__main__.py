@@ -36,11 +36,43 @@ def setup_logging(verbose: bool) -> None:
     logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 
+def _pid_alive(pid: int) -> bool:
+    if os.name == "nt":  # os.kill(pid, 0) would terminate the process on Windows
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return False
+        code = ctypes.c_ulong()
+        kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
+        kernel32.CloseHandle(handle)
+        return code.value == 259  # STILL_ACTIVE
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _lock_is_stale(lock_path: Path) -> bool:
+    """Stale if the owning process is gone (killed run) or the lock is very old."""
+    if time.time() - lock_path.stat().st_mtime > STALE_LOCK_SECONDS:
+        return True
+    try:
+        return not _pid_alive(int(lock_path.read_text().strip()))
+    except (OSError, ValueError):
+        return False
+
+
 @contextmanager
 def single_instance(lock_path: Path):
     """Skip this run if another one is still going (scheduled runs can overlap)."""
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    if lock_path.exists() and time.time() - lock_path.stat().st_mtime > STALE_LOCK_SECONDS:
+    if lock_path.exists() and _lock_is_stale(lock_path):
+        log.info("removing stale lock from an interrupted run")
         lock_path.unlink(missing_ok=True)
     try:
         fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)

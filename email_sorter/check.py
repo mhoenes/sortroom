@@ -4,7 +4,7 @@ from __future__ import annotations
 from imap_tools import MailBox
 
 from .config import Config, Credentials
-from .jev import JevClient, JevError
+from .jev import JevError
 from .sorter import _delimiter, server_folder
 
 SAMPLE_STATE = {
@@ -42,7 +42,7 @@ def check(cfg: Config, creds: Credentials) -> int:
 
     print(f"\nJev   {cfg.jev_model} via {cfg.jev_endpoint}")
     try:
-        jev = JevClient(creds.jev_api_key, cfg.jev_endpoint, cfg.jev_model, cfg.timeout_seconds)
+        jev = cfg.jev_client(creds.jev_api_key)
         d = jev.decide(SAMPLE_STATE, cfg.descriptions)
         print(f"  OK - sample electricity bill -> {d.category} (confidence {d.confidence:.2f}, "
               f"needs_action {d.needs_action:.2f}, cost ${d.cost:.6f})")
