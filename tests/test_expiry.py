@@ -184,3 +184,20 @@ def test_tag_expired_sets_keyword_and_marks_missing(tmp_path):
     assert mb.folder.selected == ["INBOX.Newsletter", "INBOX"]
     assert store.due_expired(date(2026, 9, 25)) == []  # tagged + gone are both settled
     store.close()
+
+
+def test_tag_expired_splits_long_uid_lists(tmp_path, monkeypatch):
+    from email_sorter import sorter
+    from email_sorter.config import load_config
+    from pathlib import Path
+
+    monkeypatch.setattr(sorter, "UID_CHUNK", 2)
+    cfg = load_config(Path(__file__).resolve().parent.parent / "config.toml")
+    store = Store(tmp_path / "s.db")
+    for i in range(5):
+        store.record(_outcome(f"<k{i}@x>", expires=date(2026, 9, 1)))
+    mb = _FakeMailBox([_Head(str(10 + i), f"<k{i}@x>") for i in range(5)])
+    assert sorter.tag_expired(mb, cfg, store, today=date(2026, 9, 25)) == 5
+    assert [len(u) for u, _, _ in mb.flags] == [2, 2, 1]
+    assert [len(u) for u, _ in mb.moves] == [2, 2, 1]
+    store.close()

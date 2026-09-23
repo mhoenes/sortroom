@@ -20,6 +20,13 @@ from .store import GONE, TAGGED, Store
 log = logging.getLogger(__name__)
 
 MAX_EXPIRY_AGE_DAYS = 200  # tracked offers expire within ~180 days of arrival
+UID_CHUNK = 250  # Strato rejects IMAP command lines over ~20 KB: at most this many UIDs per command
+
+
+def _chunks(items: list[str], size: int | None = None):
+    size = size or UID_CHUNK
+    for i in range(0, len(items), size):
+        yield items[i:i + size]
 
 
 @dataclass
@@ -87,7 +94,7 @@ def classify_new(
     """Classify unprocessed mail received in [since, before). Returns (outcomes, failed keys)."""
     criteria = AND(date_gte=since, date_lt=before) if before else AND(date_gte=since)
     pending: dict[str, str] = {}  # uid -> message key
-    for head in mb.fetch(criteria, mark_seen=False, headers_only=True, bulk=True):
+    for head in mb.fetch(criteria, mark_seen=False, headers_only=True, bulk=UID_CHUNK):
         key = message_key(head)
         if not store.is_processed(key) and not (exclude and key in exclude):
             pending[head.uid] = key
@@ -101,7 +108,7 @@ def classify_new(
     outcomes: list[Outcome] = []
     failed: list[str] = []
     descriptions = cfg.descriptions
-    for msg in mb.fetch(AND(uid=uids), mark_seen=False, bulk=True):
+    for msg in mb.fetch(AND(uid=uids), mark_seen=False, bulk=UID_CHUNK):
         if msg.uid not in pending:
             continue  # unsolicited FETCH (e.g. another client changed flags meanwhile)
         try:
@@ -140,7 +147,8 @@ def apply(mb: MailBox, outcomes: list[Outcome], store: Store) -> int:
     to_flag = [o.uid for o in outcomes if o.flag]
     if to_flag:
         try:
-            mb.flag(to_flag, MailMessageFlags.FLAGGED, True)
+            for chunk in _chunks(to_flag):
+                mb.flag(chunk, MailMessageFlags.FLAGGED, True)
         except Exception as e:  # imap_tools raises various MailboxError subclasses
             log.error("flagging failed: %s", e)
             for o in outcomes:
@@ -155,7 +163,8 @@ def apply(mb: MailBox, outcomes: list[Outcome], store: Store) -> int:
     for folder, group in by_folder.items():
         try:
             _ensure_folder(mb, folder)
-            mb.move([o.uid for o in group], folder)
+            for chunk in _chunks([o.uid for o in group]):
+                mb.move(chunk, folder)
             log.info("moved %d mail(s) to %s", len(group), folder)
         except Exception as e:
             log.error("moving to %s failed, will retry next run: %s", folder, e)
@@ -217,7 +226,7 @@ def _find_uids(mb: MailBox, folder: str, wanted: dict[str, str | None], fallback
     mb.folder.set(folder)
     found = {}
     since = _since(wanted.values(), fallback_days)
-    for head in mb.fetch(AND(date_gte=since), mark_seen=False, headers_only=True, bulk=True):
+    for head in mb.fetch(AND(date_gte=since), mark_seen=False, headers_only=True, bulk=UID_CHUNK):
         key = message_key(head)
         if key in wanted:
             found[key] = head.uid
@@ -248,10 +257,12 @@ def tag_expired(mb: MailBox, cfg: Config, store: Store, today: date | None = Non
             try:
                 uids = _find_uids(mb, folder, wanted, fallback_days=MAX_EXPIRY_AGE_DAYS)
                 if uids:
-                    mb.flag(list(uids.values()), cfg.expired_keyword, True)
                     if target and target != folder:
                         _ensure_folder(mb, target)
-                        mb.move(list(uids.values()), target)
+                    for chunk in _chunks(list(uids.values())):
+                        mb.flag(chunk, cfg.expired_keyword, True)
+                        if target and target != folder:
+                            mb.move(chunk, target)
                 store.mark_tagged(uids, TAGGED)
                 store.mark_tagged(set(wanted) - set(uids), GONE)  # deleted or moved away by the user
                 tagged += len(uids)
@@ -280,7 +291,9 @@ def recheck_expiry(mb: MailBox, cfg: Config, jev: JevClient, store: Store) -> in
             key_by_uid = {uid: key for key, uid in uids.items()}
             if not key_by_uid:
                 continue
-            for msg in mb.fetch(AND(uid=list(key_by_uid)), mark_seen=False, bulk=True):
+            messages = (msg for chunk in _chunks(list(key_by_uid))
+                        for msg in mb.fetch(AND(uid=chunk), mark_seen=False, bulk=UID_CHUNK))
+            for msg in messages:
                 if msg.uid not in key_by_uid:
                     continue  # unsolicited FETCH from the server
                 try:
