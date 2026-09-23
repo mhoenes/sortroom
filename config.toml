@@ -17,7 +17,8 @@ api_key_env = "OPENROUTER_API_KEY"   # name of the .env variable holding the key
 # api_key_env = "AI_GATEWAY_API_KEY"
 max_body_chars = 3000     # body text sent to Jev is cut to this length
 timeout_seconds = 20
-min_interval_seconds = 2.0  # pause between requests; Vercel rate-limits per minute, shorter gaps
+min_interval_seconds = 0    # pause between requests; OpenRouter needs none.
+                            # For Vercel use 2.0: it rate-limits per minute, shorter gaps
                             # trigger 40-60 s forced waits and end up slower
 
 [rules]
