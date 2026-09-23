@@ -40,6 +40,23 @@ Options: `--limit N` (classify at most N mails), `-v` (log every decision),
 Dry runs don't record anything, so each one re-classifies the same mails
 (a fraction of a cent) – that's intended, so you can compare after tweaking.
 
+## Sorting older mail (manual backfill)
+
+Normal and scheduled runs only look at the last `lookback_days`. Older mail is
+sorted only when you start it yourself – the scheduled task never passes
+`--since`:
+
+```powershell
+.venv\Scripts\python -m email_sorter --since 2026-01-01 --limit 100   # dry run, report only
+.venv\Scripts\python -m email_sorter --since 2026-01-01 --live        # sort for real
+```
+
+It works month by month, newest first, in batches of `max_per_run`. Live
+batches are applied immediately, so you can stop it (Ctrl+C) and start it
+again later – it continues where it left off. While it runs, scheduled runs
+are skipped (shared lock). Old offers whose deadline has passed go straight
+to `Newsletter/Abgelaufen`.
+
 ## How it decides
 
 1. Looks at mails in `INBOX` from the last `lookback_days` (default 7) that

@@ -1,4 +1,4 @@
-"""Command line entry point: python -m email_sorter [--live] [--limit N] [--check] [--recheck-expiry]"""
+"""Command line entry point: python -m email_sorter [--live] [--limit N] [--since DATE] [--check] [--recheck-expiry]"""
 from __future__ import annotations
 
 import argparse
@@ -7,6 +7,7 @@ import os
 import sys
 import time
 from contextlib import contextmanager
+from datetime import date
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -58,13 +59,12 @@ def _pid_alive(pid: int) -> bool:
 
 
 def _lock_is_stale(lock_path: Path) -> bool:
-    """Stale if the owning process is gone (killed run) or the lock is very old."""
-    if time.time() - lock_path.stat().st_mtime > STALE_LOCK_SECONDS:
-        return True
+    """Stale if the owning process is gone (killed run). A long backfill can run for
+    hours, so age only decides when the lock holds no readable PID."""
     try:
         return not _pid_alive(int(lock_path.read_text().strip()))
     except (OSError, ValueError):
-        return False
+        return time.time() - lock_path.stat().st_mtime > STALE_LOCK_SECONDS
 
 
 @contextmanager
@@ -87,11 +87,24 @@ def single_instance(lock_path: Path):
         lock_path.unlink(missing_ok=True)
 
 
+def _past_date(value: str) -> date:
+    try:
+        d = date.fromisoformat(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected YYYY-MM-DD, got {value!r}") from None
+    if d > date.today():
+        raise argparse.ArgumentTypeError("date must not be in the future")
+    return d
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="email_sorter", description=__doc__)
     parser.add_argument("--live", action="store_true",
                         help="actually move/flag mails (default is a dry run that only writes a CSV report)")
     parser.add_argument("--limit", type=int, help="classify at most N mails this run")
+    parser.add_argument("--since", type=_past_date, metavar="YYYY-MM-DD",
+                        help="manual backfill: sort all unprocessed mail received since this date "
+                             "(month by month, newest first; the scheduled task never does this)")
     parser.add_argument("--check", action="store_true",
                         help="test IMAP login and the Jev connection, list folders, change nothing")
     parser.add_argument("--recheck-expiry", action="store_true",
@@ -113,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
         from .check import check
         return check(cfg, creds)
 
-    from .sorter import run, run_recheck_expiry
+    from .sorter import run, run_backfill, run_recheck_expiry
 
     with single_instance(BASE_DIR / "data" / "run.lock") as acquired:
         if not acquired:
@@ -123,6 +136,9 @@ def main(argv: list[str] | None = None) -> int:
         try:
             if args.recheck_expiry:
                 return run_recheck_expiry(cfg, creds, BASE_DIR, live=args.live)
+            if args.since:
+                log.info("backfill since %s%s", args.since, f", at most {args.limit} mails" if args.limit else "")
+                return run_backfill(cfg, creds, BASE_DIR, live=args.live, since=args.since, limit=args.limit)
             return run(cfg, creds, BASE_DIR, live=args.live, limit=args.limit)
         except Exception:
             log.exception("run failed")
