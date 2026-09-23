@@ -37,7 +37,8 @@ def plan(decision: Decision, cfg: Config) -> tuple[str | None, bool, str]:
     category = cfg.categories[decision.category]
     confident = decision.confidence >= cfg.min_confidence
     folder = category.folder if confident else None
-    flag = (category.flag and confident) or decision.needs_action >= cfg.action_flag_threshold
+    needs_action = category.flag_on_action and decision.needs_action >= cfg.action_flag_threshold
+    flag = (category.flag and confident) or needs_action
     note = "" if confident else f"low confidence (< {cfg.min_confidence:.2f}), stays in inbox"
     return folder, flag, note
 

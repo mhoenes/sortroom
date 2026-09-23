@@ -17,7 +17,8 @@ api_key_env = "AI_GATEWAY_API_KEY"   # name of the .env variable holding the key
 # api_key_env = "OPENROUTER_API_KEY"
 max_body_chars = 3000     # body text sent to Jev is cut to this length
 timeout_seconds = 20
-min_interval_seconds = 2.0  # pause between requests; Vercel returns 429 when calls come back to back
+min_interval_seconds = 2.0  # pause between requests; Vercel rate-limits per minute, shorter gaps
+                            # trigger 40-60 s forced waits and end up slower
 
 [rules]
 min_confidence = 0.70         # below this, mail stays in the inbox untouched
@@ -31,6 +32,8 @@ max_per_run = 200             # safety cap on mails classified per run
 #   folder       target folder ("/" is translated to the server's separator);
 #                omit to leave the mail in the inbox
 #   flag         true = always flag mails of this category
+#   flag_on_action  false = never flag because of "needs action" (default true);
+#                   for advertising ("voucher expires!") and anything suspicious
 # Order does not matter. Keys must be unique, lowercase, no spaces.
 # ---------------------------------------------------------------------------
 
@@ -53,18 +56,25 @@ folder = "INBOX/Verträge"
 [categories.newsletter]
 description = "Newsletters, marketing, advertising, promotions, discount offers, product announcements, mailing lists"
 folder = "INBOX/Newsletter"
+flag_on_action = false
 
 [categories.benachrichtigungen]
 description = "Automated notifications from apps, social networks, forums and online services (likes, comments, activity digests, status updates)"
 folder = "INBOX/Benachrichtigungen"
+flag_on_action = false
 
 [categories.persoenlich]
 description = "Personal mail written by a real person to the recipient: friends, family, acquaintances, private conversations"
 # no folder: stays in the inbox
 
 [categories.sicherheit]
-description = "Account security: password resets, login alerts, new device sign-ins, two-factor and verification codes, account changes"
+description = "Genuine account security mail sent from the service's own official domain: password resets you requested, login alerts, new device sign-ins, two-factor and verification codes, account changes"
 flag = true
+
+[categories.verdacht]
+description = "Phishing, scams and fraud: fake account warnings, suspended or locked account claims, urgent requests to log in, verify or pay, sender domain that does not belong to the brand it names, misspelled brand names (e.g. AppIe, PayPaI), unexpected prizes, inheritances, crypto or investment offers"
+folder = "INBOX/Verdacht"
+flag_on_action = false   # never star suspicious mail
 
 [categories.sonstiges]
 description = "Anything that clearly fits none of the other categories"

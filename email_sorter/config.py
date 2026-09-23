@@ -19,6 +19,7 @@ class Category:
     description: str
     folder: str | None
     flag: bool
+    flag_on_action: bool
 
 
 @dataclass(frozen=True)
@@ -78,6 +79,7 @@ def load_config(path: Path) -> Config:
                 description=c["description"].strip(),
                 folder=c.get("folder") or None,
                 flag=bool(c.get("flag", False)),
+                flag_on_action=bool(c.get("flag_on_action", True)),
             )
         cfg = Config(
             imap_host=imap["host"],

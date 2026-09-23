@@ -169,6 +169,16 @@ def test_plan_flags_mail_needing_action_even_if_unsure():
     assert folder is None and flag
 
 
+def test_plan_does_not_flag_advertising_needing_action():
+    assert plan(decision("newsletter", 1.0, needs_action=0.95), CFG) == ("INBOX/Newsletter", False, "")
+
+
+def test_plan_never_flags_suspicious_mail():
+    assert plan(decision("verdacht", 0.95, needs_action=0.97), CFG) == ("INBOX/Verdacht", False, "")
+    folder, flag, _ = plan(decision("verdacht", 0.5, needs_action=0.97), CFG)
+    assert folder is None and not flag
+
+
 def test_plan_flags_security_category_and_keeps_it():
     assert plan(decision("sicherheit", 0.9), CFG) == (None, True, "")
 
