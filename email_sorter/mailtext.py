@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import html
 import re
+from datetime import date
 
 from imap_tools import MailMessage
 
@@ -35,15 +36,31 @@ def clean_body(text: str, max_chars: int) -> str:
     return body[:max_chars]
 
 
+FULL_TEXT_CHARS = 20_000  # for deadline search; Jev only gets max_body_chars
+
+
+def _body(msg: MailMessage) -> str:
+    return msg.text if msg.text.strip() else html_to_text(msg.html)
+
+
+def sent_date(msg: MailMessage) -> date:
+    # imap_tools returns 1900-01-01 when the Date header is missing or broken
+    return msg.date.date() if msg.date and msg.date.year > 1970 else date.today()
+
+
+def full_text(msg: MailMessage) -> str:
+    return f"{msg.subject}\n{clean_body(_body(msg), FULL_TEXT_CHARS)}"
+
+
 def build_state(msg: MailMessage, max_chars: int) -> dict:
-    body = msg.text if msg.text.strip() else html_to_text(msg.html)
     return {
         "from": msg.from_values.full if msg.from_values else msg.from_,
         "to": ", ".join(msg.to),
+        "sent": f"{sent_date(msg):%A, %Y-%m-%d}",
         "subject": msg.subject,
         "is_mailing_list": "list-unsubscribe" in msg.headers,
         "attachments": [a.filename for a in msg.attachments if a.filename][:10],
-        "body": clean_body(body, max_chars),
+        "body": clean_body(_body(msg), max_chars),
     }
 
 

@@ -12,6 +12,8 @@ from dataclasses import dataclass
 
 import requests
 
+from .expiry import WINDOWS
+
 log = logging.getLogger(__name__)
 
 RETRY_STATUS = {408, 429, 500, 502, 503, 504}
@@ -24,6 +26,21 @@ NEEDS_ACTION_QUESTION = {
         "true": "An action, payment or reply from the recipient is expected.",
         "false": "The email is informational only; nothing needs to be done.",
     },
+}
+
+HAS_EXPIRY_QUESTION = {
+    "type": "noul",
+    "instructions": "Does this email advertise an offer, discount, voucher, coupon, sale or deal that is limited in time?",
+    "criteria": {
+        "true": "The offer ends or expires: a deadline, end date, 'only today', 'last days', 'ends soon' or a countdown is mentioned.",
+        "false": "No offer, or the offer has no time limit.",
+    },
+}
+
+EXPIRY_WINDOW_QUESTION = {
+    "type": "choice",
+    "instructions": "Counting from the day the email was sent, when does the time-limited offer end?",
+    "criteria": WINDOWS,
 }
 
 
@@ -42,6 +59,8 @@ class Decision:
     probabilities: dict[str, float]
     needs_action: float
     cost: float
+    has_expiry: float = 0.0
+    expiry_window: str | None = None
 
     @property
     def runner_up(self) -> tuple[str, float] | None:
@@ -64,6 +83,8 @@ def build_request(model: str, state: dict, categories: dict[str, str]) -> dict:
                 "criteria": categories,
             },
             "needs_action": NEEDS_ACTION_QUESTION,
+            "has_expiry": HAS_EXPIRY_QUESTION,
+            "expiry_window": EXPIRY_WINDOW_QUESTION,
         },
     }
 
@@ -83,12 +104,16 @@ def parse_response(data: dict, categories: dict[str, str]) -> Decision:
         probabilities = {k: float(v) for k, v in (cat.get("probabilities") or {}).items()}
         confidence = float(cat.get("confidence", probabilities.get(choice, 0.0)))
         needs_action = float((answers.get("needs_action") or {}).get("noul", 0.0))
+        has_expiry = float((answers.get("has_expiry") or {}).get("noul", 0.0))
+        expiry_window = (answers.get("expiry_window") or {}).get("choice")
         cost = _cost(data)
     except (KeyError, TypeError, ValueError) as e:
         raise JevError(f"unexpected response shape ({e!r}): {str(data)[:300]}") from None
     if choice not in categories:
         raise JevError(f"Jev returned unknown category {choice!r}")
-    return Decision(choice, confidence, probabilities, needs_action, cost)
+    if expiry_window not in WINDOWS:
+        expiry_window = None
+    return Decision(choice, confidence, probabilities, needs_action, cost, has_expiry, expiry_window)
 
 
 MAX_BACKOFF_SECONDS = 60

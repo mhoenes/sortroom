@@ -7,16 +7,19 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterable
 
-from imap_tools import AND, MailBox, MailMessageFlags
+from imap_tools import AND, MailBox, MailMessage, MailMessageFlags
 
 from .config import Config, Credentials
+from .expiry import resolve_expiry
 from .jev import Decision, JevAuthError, JevClient, JevError
-from .mailtext import build_state, message_key
-from .store import Store
+from .mailtext import build_state, full_text, message_key, sent_date
+from .store import GONE, TAGGED, Store
 
 log = logging.getLogger(__name__)
+
+MAX_EXPIRY_AGE_DAYS = 200  # tracked offers expire within ~180 days of arrival
 
 
 @dataclass
@@ -30,6 +33,7 @@ class Outcome:
     folder: str | None  # config-style path ("INBOX/Finanzen"), None = stays
     flag: bool
     note: str = ""
+    expires: date | None = None  # last valid day of a time-limited offer
 
 
 def plan(decision: Decision, cfg: Config) -> tuple[str | None, bool, str]:
@@ -41,6 +45,13 @@ def plan(decision: Decision, cfg: Config) -> tuple[str | None, bool, str]:
     flag = (category.flag and confident) or needs_action
     note = "" if confident else f"low confidence (< {cfg.min_confidence:.2f}), stays in inbox"
     return folder, flag, note
+
+
+def expiry_for(decision: Decision, cfg: Config, msg: MailMessage) -> date | None:
+    """End date of a time-limited offer, for categories that track it."""
+    if not cfg.categories[decision.category].track_expiry or decision.has_expiry < cfg.expiry_threshold:
+        return None
+    return resolve_expiry(full_text(msg), sent_date(msg), decision.expiry_window)
 
 
 def server_folder(path: str, delim: str) -> str:
@@ -104,6 +115,7 @@ def classify_new(
             folder=folder,
             flag=flag,
             note=note,
+            expires=expiry_for(decision, cfg, msg),
         )
         outcomes.append(outcome)
         if on_outcome:
@@ -152,7 +164,7 @@ class ReportWriter:
     """Dry-run CSV, written row by row so an interrupted run still leaves a report."""
 
     HEADER = ["received", "from", "subject", "category", "confidence", "runner_up",
-              "needs_action", "would_move_to", "would_flag", "note"]
+              "needs_action", "would_move_to", "would_flag", "expires", "note"]
 
     def __init__(self, reports_dir: Path):
         reports_dir.mkdir(parents=True, exist_ok=True)
@@ -169,7 +181,8 @@ class ReportWriter:
         self._csv.writerow([
             o.received, o.sender, o.subject, d.category, f"{d.confidence:.2f}",
             f"{ru[0]} ({ru[1]:.2f})" if ru else "", f"{d.needs_action:.2f}",
-            o.folder or "(inbox)", "yes" if o.flag else "", o.note,
+            o.folder or "(inbox)", "yes" if o.flag else "",
+            o.expires.strftime("%d.%m.%Y") if o.expires else "", o.note,
         ])
         self._file.flush()
         self.rows += 1
@@ -178,6 +191,99 @@ class ReportWriter:
         self._file.close()
         if self.rows == 0:
             self.path.unlink(missing_ok=True)
+
+
+def _since(received_values: Iterable[str | None], fallback_days: int) -> date:
+    """Earliest received date of a group of mails, for a narrow IMAP SINCE search."""
+    dates = []
+    for r in received_values:
+        try:
+            dates.append(date.fromisoformat((r or "")[:10]))
+        except ValueError:
+            return date.today() - timedelta(days=fallback_days)
+    return min(dates) - timedelta(days=1) if dates else date.today()
+
+
+def _find_uids(mb: MailBox, folder: str, wanted: dict[str, str | None], fallback_days: int) -> dict[str, str]:
+    """Locate mails by message key in a folder: {key: uid}. `wanted` maps key -> received."""
+    mb.folder.set(folder)
+    found = {}
+    since = _since(wanted.values(), fallback_days)
+    for head in mb.fetch(AND(date_gte=since), mark_seen=False, headers_only=True, bulk=True):
+        key = message_key(head)
+        if key in wanted:
+            found[key] = head.uid
+    return found
+
+
+def _group_by_folder(rows, cfg: Config, delim: str) -> dict[str, dict[str, str | None]]:
+    """rows of (key, moved_to, received) -> {server folder: {key: received}}"""
+    groups: dict[str, dict[str, str | None]] = defaultdict(dict)
+    for key, moved_to, received in rows:
+        groups[server_folder(moved_to or cfg.source_folder, delim)][key] = received
+    return groups
+
+
+def tag_expired(mb: MailBox, cfg: Config, store: Store, today: date | None = None) -> int:
+    """Set the expired keyword on offers whose last valid day has passed. Returns count tagged."""
+    due = store.due_expired(today or date.today())
+    if not due:
+        return 0
+    delim = _delimiter(mb)
+    tagged = 0
+    try:
+        for folder, wanted in _group_by_folder(due, cfg, delim).items():
+            try:
+                uids = _find_uids(mb, folder, wanted, fallback_days=MAX_EXPIRY_AGE_DAYS)
+                if uids:
+                    mb.flag(list(uids.values()), cfg.expired_keyword, True)
+                store.mark_tagged(uids, TAGGED)
+                store.mark_tagged(set(wanted) - set(uids), GONE)  # deleted or moved away by the user
+                tagged += len(uids)
+                if uids:
+                    log.info("tagged %d expired offer(s) in %s as '%s'", len(uids), folder, cfg.expired_keyword)
+            except Exception as e:
+                log.error("tagging expired offers in %s failed, will retry next run: %s", folder, e)
+    finally:
+        mb.folder.set(cfg.source_folder)
+    return tagged
+
+
+def recheck_expiry(mb: MailBox, cfg: Config, jev: JevClient, store: Store) -> int:
+    """One-off: work out expiry dates for mails sorted before expiry tracking existed."""
+    tracked = [k for k, c in cfg.categories.items() if c.track_expiry]
+    todo = store.unchecked_expiry(tracked)
+    log.info("%d already sorted mail(s) to check for an expiry date", len(todo))
+    delim = _delimiter(mb)
+    found = 0
+    try:
+        for folder, wanted in _group_by_folder(todo, cfg, delim).items():
+            uids = _find_uids(mb, folder, wanted, fallback_days=cfg.lookback_days + 1)
+            for key in set(wanted) - set(uids):
+                store.set_expiry(key, None)  # no longer there
+            key_by_uid = {uid: key for key, uid in uids.items()}
+            if not key_by_uid:
+                continue
+            for msg in mb.fetch(AND(uid=list(key_by_uid)), mark_seen=False, bulk=True):
+                try:
+                    decision = jev.decide(build_state(msg, cfg.max_body_chars), cfg.descriptions)
+                except JevAuthError:
+                    raise
+                except JevError as e:
+                    log.warning("could not check %r: %s", msg.subject, e)
+                    continue  # stays unchecked, retried next time
+                # the category was decided earlier; only the expiry answers matter here
+                expires = None
+                if decision.has_expiry >= cfg.expiry_threshold:
+                    expires = resolve_expiry(full_text(msg), sent_date(msg), decision.expiry_window)
+                store.set_expiry(key_by_uid[msg.uid], expires)
+                if expires:
+                    found += 1
+                    log.debug("expires %s: %s", expires, msg.subject)
+    finally:
+        mb.folder.set(cfg.source_folder)
+    log.info("found %d time-limited offer(s) among already sorted mail", found)
+    return found
 
 
 def summarize(outcomes: list[Outcome], live: bool) -> None:
@@ -189,8 +295,9 @@ def summarize(outcomes: list[Outcome], live: bool) -> None:
     flagged = sum(1 for o in outcomes if o.flag)
     cost = sum(o.decision.cost for o in outcomes)
     log.info("categories: %s", ", ".join(f"{k}={v}" for k, v in counts.most_common()))
-    log.info("%s %d, flagged %d, kept %d in inbox, cost $%.6f",
-             verb, moved, flagged, len(outcomes) - moved, cost)
+    expiring = sum(1 for o in outcomes if o.expires)
+    log.info("%s %d, flagged %d, kept %d in inbox, %d time-limited offer(s), cost $%.6f",
+             verb, moved, flagged, len(outcomes) - moved, expiring, cost)
 
 
 def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int | None) -> int:
@@ -212,6 +319,7 @@ def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int 
             failures = 0
             if live:
                 failures = apply(mb, outcomes, store)
+                tag_expired(mb, cfg, store)
             elif outcomes:
                 log.info("dry run - nothing changed. Report: %s", report.path)
             summarize(outcomes, live)
@@ -220,3 +328,25 @@ def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int 
         if report:
             report.close()
     return 1 if (errors or failures) else 0
+
+
+def run_recheck_expiry(cfg: Config, creds: Credentials, base_dir: Path, live: bool) -> int:
+    """--recheck-expiry: find expiry dates for already sorted mail, then tag (live only)."""
+    store = Store(base_dir / "data" / "state.db")
+    jev = cfg.jev_client(creds.jev_api_key)
+    try:
+        with MailBox(cfg.imap_host, cfg.imap_port).login(
+            creds.imap_user, creds.imap_password, initial_folder=cfg.source_folder
+        ) as mb:
+            try:
+                recheck_expiry(mb, cfg, jev, store)
+            except JevAuthError as e:
+                log.error("%s - check %s in .env and your gateway credits", e, cfg.jev_api_key_env)
+                return 2
+            if live:
+                tag_expired(mb, cfg, store)
+            else:
+                log.info("dry run - expiry dates saved, no tags set (use --live to tag)")
+    finally:
+        store.close()
+    return 0

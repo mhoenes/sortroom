@@ -1,4 +1,4 @@
-"""Command line entry point: python -m email_sorter [--live] [--limit N] [--check]"""
+"""Command line entry point: python -m email_sorter [--live] [--limit N] [--check] [--recheck-expiry]"""
 from __future__ import annotations
 
 import argparse
@@ -94,6 +94,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--limit", type=int, help="classify at most N mails this run")
     parser.add_argument("--check", action="store_true",
                         help="test IMAP login and the Jev connection, list folders, change nothing")
+    parser.add_argument("--recheck-expiry", action="store_true",
+                        help="one-off: find expiry dates of already sorted offers (with --live also tag expired ones)")
     parser.add_argument("--config", type=Path, default=BASE_DIR / "config.toml")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
@@ -111,14 +113,16 @@ def main(argv: list[str] | None = None) -> int:
         from .check import check
         return check(cfg, creds)
 
-    from .sorter import run
+    from .sorter import run, run_recheck_expiry
 
     with single_instance(BASE_DIR / "data" / "run.lock") as acquired:
         if not acquired:
             log.info("another run is still active, skipping")
             return 0
-        log.info("starting %s run", "LIVE" if args.live else "dry")
+        log.info("starting %s %s", "LIVE" if args.live else "dry", "expiry recheck" if args.recheck_expiry else "run")
         try:
+            if args.recheck_expiry:
+                return run_recheck_expiry(cfg, creds, BASE_DIR, live=args.live)
             return run(cfg, creds, BASE_DIR, live=args.live, limit=args.limit)
         except Exception:
             log.exception("run failed")

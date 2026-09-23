@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _KEY_RE = re.compile(r"^[a-z0-9_]+$")
+_KEYWORD_RE = re.compile(r"^[A-Za-z0-9_$-]+$")  # IMAP atom without specials
 
 
 class ConfigError(ValueError):
@@ -20,6 +21,7 @@ class Category:
     folder: str | None
     flag: bool
     flag_on_action: bool
+    track_expiry: bool
 
 
 @dataclass(frozen=True)
@@ -35,6 +37,8 @@ class Config:
     min_interval_seconds: float
     min_confidence: float
     action_flag_threshold: float
+    expiry_threshold: float
+    expired_keyword: str
     lookback_days: int
     max_per_run: int
     categories: dict[str, Category]
@@ -80,6 +84,7 @@ def load_config(path: Path) -> Config:
                 folder=c.get("folder") or None,
                 flag=bool(c.get("flag", False)),
                 flag_on_action=bool(c.get("flag_on_action", True)),
+                track_expiry=bool(c.get("track_expiry", False)),
             )
         cfg = Config(
             imap_host=imap["host"],
@@ -93,6 +98,8 @@ def load_config(path: Path) -> Config:
             min_interval_seconds=float(jev.get("min_interval_seconds", 0.0)),
             min_confidence=float(rules["min_confidence"]),
             action_flag_threshold=float(rules["action_flag_threshold"]),
+            expiry_threshold=float(rules.get("expiry_threshold", 0.7)),
+            expired_keyword=rules.get("expired_keyword", "abgelaufen"),
             lookback_days=int(rules["lookback_days"]),
             max_per_run=int(rules["max_per_run"]),
             categories=categories,
@@ -102,7 +109,9 @@ def load_config(path: Path) -> Config:
 
     if len(cfg.categories) < 2:
         raise ConfigError("at least two categories are required")
-    for name in ("min_confidence", "action_flag_threshold"):
+    if not _KEYWORD_RE.match(cfg.expired_keyword):
+        raise ConfigError("expired_keyword may only contain letters, digits, _, - and $")
+    for name in ("min_confidence", "action_flag_threshold", "expiry_threshold"):
         if not 0.0 <= getattr(cfg, name) <= 1.0:
             raise ConfigError(f"{name} must be between 0 and 1")
     return cfg
