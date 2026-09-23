@@ -173,7 +173,7 @@ def summarize(outcomes: list[Outcome], live: bool) -> None:
 def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int | None) -> int:
     """Returns a process exit code."""
     store = Store(base_dir / "data" / "state.db")
-    jev = JevClient(creds.openrouter_api_key, cfg.jev_endpoint, cfg.jev_model, cfg.timeout_seconds)
+    jev = JevClient(creds.jev_api_key, cfg.jev_endpoint, cfg.jev_model, cfg.timeout_seconds)
     limit = min(limit or cfg.max_per_run, cfg.max_per_run)
     try:
         with MailBox(cfg.imap_host, cfg.imap_port).login(
@@ -182,7 +182,7 @@ def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int 
             try:
                 outcomes, errors = classify_new(mb, cfg, jev, store, limit)
             except JevAuthError as e:
-                log.error("%s - check OPENROUTER_API_KEY and your OpenRouter credits", e)
+                log.error("%s - check %s in .env and your gateway credits", e, cfg.jev_api_key_env)
                 return 2
             failures = 0
             if live:

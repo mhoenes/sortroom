@@ -1,7 +1,8 @@
-"""Client for the Jev decision model on OpenRouter (POST /api/alpha/decisions).
+"""Client for the Jev decision model (TypeSafe "systemOne" request/response shape).
 
-The endpoint is alpha, so everything that knows about its request/response
-shape lives in build_request() and parse_response().
+Works with Vercel AI Gateway (/typesafe/v1/systemone) and OpenRouter
+(/api/alpha/decisions). Everything that knows about the wire format lives in
+build_request() and parse_response().
 """
 from __future__ import annotations
 
@@ -67,6 +68,13 @@ def build_request(model: str, state: dict, categories: dict[str, str]) -> dict:
     }
 
 
+def _cost(data: dict) -> float:
+    # Vercel: provider_metadata.gateway.cost (string); OpenRouter: usage.cost
+    gateway = (data.get("provider_metadata") or {}).get("gateway") or {}
+    cost = gateway.get("cost", (data.get("usage") or {}).get("cost", 0.0))
+    return float(cost or 0.0)
+
+
 def parse_response(data: dict, categories: dict[str, str]) -> Decision:
     try:
         answers = data["answers"]
@@ -75,7 +83,7 @@ def parse_response(data: dict, categories: dict[str, str]) -> Decision:
         probabilities = {k: float(v) for k, v in (cat.get("probabilities") or {}).items()}
         confidence = float(cat.get("confidence", probabilities.get(choice, 0.0)))
         needs_action = float((answers.get("needs_action") or {}).get("noul", 0.0))
-        cost = float((data.get("usage") or {}).get("cost", 0.0))
+        cost = _cost(data)
     except (KeyError, TypeError, ValueError) as e:
         raise JevError(f"unexpected response shape ({e!r}): {str(data)[:300]}") from None
     if choice not in categories:
@@ -102,7 +110,6 @@ class JevClient:
             {
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
-                "X-Title": "email-sorter",
             }
         )
 
@@ -118,9 +125,9 @@ class JevClient:
                 if r.status_code == 200:
                     return parse_response(r.json(), categories)
                 if r.status_code in AUTH_STATUS:
-                    raise JevAuthError(f"OpenRouter HTTP {r.status_code}: {r.text[:300]}")
+                    raise JevAuthError(f"HTTP {r.status_code}: {r.text[:300]}")
                 if r.status_code not in RETRY_STATUS:
-                    raise JevError(f"OpenRouter HTTP {r.status_code}: {r.text[:300]}")
+                    raise JevError(f"HTTP {r.status_code}: {r.text[:300]}")
                 last_error = f"HTTP {r.status_code}"
             if attempt < self.retries:
                 delay = 2**attempt

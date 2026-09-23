@@ -1,4 +1,4 @@
-"""--check: verify IMAP and OpenRouter access without touching any mail."""
+"""--check: verify IMAP and Jev API access without touching any mail."""
 from __future__ import annotations
 
 from imap_tools import MailBox
@@ -42,7 +42,7 @@ def check(cfg: Config, creds: Credentials) -> int:
 
     print(f"\nJev   {cfg.jev_model} via {cfg.jev_endpoint}")
     try:
-        jev = JevClient(creds.openrouter_api_key, cfg.jev_endpoint, cfg.jev_model, cfg.timeout_seconds)
+        jev = JevClient(creds.jev_api_key, cfg.jev_endpoint, cfg.jev_model, cfg.timeout_seconds)
         d = jev.decide(SAMPLE_STATE, cfg.descriptions)
         print(f"  OK - sample electricity bill -> {d.category} (confidence {d.confidence:.2f}, "
               f"needs_action {d.needs_action:.2f}, cost ${d.cost:.6f})")

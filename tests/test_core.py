@@ -55,6 +55,26 @@ def test_parse_response():
     assert d.runner_up == ("vertraege", 0.05)
 
 
+def test_parse_response_reads_vercel_gateway_cost():
+    vercel = {
+        "model": "typesafe-ai/jev",
+        "answers": SAMPLE_RESPONSE["answers"],
+        "usage": {"input_tokens": 275, "output_tokens": 20},
+        "provider_metadata": {"gateway": {"cost": "0.00001155", "generationId": "gen_x"}},
+    }
+    assert parse_response(vercel, CFG.descriptions).cost == pytest.approx(0.00001155)
+
+
+def test_parse_response_without_cost():
+    no_cost = {"answers": SAMPLE_RESPONSE["answers"], "usage": {"input_tokens": 1}}
+    assert parse_response(no_cost, CFG.descriptions).cost == 0.0
+
+
+def test_shipped_config_uses_vercel():
+    assert CFG.jev_endpoint == "https://ai-gateway.vercel.sh/typesafe/v1/systemone"
+    assert CFG.jev_api_key_env == "AI_GATEWAY_API_KEY"
+
+
 def test_parse_response_rejects_unknown_category():
     bad = {"answers": {"category": {"choice": "nope", "confidence": 1.0}}}
     with pytest.raises(JevError):

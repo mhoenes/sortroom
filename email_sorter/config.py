@@ -28,6 +28,7 @@ class Config:
     source_folder: str
     jev_endpoint: str
     jev_model: str
+    jev_api_key_env: str
     max_body_chars: int
     timeout_seconds: float
     min_confidence: float
@@ -45,7 +46,7 @@ class Config:
 class Credentials:
     imap_user: str
     imap_password: str
-    openrouter_api_key: str
+    jev_api_key: str
 
 
 def load_config(path: Path) -> Config:
@@ -77,6 +78,7 @@ def load_config(path: Path) -> Config:
             source_folder=imap.get("source_folder", "INBOX"),
             jev_endpoint=jev["endpoint"],
             jev_model=jev["model"],
+            jev_api_key_env=jev.get("api_key_env", "AI_GATEWAY_API_KEY"),
             max_body_chars=int(jev.get("max_body_chars", 3000)),
             timeout_seconds=float(jev.get("timeout_seconds", 20)),
             min_confidence=float(rules["min_confidence"]),
@@ -96,8 +98,8 @@ def load_config(path: Path) -> Config:
     return cfg
 
 
-def load_credentials() -> Credentials:
-    names = ("IMAP_USER", "IMAP_PASSWORD", "OPENROUTER_API_KEY")
+def load_credentials(cfg: Config) -> Credentials:
+    names = ("IMAP_USER", "IMAP_PASSWORD", cfg.jev_api_key_env)
     missing = [n for n in names if not os.environ.get(n)]
     if missing:
         raise ConfigError(f"missing in .env / environment: {', '.join(missing)}")

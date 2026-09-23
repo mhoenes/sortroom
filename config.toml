@@ -7,8 +7,14 @@ port = 993
 source_folder = "INBOX"
 
 [jev]
-endpoint = "https://openrouter.ai/api/alpha/decisions"
-model = "typesafe/jev-1.13"
+# Vercel AI Gateway (TypeSafe-compatible API)
+endpoint = "https://ai-gateway.vercel.sh/typesafe/v1/systemone"
+model = "typesafe-ai/jev"
+api_key_env = "AI_GATEWAY_API_KEY"   # name of the .env variable holding the key
+# OpenRouter alternative:
+# endpoint = "https://openrouter.ai/api/alpha/decisions"
+# model = "typesafe/jev-1.13"
+# api_key_env = "OPENROUTER_API_KEY"
 max_body_chars = 3000     # body text sent to Jev is cut to this length
 timeout_seconds = 20
 
@@ -28,7 +34,7 @@ max_per_run = 200             # safety cap on mails classified per run
 # ---------------------------------------------------------------------------
 
 [categories.finanzen]
-description = "Invoices, receipts, bank statements, credit card statements, insurance, taxes, payment reminders, dunning letters"
+description = "Anything about money owed or paid: invoices and bills of any kind (including electricity, gas, water, phone and internet bills), receipts, direct debit notices, bank and credit card statements, insurance premiums, taxes, payment reminders, dunning letters"
 folder = "INBOX/Finanzen"
 
 [categories.bestellungen]
@@ -40,7 +46,7 @@ description = "Travel bookings, train/flight/event tickets, hotel and rental con
 folder = "INBOX/Reisen"
 
 [categories.vertraege]
-description = "Contracts and their changes, utilities (electricity, gas, water), internet and mobile providers, landlord and housing, government, authorities and official letters"
+description = "Contract matters that are not a bill: new contracts, contract changes, price change announcements, terminations and renewals with utility, internet or mobile providers; landlord and housing; government, authorities and official letters"
 folder = "INBOX/Verträge"
 
 [categories.newsletter]

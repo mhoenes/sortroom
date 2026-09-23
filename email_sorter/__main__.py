@@ -70,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
     setup_logging(args.verbose)
     try:
         cfg = load_config(args.config)
-        creds = load_credentials()
+        creds = load_credentials(cfg)
     except ConfigError as e:
         log.error("configuration error: %s", e)
         return 2
