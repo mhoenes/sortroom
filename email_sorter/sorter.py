@@ -20,6 +20,7 @@ from .store import GONE, TAGGED, Store
 log = logging.getLogger(__name__)
 
 MAX_EXPIRY_AGE_DAYS = 200  # tracked offers expire within ~180 days of arrival
+IMAP_TIMEOUT = 120  # seconds; a stalled connection raises instead of hanging forever
 UID_CHUNK = 250  # Strato rejects IMAP command lines over ~20 KB: at most this many UIDs per command
 
 
@@ -90,8 +91,12 @@ def classify_new(
     before: date | None = None,
     exclude: set[str] | None = None,
     on_outcome: Callable[[Outcome], None] | None = None,
-) -> tuple[list[Outcome], list[str]]:
-    """Classify unprocessed mail received in [since, before). Returns (outcomes, failed keys)."""
+) -> tuple[list[Outcome], list[str], list[str]]:
+    """Classify unprocessed mail received in [since, before).
+
+    Returns (outcomes, failed keys, attempted keys). Attempted covers every mail picked
+    for this batch, including ones the server did not return, so callers can make progress.
+    """
     criteria = AND(date_gte=since, date_lt=before) if before else AND(date_gte=since)
     pending: dict[str, str] = {}  # uid -> message key
     for head in mb.fetch(criteria, mark_seen=False, headers_only=True, bulk=UID_CHUNK):
@@ -103,26 +108,34 @@ def classify_new(
     span = f"{since} to {before - timedelta(days=1)}" if before else f"since {since}"
     log.info("%d new mail(s) in %s %s, classifying %d", len(pending), cfg.source_folder, span, len(uids))
     if not uids:
-        return [], []
+        return [], [], []
 
     outcomes: list[Outcome] = []
     failed: list[str] = []
+    attempted = [pending[u] for u in uids]
+    uid_by_key = {pending[u]: u for u in uids}
+    done: set[str] = set()
     descriptions = cfg.descriptions
     for msg in mb.fetch(AND(uid=uids), mark_seen=False, bulk=UID_CHUNK):
-        if msg.uid not in pending:
-            continue  # unsolicited FETCH (e.g. another client changed flags meanwhile)
+        # match by UID; fall back to the message key when the server's response carries
+        # no usable UID (e.g. another client changed flags while we were fetching)
+        uid = msg.uid if msg.uid in pending else uid_by_key.get(message_key(msg)) if msg.headers else None
+        if uid is None or pending[uid] in done:
+            continue  # unsolicited FETCH without a mail we asked for
+        done.add(pending[uid])
+        msg_uid = uid
         try:
             decision = jev.decide(build_state(msg, cfg.max_body_chars), descriptions)
         except JevAuthError:
             raise
         except JevError as e:
-            failed.append(pending[msg.uid])
+            failed.append(pending[msg_uid])
             log.warning("could not classify %r: %s", msg.subject, e)
             continue
         folder, flag, note = plan(decision, cfg)
         outcome = Outcome(
-            key=pending[msg.uid],
-            uid=msg.uid,
+            key=pending[msg_uid],
+            uid=msg_uid,
             received=msg.date.isoformat(timespec="minutes") if msg.date else msg.date_str,
             sender=msg.from_,
             subject=msg.subject,
@@ -136,7 +149,11 @@ def classify_new(
         if on_outcome:
             on_outcome(outcome)
         log.debug("%.2f %-18s %s", decision.confidence, decision.category, msg.subject)
-    return outcomes, failed
+    missing = [k for k in attempted if k not in done]
+    if missing:
+        log.warning("%d mail(s) were not returned by the server, retried next run", len(missing))
+        failed.extend(missing)
+    return outcomes, failed, attempted
 
 
 def apply(mb: MailBox, outcomes: list[Outcome], store: Store) -> int:
@@ -338,12 +355,12 @@ def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int 
     limit = min(limit or cfg.max_per_run, cfg.max_per_run)
     report = None if live else ReportWriter(base_dir / "reports")
     try:
-        with MailBox(cfg.imap_host, cfg.imap_port).login(
+        with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(
             creds.imap_user, creds.imap_password, initial_folder=cfg.source_folder
         ) as mb:
             since = date.today() - timedelta(days=cfg.lookback_days)
             try:
-                outcomes, failed = classify_new(mb, cfg, jev, store, limit, since,
+                outcomes, failed, _ = classify_new(mb, cfg, jev, store, limit, since,
                                                 on_outcome=report.write if report else None)
             except JevAuthError as e:
                 log.error("%s - check %s in .env and your gateway credits", e, cfg.jev_api_key_env)
@@ -390,31 +407,29 @@ def run_backfill(cfg: Config, creds: Credentials, base_dir: Path, live: bool,
     failures = 0
     seen: set[str] = set()  # dry run records nothing; don't classify the same mail twice
     try:
-        with MailBox(cfg.imap_host, cfg.imap_port).login(
+        with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(
             creds.imap_user, creds.imap_password, initial_folder=cfg.source_folder
         ) as mb:
             for start, end in month_windows(since, date.today() + timedelta(days=1)):
                 while remaining is None or remaining > 0:
                     batch = min(cfg.max_per_run, remaining) if remaining is not None else cfg.max_per_run
                     try:
-                        outcomes, failed = classify_new(
+                        outcomes, failed, attempted = classify_new(
                             mb, cfg, jev, store, batch, start, before=end, exclude=seen,
                             on_outcome=report.write if report else None,
                         )
                     except JevAuthError as e:
                         log.error("%s - check %s in .env and your gateway credits", e, cfg.jev_api_key_env)
                         return 2
-                    seen.update(o.key for o in outcomes)
-                    seen.update(failed)  # retried on the next backfill, not in this one
+                    if not attempted:
+                        break  # month done
+                    seen.update(attempted)  # failed ones are retried on the next backfill, not in this one
                     if live and outcomes:
                         failures += apply(mb, outcomes, store)
                     all_outcomes.extend(outcomes)
                     all_failed.extend(failed)
-                    handled = len(outcomes) + len(failed)
                     if remaining is not None:
-                        remaining -= handled
-                    if handled < batch:
-                        break  # month done
+                        remaining -= len(attempted)
                 if remaining is not None and remaining <= 0:
                     log.info("limit reached, stopping")
                     break
@@ -437,7 +452,7 @@ def run_recheck_expiry(cfg: Config, creds: Credentials, base_dir: Path, live: bo
     store = Store(base_dir / "data" / "state.db")
     jev = cfg.jev_client(creds.jev_api_key)
     try:
-        with MailBox(cfg.imap_host, cfg.imap_port).login(
+        with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(
             creds.imap_user, creds.imap_password, initial_folder=cfg.source_folder
         ) as mb:
             try:

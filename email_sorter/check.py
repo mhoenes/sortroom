@@ -5,7 +5,7 @@ from imap_tools import MailBox
 
 from .config import Config, Credentials
 from .jev import JevError
-from .sorter import _delimiter, server_folder
+from .sorter import IMAP_TIMEOUT, _delimiter, server_folder
 
 SAMPLE_STATE = {
     "from": "Stadtwerke Musterstadt <rechnung@stadtwerke-musterstadt.de>",
@@ -23,7 +23,7 @@ def check(cfg: Config, creds: Credentials) -> int:
 
     print(f"IMAP  {cfg.imap_host}:{cfg.imap_port} as {creds.imap_user}")
     try:
-        with MailBox(cfg.imap_host, cfg.imap_port).login(creds.imap_user, creds.imap_password,
+        with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(creds.imap_user, creds.imap_password,
                                                          initial_folder=cfg.source_folder) as mb:
             delim = _delimiter(mb)
             existing = {f.name for f in mb.folder.list()}

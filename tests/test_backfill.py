@@ -42,7 +42,7 @@ class FakeMailBox:
 
     instances: list = []
 
-    def __init__(self, host, port):
+    def __init__(self, host, port, timeout=None):
         self.mails = {str(u): _mail(u, f"Angebot {u}") for u in range(1, 8)}
         self.moves, self.fetches = [], 0
         self.folder = SimpleNamespace(
@@ -180,3 +180,44 @@ def test_unsolicited_fetch_response_is_ignored(env):
     env.monkeypatch.setattr(FakeMailBox, "fetch", fetch_with_noise)
     code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None)
     assert code == 0 and jev.calls == 7
+
+
+def test_backfill_keeps_going_when_a_batch_comes_back_short(env):
+    """Regression: a batch returning fewer mails than requested used to end the month early."""
+    jev = FakeJev()
+    _use_jev(env, jev)
+    orig_fetch = FakeMailBox.fetch
+    calls = {"n": 0}
+
+    def fetch_dropping_one(self, criteria, **kw):
+        result = list(orig_fetch(self, criteria, **kw))
+        if "UID" in str(criteria):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                result = result[1:]  # server "loses" one mail in the first batch
+        return iter(result)
+
+    env.monkeypatch.setattr(FakeMailBox, "fetch", fetch_dropping_one)
+    code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None)
+    assert code == 1  # the dropped mail is reported
+    assert jev.calls == 6  # but all other 6 mails were still processed in this run
+
+
+def test_mail_without_uid_is_matched_by_message_key(env):
+    jev = FakeJev()
+    _use_jev(env, jev)
+    orig_fetch = FakeMailBox.fetch
+
+    def fetch_losing_uid(self, criteria, **kw):
+        result = list(orig_fetch(self, criteria, **kw))
+        if "UID" in str(criteria) and result:
+            m = result[0]
+            result[0] = SimpleNamespace(uid=None, headers=m.headers, subject=m.subject, from_=m.from_,
+                                        from_values=m.from_values, to=m.to, date=m.date, date_str=m.date_str,
+                                        text=m.text, html=m.html, attachments=[])
+        return iter(result)
+
+    env.monkeypatch.setattr(FakeMailBox, "fetch", fetch_losing_uid)
+    code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None)
+    assert code == 0 and jev.calls == 7
+    assert sum(len(u) for u, _ in FakeMailBox.instances[0].moves) == 7

@@ -68,6 +68,22 @@ def _lock_is_stale(lock_path: Path) -> bool:
 
 
 @contextmanager
+def keep_awake():
+    """Stop Windows from going to standby while a run is active (a backfill can take an hour)."""
+    if os.name != "nt":
+        yield
+        return
+    import ctypes
+
+    ES_CONTINUOUS, ES_SYSTEM_REQUIRED = 0x80000000, 0x00000001
+    ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
+    try:
+        yield
+    finally:
+        ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
+
+
+@contextmanager
 def single_instance(lock_path: Path):
     """Skip this run if another one is still going (scheduled runs can overlap)."""
     lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -128,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
 
     from .sorter import run, run_backfill, run_recheck_expiry
 
-    with single_instance(BASE_DIR / "data" / "run.lock") as acquired:
+    with single_instance(BASE_DIR / "data" / "run.lock") as acquired, keep_awake():
         if not acquired:
             log.info("another run is still active, skipping")
             return 0
