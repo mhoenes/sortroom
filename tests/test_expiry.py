@@ -133,7 +133,7 @@ class _Head:
 
 class _FakeFolder:
     def __init__(self):
-        self.selected = []
+        self.selected, self.created = [], []
 
     def list(self):
         return [SimpleNamespace(name="INBOX", delim=".")]
@@ -141,16 +141,28 @@ class _FakeFolder:
     def set(self, name):
         self.selected.append(name)
 
+    def exists(self, name):
+        return False
+
+    def create(self, name):
+        self.created.append(name)
+
+    def subscribe(self, name, value):
+        pass
+
 
 class _FakeMailBox:
     def __init__(self, heads):
-        self.folder, self.heads, self.flags = _FakeFolder(), heads, []
+        self.folder, self.heads, self.flags, self.moves = _FakeFolder(), heads, [], []
 
     def fetch(self, *args, **kwargs):
         return iter(self.heads)
 
     def flag(self, uids, keyword, value):
         self.flags.append((sorted(uids), keyword, value))
+
+    def move(self, uids, folder):
+        self.moves.append((sorted(uids), folder))
 
 
 def test_tag_expired_sets_keyword_and_marks_missing(tmp_path):
@@ -167,6 +179,8 @@ def test_tag_expired_sets_keyword_and_marks_missing(tmp_path):
 
     assert sorter.tag_expired(mb, cfg, store, today=date(2026, 9, 25)) == 1
     assert mb.flags == [(["7"], "abgelaufen", True)]
+    assert mb.moves == [(["7"], "INBOX.Newsletter.Abgelaufen")]
+    assert mb.folder.created == ["INBOX.Newsletter.Abgelaufen"]
     assert mb.folder.selected == ["INBOX.Newsletter", "INBOX"]
     assert store.due_expired(date(2026, 9, 25)) == []  # tagged + gone are both settled
     store.close()

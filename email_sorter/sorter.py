@@ -225,11 +225,15 @@ def _group_by_folder(rows, cfg: Config, delim: str) -> dict[str, dict[str, str |
 
 
 def tag_expired(mb: MailBox, cfg: Config, store: Store, today: date | None = None) -> int:
-    """Set the expired keyword on offers whose last valid day has passed. Returns count tagged."""
+    """Tag offers whose last valid day has passed and move them to expired_folder.
+
+    Returns the number of mails handled. The keyword is set before the move, so it travels along.
+    """
     due = store.due_expired(today or date.today())
     if not due:
         return 0
     delim = _delimiter(mb)
+    target = server_folder(cfg.expired_folder, delim) if cfg.expired_folder else None
     tagged = 0
     try:
         for folder, wanted in _group_by_folder(due, cfg, delim).items():
@@ -237,11 +241,15 @@ def tag_expired(mb: MailBox, cfg: Config, store: Store, today: date | None = Non
                 uids = _find_uids(mb, folder, wanted, fallback_days=MAX_EXPIRY_AGE_DAYS)
                 if uids:
                     mb.flag(list(uids.values()), cfg.expired_keyword, True)
+                    if target and target != folder:
+                        _ensure_folder(mb, target)
+                        mb.move(list(uids.values()), target)
                 store.mark_tagged(uids, TAGGED)
                 store.mark_tagged(set(wanted) - set(uids), GONE)  # deleted or moved away by the user
                 tagged += len(uids)
                 if uids:
-                    log.info("tagged %d expired offer(s) in %s as '%s'", len(uids), folder, cfg.expired_keyword)
+                    log.info("tagged %d expired offer(s) in %s as '%s'%s", len(uids), folder,
+                             cfg.expired_keyword, f" and moved them to {target}" if target else "")
             except Exception as e:
                 log.error("tagging expired offers in %s failed, will retry next run: %s", folder, e)
     finally:

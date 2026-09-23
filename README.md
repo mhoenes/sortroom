@@ -62,9 +62,12 @@ whether the mail is a time-limited offer and roughly when it ends (same day,
 1–2 days, a week, a month). An explicit deadline in the text ("gültig bis
 30.09.", "endet am 1. Oktober", "ends October 3rd") takes precedence.
 
-Every live run tags mails whose last valid day has passed with the IMAP
-keyword `abgelaufen` (`expired_keyword` in `config.toml`), so they can be
-found and deleted in one go. Mails you deleted or moved meanwhile are skipped.
+Every live run takes mails whose last valid day has passed, tags them with
+the IMAP keyword `abgelaufen` (`expired_keyword`) and moves them to
+`INBOX/Newsletter/Abgelaufen` (`expired_folder` in `config.toml`). To clean
+up, open that folder, select all, delete. The folder works in every client –
+Outlook, for example, does not show IMAP keywords. Mails you deleted or moved
+meanwhile are skipped.
 
 Mails sorted before this feature existed can be checked once:
 
@@ -73,8 +76,8 @@ Mails sorted before this feature existed can be checked once:
 .venv\Scripts\python -m email_sorter --recheck-expiry --live   # and tag expired ones
 ```
 
-In Thunderbird, create a tag named `abgelaufen` (Settings → General → Tags)
-to see it; then search or filter by that tag.
+Remove `expired_folder` from `config.toml` to only tag. In Thunderbird,
+create a tag named `abgelaufen` (Settings → General → Tags) to see the tag.
 
 ## Categories (`config.toml`)
 
@@ -84,8 +87,9 @@ to see it; then search or filter by that tag.
 | bestellungen | INBOX/Bestellungen | |
 | reisen | INBOX/Reisen | |
 | vertraege | INBOX/Verträge | |
-| newsletter | INBOX/Newsletter | |
+| newsletter | INBOX/Newsletter | expired offers → Newsletter/Abgelaufen |
 | benachrichtigungen | INBOX/Benachrichtigungen | |
+| verdacht | INBOX/Verdacht | phishing/scams, never flagged |
 | persoenlich | – (inbox) | |
 | sicherheit | – (inbox) | always flagged |
 | sonstiges | – (inbox) | |

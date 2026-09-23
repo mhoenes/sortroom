@@ -25,6 +25,7 @@ min_confidence = 0.70         # below this, mail stays in the inbox untouched
 action_flag_threshold = 0.80  # "needs action" probability at/above this -> mail gets flagged
 expiry_threshold = 0.70       # "time-limited offer" probability at/above this -> expiry date is tracked
 expired_keyword = "abgelaufen" # IMAP tag set once a tracked offer has expired
+expired_folder = "INBOX/Newsletter/Abgelaufen"  # expired offers are moved here; remove to only tag
 lookback_days = 7             # only look at mail received in the last N days
 max_per_run = 200             # safety cap on mails classified per run
 
@@ -36,8 +37,8 @@ max_per_run = 200             # safety cap on mails classified per run
 #   flag         true = always flag mails of this category
 #   flag_on_action  false = never flag because of "needs action" (default true);
 #                   for advertising ("voucher expires!") and anything suspicious
-#   track_expiry  true = find the end date of time-limited offers and tag the
-#                 mail with expired_keyword the day after it has passed
+#   track_expiry  true = find the end date of time-limited offers; the day after it
+#                 has passed, tag the mail with expired_keyword and move it to expired_folder
 # Order does not matter. Keys must be unique, lowercase, no spaces.
 # ---------------------------------------------------------------------------
 

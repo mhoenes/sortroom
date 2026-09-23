@@ -39,6 +39,7 @@ class Config:
     action_flag_threshold: float
     expiry_threshold: float
     expired_keyword: str
+    expired_folder: str | None
     lookback_days: int
     max_per_run: int
     categories: dict[str, Category]
@@ -100,6 +101,7 @@ def load_config(path: Path) -> Config:
             action_flag_threshold=float(rules["action_flag_threshold"]),
             expiry_threshold=float(rules.get("expiry_threshold", 0.7)),
             expired_keyword=rules.get("expired_keyword", "abgelaufen"),
+            expired_folder=rules.get("expired_folder") or None,
             lookback_days=int(rules["lookback_days"]),
             max_per_run=int(rules["max_per_run"]),
             categories=categories,
