@@ -70,9 +70,12 @@ def test_parse_response_without_cost():
     assert parse_response(no_cost, CFG.descriptions).cost == 0.0
 
 
-def test_shipped_config_uses_vercel():
-    assert CFG.jev_endpoint == "https://ai-gateway.vercel.sh/typesafe/v1/systemone"
-    assert CFG.jev_api_key_env == "AI_GATEWAY_API_KEY"
+def test_shipped_config_uses_a_known_gateway():
+    known = {
+        "https://openrouter.ai/api/alpha/decisions": ("typesafe/jev-1.13", "OPENROUTER_API_KEY"),
+        "https://ai-gateway.vercel.sh/typesafe/v1/systemone": ("typesafe-ai/jev", "AI_GATEWAY_API_KEY"),
+    }
+    assert known[CFG.jev_endpoint] == (CFG.jev_model, CFG.jev_api_key_env)
 
 
 def test_parse_response_rejects_unknown_category():

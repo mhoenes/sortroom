@@ -18,7 +18,7 @@ $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances 
               -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 
 Register-ScheduledTask -TaskName "email-sorter" -Action $action -Trigger $trigger -Settings $settings `
-  -Description "Sorts the Strato inbox with Jev (Vercel AI Gateway). Logs: $root\logs" -Force | Out-Null
+  -Description "Sorts the Strato inbox with Jev (OpenRouter). Logs: $root\logs" -Force | Out-Null
 
 Write-Host "Scheduled task 'email-sorter' registered: every $IntervalMinutes min, LIVE mode."
 Write-Host "Logs: $root\logs\email-sorter.log"

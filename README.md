@@ -1,7 +1,7 @@
 # email-sorter
 
 Sorts a Strato IMAP inbox into folders using **Jev** (TypeSafe's "System One"
-decision model) through **Vercel AI Gateway**. Jev doesn't generate text – it picks one
+decision model) through **OpenRouter** (or Vercel AI Gateway). Jev doesn't generate text – it picks one
 of your categories and returns probabilities, so it can never invent a folder.
 
 For every new mail it asks Jev two questions in one request:
@@ -19,7 +19,7 @@ Cost is roughly $0.00002 per mail (input tokens only; output is free).
 cd C:\Projekte\email-sorter
 py -3.13 -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
-copy .env.example .env      # then fill in IMAP_USER, IMAP_PASSWORD, AI_GATEWAY_API_KEY
+copy .env.example .env      # then fill in IMAP_USER, IMAP_PASSWORD, OPENROUTER_API_KEY
 ```
 
 ## Usage
@@ -128,8 +128,8 @@ Overlapping runs are skipped via `data/run.lock`.
 
 - Jev is in beta. If the API shape changes, only `build_request()` / `parse_response()` in
   `email_sorter/jev.py` need updating.
-- Mail content (first 3000 chars) is sent to Vercel AI Gateway/TypeSafe.
-- Switching gateway (e.g. back to OpenRouter) only needs `endpoint`, `model`
+- Mail content (first 3000 chars) is sent to the gateway (OpenRouter/Vercel) and TypeSafe.
+- Switching gateway (OpenRouter ↔ Vercel) only needs `endpoint`, `model`
   and `api_key_env` in `config.toml` – see the commented alternative there.
 - Exit codes: `0` ok, `1` some mails failed (retried next run), `2` config or
   API-key/credit problem.
