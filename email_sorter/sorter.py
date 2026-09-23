@@ -102,6 +102,8 @@ def classify_new(
     failed: list[str] = []
     descriptions = cfg.descriptions
     for msg in mb.fetch(AND(uid=uids), mark_seen=False, bulk=True):
+        if msg.uid not in pending:
+            continue  # unsolicited FETCH (e.g. another client changed flags meanwhile)
         try:
             decision = jev.decide(build_state(msg, cfg.max_body_chars), descriptions)
         except JevAuthError:
@@ -279,6 +281,8 @@ def recheck_expiry(mb: MailBox, cfg: Config, jev: JevClient, store: Store) -> in
             if not key_by_uid:
                 continue
             for msg in mb.fetch(AND(uid=list(key_by_uid)), mark_seen=False, bulk=True):
+                if msg.uid not in key_by_uid:
+                    continue  # unsolicited FETCH from the server
                 try:
                     decision = jev.decide(build_state(msg, cfg.max_body_chars), cfg.descriptions)
                 except JevAuthError:

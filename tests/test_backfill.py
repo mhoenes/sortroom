@@ -163,3 +163,20 @@ def test_lock_of_dead_process_is_stale(tmp_path):
     lock = tmp_path / "run.lock"
     lock.write_text("999999")  # no such PID
     assert cli._lock_is_stale(lock)
+
+
+def test_unsolicited_fetch_response_is_ignored(env):
+    jev = FakeJev()
+    _use_jev(env, jev)
+    orig_fetch = FakeMailBox.fetch
+
+    def fetch_with_noise(self, criteria, **kw):
+        result = list(orig_fetch(self, criteria, **kw))
+        if "UID" in str(criteria):
+            noise = SimpleNamespace(uid=None, subject="", headers={})
+            result.insert(1, noise)
+        return iter(result)
+
+    env.monkeypatch.setattr(FakeMailBox, "fetch", fetch_with_noise)
+    code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None)
+    assert code == 0 and jev.calls == 7

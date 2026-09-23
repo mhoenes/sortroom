@@ -60,15 +60,20 @@ description = "Contract matters that are not a bill: new contracts, contract cha
 folder = "INBOX/Verträge"
 
 [categories.newsletter]
-description = "Newsletters, marketing, advertising, promotions, discount offers, product announcements, mailing lists"
+description = "Marketing and editorial mail sent to many recipients: newsletters, advertising, promotions, discounts, vouchers and coupons, sales, product and event announcements (e.g. new concerts or shows), subscription upgrade or renewal offers, club and association newsletters and member invitations, general service announcements to all customers. Not job alerts, social network digests or notifications about the recipient's own accounts"
 folder = "INBOX/Newsletter"
 flag_on_action = false
 track_expiry = true
 
 [categories.benachrichtigungen]
-description = "Automated notifications from apps, social networks, forums and online services (likes, comments, activity digests, status updates)"
+description = "Automated notifications about the recipient's own accounts, devices and activity: social and career networks (LinkedIn, Xing, Instagram: job alerts and recommendations, 'hiring near you', 'open to work', birthdays, follow suggestions, network digests), likes and comments, price alerts and wishlist price drops, requests to rate or review a purchase or trip, genealogy and record hints, app and smart home alerts, server and device status mails (updates, backups, errors), family safety reports"
 folder = "INBOX/Benachrichtigungen"
 flag_on_action = false
+
+[categories.postfach]
+description = "Notice that a new document or message is waiting in an online customer portal or postbox (bank PostBox, health insurance mailbox, tenant or property management portal), without the document itself"
+flag_on_action = false
+# no folder: stays in the inbox so documents waiting in portals are not overlooked
 
 [categories.persoenlich]
 description = "Personal mail written by a real person to the recipient: friends, family, acquaintances, private conversations"
