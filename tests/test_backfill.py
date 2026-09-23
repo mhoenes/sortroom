@@ -104,7 +104,7 @@ def _use_jev(env, jev):
 def test_backfill_live_processes_everything_in_batches(env):
     jev = FakeJev()
     _use_jev(env, jev)
-    code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None)
+    code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None).exit_code
     mb = FakeMailBox.instances[0]
     assert code == 0 and jev.calls == 7
     assert [len(uids) for uids, _ in mb.moves] == [3, 3, 1]  # batches of max_per_run, newest first
@@ -117,7 +117,7 @@ def test_backfill_live_processes_everything_in_batches(env):
 def test_backfill_dry_run_terminates_and_classifies_each_mail_once(env):
     jev = FakeJev()
     _use_jev(env, jev)
-    code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=False, since=date(2026, 1, 1), limit=None)
+    code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=False, since=date(2026, 1, 1), limit=None).exit_code
     assert code == 0 and jev.calls == 7
     assert FakeMailBox.instances[0].moves == []
     report = next((env.tmp / "reports").glob("dry-run-*.csv"))
@@ -135,7 +135,7 @@ def test_backfill_respects_limit(env):
 def test_backfill_skips_failed_mail_instead_of_looping(env):
     jev = FakeJev(fail_subjects={"Angebot 6"})
     _use_jev(env, jev)
-    code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None)
+    code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None).exit_code
     assert code == 1 and jev.calls == 7  # failure reported, nothing classified twice
     store = Store(env.tmp / "data" / "state.db")
     assert not store.is_processed("<m6@x>")  # retried by the next backfill
@@ -178,7 +178,7 @@ def test_unsolicited_fetch_response_is_ignored(env):
         return iter(result)
 
     env.monkeypatch.setattr(FakeMailBox, "fetch", fetch_with_noise)
-    code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None)
+    code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None).exit_code
     assert code == 0 and jev.calls == 7
 
 
@@ -198,7 +198,7 @@ def test_backfill_keeps_going_when_a_batch_comes_back_short(env):
         return iter(result)
 
     env.monkeypatch.setattr(FakeMailBox, "fetch", fetch_dropping_one)
-    code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None)
+    code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None).exit_code
     assert code == 1  # the dropped mail is reported
     assert jev.calls == 6  # but all other 6 mails were still processed in this run
 
@@ -218,6 +218,6 @@ def test_mail_without_uid_is_matched_by_message_key(env):
         return iter(result)
 
     env.monkeypatch.setattr(FakeMailBox, "fetch", fetch_losing_uid)
-    code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None)
+    code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None).exit_code
     assert code == 0 and jev.calls == 7
     assert sum(len(u) for u, _ in FakeMailBox.instances[0].moves) == 7

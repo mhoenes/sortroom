@@ -334,22 +334,60 @@ def recheck_expiry(mb: MailBox, cfg: Config, jev: JevClient, store: Store) -> in
     return found
 
 
-def summarize(outcomes: list[Outcome], live: bool) -> None:
-    if not outcomes:
-        return
-    verb = "moved" if live else "would move"
+@dataclass
+class RunResult:
+    """Outcome of a run: exit code for the CLI, summary for the HTTP API."""
+    exit_code: int
+    live: bool = False
+    classified: int = 0
+    moved: int = 0
+    flagged: int = 0
+    kept_in_inbox: int = 0
+    time_limited_offers: int = 0
+    expired_tagged: int = 0
+    failed: int = 0
+    cost_usd: float = 0.0
+    categories: dict[str, int] | None = None
+    report: str | None = None
+    error: str | None = None
+
+    def as_dict(self) -> dict:
+        return {"ok": self.exit_code == 0, **self.__dict__, "categories": self.categories or {}}
+
+
+def summarize(outcomes: list[Outcome], live: bool, exit_code: int, failed: int = 0,
+              expired_tagged: int = 0, report: Path | None = None) -> RunResult:
     counts = Counter(o.decision.category for o in outcomes)
     moved = sum(1 for o in outcomes if o.folder)
-    flagged = sum(1 for o in outcomes if o.flag)
-    cost = sum(o.decision.cost for o in outcomes)
-    log.info("categories: %s", ", ".join(f"{k}={v}" for k, v in counts.most_common()))
-    expiring = sum(1 for o in outcomes if o.expires)
-    log.info("%s %d, flagged %d, kept %d in inbox, %d time-limited offer(s), cost $%.6f",
-             verb, moved, flagged, len(outcomes) - moved, expiring, cost)
+    result = RunResult(
+        exit_code=exit_code,
+        live=live,
+        classified=len(outcomes),
+        moved=moved,
+        flagged=sum(1 for o in outcomes if o.flag),
+        kept_in_inbox=len(outcomes) - moved,
+        time_limited_offers=sum(1 for o in outcomes if o.expires),
+        expired_tagged=expired_tagged,
+        failed=failed,
+        cost_usd=round(sum(o.decision.cost for o in outcomes), 6),
+        categories=dict(counts.most_common()),
+        report=str(report) if report else None,
+    )
+    if outcomes:
+        log.info("categories: %s", ", ".join(f"{k}={v}" for k, v in counts.most_common()))
+        log.info("%s %d, flagged %d, kept %d in inbox, %d time-limited offer(s), cost $%.6f",
+                 "moved" if live else "would move", result.moved, result.flagged,
+                 result.kept_in_inbox, result.time_limited_offers, result.cost_usd)
+    return result
 
 
-def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int | None) -> int:
-    """Returns a process exit code."""
+def _auth_failed(cfg: Config, e: Exception) -> RunResult:
+    log.error("%s - check %s in .env and your gateway credits", e, cfg.jev_api_key_env)
+    return RunResult(exit_code=2, error=str(e))
+
+
+def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int | None) -> RunResult:
+    """Normal run: classify new mail from the last lookback_days."""
     store = Store(base_dir / "data" / "state.db")
     jev = cfg.jev_client(creds.jev_api_key)
     limit = min(limit or cfg.max_per_run, cfg.max_per_run)
@@ -361,22 +399,22 @@ def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int 
             since = date.today() - timedelta(days=cfg.lookback_days)
             try:
                 outcomes, failed, _ = classify_new(mb, cfg, jev, store, limit, since,
-                                                on_outcome=report.write if report else None)
+                                                   on_outcome=report.write if report else None)
             except JevAuthError as e:
-                log.error("%s - check %s in .env and your gateway credits", e, cfg.jev_api_key_env)
-                return 2
-            failures = 0
+                return _auth_failed(cfg, e)
+            failures = tagged = 0
             if live:
                 failures = apply(mb, outcomes, store)
-                tag_expired(mb, cfg, store)
+                tagged = tag_expired(mb, cfg, store)
             elif outcomes:
                 log.info("dry run - nothing changed. Report: %s", report.path)
-            summarize(outcomes, live)
+            code = 1 if (failed or failures) else 0
+            return summarize(outcomes, live, code, failed=len(failed) + failures, expired_tagged=tagged,
+                             report=report.path if report and report.rows else None)
     finally:
         store.close()
         if report:
             report.close()
-    return 1 if (failed or failures) else 0
 
 
 def month_windows(since: date, until: date) -> list[tuple[date, date]]:
@@ -391,7 +429,7 @@ def month_windows(since: date, until: date) -> list[tuple[date, date]]:
 
 
 def run_backfill(cfg: Config, creds: Credentials, base_dir: Path, live: bool,
-                 since: date, limit: int | None) -> int:
+                 since: date, limit: int | None) -> RunResult:
     """--since: manually sort older mail, month by month (newest first) in batches.
 
     Only reachable from the command line; the scheduled task never passes --since.
@@ -419,8 +457,7 @@ def run_backfill(cfg: Config, creds: Credentials, base_dir: Path, live: bool,
                             on_outcome=report.write if report else None,
                         )
                     except JevAuthError as e:
-                        log.error("%s - check %s in .env and your gateway credits", e, cfg.jev_api_key_env)
-                        return 2
+                        return _auth_failed(cfg, e)
                     if not attempted:
                         break  # month done
                     seen.update(attempted)  # failed ones are retried on the next backfill, not in this one
@@ -433,21 +470,23 @@ def run_backfill(cfg: Config, creds: Credentials, base_dir: Path, live: bool,
                 if remaining is not None and remaining <= 0:
                     log.info("limit reached, stopping")
                     break
+            tagged = 0
             if live:
-                tag_expired(mb, cfg, store)
+                tagged = tag_expired(mb, cfg, store)
             elif all_outcomes:
                 log.info("dry run - nothing changed. Report: %s", report.path)
-            summarize(all_outcomes, live)
             if all_failed:
                 log.warning("%d mail(s) could not be classified; run the backfill again to retry", len(all_failed))
+            code = 1 if (all_failed or failures) else 0
+            return summarize(all_outcomes, live, code, failed=len(all_failed) + failures, expired_tagged=tagged,
+                             report=report.path if report and report.rows else None)
     finally:
         store.close()
         if report:
             report.close()
-    return 1 if (all_failed or failures) else 0
 
 
-def run_recheck_expiry(cfg: Config, creds: Credentials, base_dir: Path, live: bool) -> int:
+def run_recheck_expiry(cfg: Config, creds: Credentials, base_dir: Path, live: bool) -> RunResult:
     """--recheck-expiry: find expiry dates for already sorted mail, then tag (live only)."""
     store = Store(base_dir / "data" / "state.db")
     jev = cfg.jev_client(creds.jev_api_key)
@@ -456,14 +495,14 @@ def run_recheck_expiry(cfg: Config, creds: Credentials, base_dir: Path, live: bo
             creds.imap_user, creds.imap_password, initial_folder=cfg.source_folder
         ) as mb:
             try:
-                recheck_expiry(mb, cfg, jev, store)
+                found = recheck_expiry(mb, cfg, jev, store)
             except JevAuthError as e:
-                log.error("%s - check %s in .env and your gateway credits", e, cfg.jev_api_key_env)
-                return 2
+                return _auth_failed(cfg, e)
+            tagged = 0
             if live:
-                tag_expired(mb, cfg, store)
+                tagged = tag_expired(mb, cfg, store)
             else:
                 log.info("dry run - expiry dates saved, no tags set (use --live to tag)")
+            return RunResult(exit_code=0, live=live, time_limited_offers=found, expired_tagged=tagged)
     finally:
         store.close()
-    return 0

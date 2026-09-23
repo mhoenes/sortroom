@@ -1,0 +1,28 @@
+# email-sorter as a service next to n8n.
+#
+# The container publishes no port: it is only reachable from containers on the
+# same Docker network as n8n, at http://email-sorter:8765.
+# Set N8N_NETWORK in .env to the network your n8n container uses
+# (docker inspect <n8n-container> --format '{{json .NetworkSettings.Networks}}').
+
+services:
+  email-sorter:
+    build: .
+    image: email-sorter:latest
+    container_name: email-sorter
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: Europe/Berlin  # expiry dates and "today" follow local time
+    volumes:
+      - ./data:/app/data          # state.db: which mails were sorted, expiry dates
+      - ./logs:/app/logs
+      - ./reports:/app/reports    # dry-run CSV reports
+      - ./config.toml:/app/config.toml:ro
+    networks:
+      - n8n
+
+networks:
+  n8n:
+    external: true
+    name: ${N8N_NETWORK:-n8n_default}

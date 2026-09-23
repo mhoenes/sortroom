@@ -57,6 +57,57 @@ again later – it continues where it left off. While it runs, scheduled runs
 are skipped (shared lock). Old offers whose deadline has passed go straight
 to `Newsletter/Abgelaufen`.
 
+## Running in Docker next to n8n
+
+The sorter can run as its own container with a small HTTP API that n8n calls.
+The container publishes no port; only containers on the n8n Docker network
+reach it at `http://email-sorter:8765`.
+
+| Endpoint | What |
+|---|---|
+| `POST /run` `{"live": true}` | normal run (last `lookback_days`), returns a JSON summary |
+| `POST /backfill` `{"since": "2024-01-01", "live": false}` | backfill in the background, returns a job (202) |
+| `GET /jobs/{id}` | status and summary of a backfill job |
+| `POST /recheck-expiry` `{"live": true}` | find expiry dates of already sorted offers |
+| `GET /health` | liveness, no auth |
+
+All endpoints except `/health` need `Authorization: Bearer <API_TOKEN>`.
+Runs share one lock: while a backfill runs, `/run` answers 409.
+
+### Setup on the Docker host
+
+1. Copy the project folder to the host (without `.venv`).
+2. **Move the state over:** copy `data/state.db` from the old machine into
+   `data/` on the host – otherwise the sorter doesn't know what it already
+   sorted and expiry dates are lost.
+3. Create `.env` (see `.env.example`): IMAP, `OPENROUTER_API_KEY`, a new
+   `API_TOKEN` and `N8N_NETWORK` (the Docker network of your n8n container:
+   `docker inspect <n8n> --format '{{json .NetworkSettings.Networks}}'`).
+4. `mkdir -p data logs reports && sudo chown -R 1000:1000 data logs reports`
+   (the container runs as uid 1000).
+5. `docker compose up -d --build`, then check:
+   `docker compose logs -f email-sorter` and
+   `docker exec email-sorter python -m email_sorter --check`.
+
+### n8n
+
+Import the workflows from `n8n/` (Workflows → Import from File):
+
+- **`email-sorter-laufend.json`** – every 10 minutes `POST /run`; a failed run
+  goes to "Fehlermeldung bauen", where you attach your notification node
+  (e-mail, Telegram, ntfy …).
+- **`email-sorter-backfill.json`** – manual only: set `since`/`live`/`limit`
+  in "Parameter", start it, it polls the job every minute until done.
+
+In both, create one credential of type **Header Auth**: name
+`Authorization`, value `Bearer <API_TOKEN>`, and select it in the HTTP nodes.
+Then activate the 10-minute workflow.
+
+**Don't run two sorters on the same mailbox.** Once the container is live,
+remove the Windows scheduled task (`uninstall-task.ps1`) if you installed it –
+each installation has its own `state.db` and they would not know about each
+other's work.
+
 ## How it decides
 
 1. Looks at mails in `INBOX` from the last `lookback_days` (default 7) that
