@@ -53,11 +53,11 @@ description = "Online shop order confirmations, shipping and delivery notificati
 folder = "INBOX/Bestellungen"
 
 [categories.reisen]
-description = "Travel: flight, train and long-distance bus bookings and tickets, hotel and holiday rental confirmations, rental cars, check-in and boarding reminders, itinerary changes, delays and cancellations of a trip. Not event tickets or local appointments"
+description = "Travel: flight, train and long-distance bus bookings and tickets, hotel and holiday rental confirmations, rental cars, check-in and boarding reminders, itinerary changes, delays and cancellations; booking receipts and invoices from travel platforms and agencies (e.g. Agoda, trip.com, Booking.com); activities booked for a trip away from home: tickets for sights, museums, tours and excursions at the travel destination. Not local events or appointments at home"
 folder = "INBOX/Reisen"
 
 [categories.termine]
-description = "Appointments and events the recipient booked or was personally invited to: tickets and booking confirmations for concerts, cinema, theatre, sports and other events; doctor, dentist, craftsman, hairdresser, car service and other appointment confirmations, reminders, reschedules and cancellations; calendar invitations. Not advertising for events and not travel"
+description = "Local appointments and events the recipient booked or was personally invited to: tickets and booking confirmations for concerts, cinema, theatre, sports and other events, restaurant reservations, leisure bookings; doctor, dentist, craftsman, hairdresser, car service and other appointment confirmations, reminders, reschedules and cancellations; calendar invitations. Not advertising for events and not sightseeing or tours on a trip"
 folder = "INBOX/Termine"
 
 [categories.unterlagen]
