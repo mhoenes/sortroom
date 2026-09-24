@@ -13,6 +13,24 @@ For every new mail it asks Jev two questions in one request:
 
 Cost is roughly $0.00002 per mail (input tokens only; output is free).
 
+## Admin UI
+
+The container serves a browser UI next to the API: `http://<docker-host>:8765`
+(port via `UI_PORT`). Log in with `ADMIN_PASSWORD` from `.env` (at least 8
+characters; without it the UI stays locked). Sessions last 7 days; failed
+logins are slowed down. Behind an HTTPS reverse proxy set `UI_SECURE_COOKIES=1`.
+
+- **Alle Postfächer** – every mailbox with status, today's count, uncertain
+  mail and this month's cost
+- **Übersicht** (per mailbox) – last run, distribution of the last 7 days,
+  run log, uncertain mail
+- **Mails** – everything sorted, with search and filters (category, folder,
+  period, uncertain, flagged) and a detail panel
+
+The pages only read each mailbox's `state.db`; they never touch IMAP or Jev.
+Editing categories and settings, maintenance jobs and correcting single mails
+follow in later versions. The API endpoints keep their bearer-token auth.
+
 ## Several mailboxes
 
 Each mailbox lives in its own folder with its own settings, log and reports:

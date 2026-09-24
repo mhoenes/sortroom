@@ -1,0 +1,172 @@
+"""Read-only queries on a mailbox's state.db for the web UI."""
+from __future__ import annotations
+
+import sqlite3
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
+from pathlib import Path
+
+PAGE_SIZE = 50
+PERIODS = {"24h": timedelta(hours=24), "7d": timedelta(days=7), "30d": timedelta(days=30), "all": None}
+
+
+def connect(workspace: Path) -> sqlite3.Connection | None:
+    """The mailbox's log, opened read-only; None before its first run."""
+    path = workspace / "data" / "state.db"
+    if not path.exists():
+        return None
+    db = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
+    db.row_factory = sqlite3.Row
+    return db
+
+
+def _has_table(db: sqlite3.Connection, name: str) -> bool:
+    return db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone() is not None
+
+
+def _has_column(db: sqlite3.Connection, table: str, column: str) -> bool:
+    return any(r[1] == column for r in db.execute(f"PRAGMA table_info({table})"))
+
+
+def _iso(dt: datetime) -> str:
+    return dt.isoformat(timespec="seconds")
+
+
+@dataclass
+class MailboxStats:
+    sorted_today: int = 0
+    uncertain: int = 0
+    flagged_7d: int = 0
+    cost_month: float = 0.0
+    jev_mails_month: int = 0
+    last_run: dict | None = None
+    errors_today: int = 0
+
+    @property
+    def cost_per_mail(self) -> float:
+        return self.cost_month / self.jev_mails_month if self.jev_mails_month else 0.0
+
+
+def stats(db: sqlite3.Connection | None, min_confidence: float, now: datetime | None = None) -> MailboxStats:
+    s = MailboxStats()
+    if db is None:
+        return s
+    now = now or datetime.now()
+    today = _iso(datetime.combine(now.date(), datetime.min.time()))
+    month = _iso(datetime.combine(now.date().replace(day=1), datetime.min.time()))
+    s.sorted_today = db.execute("SELECT COUNT(*) FROM processed WHERE processed_at >= ?", (today,)).fetchone()[0]
+    s.uncertain = db.execute(
+        "SELECT COUNT(*) FROM processed WHERE moved_to IS NULL AND confidence < ? AND processed_at >= ?",
+        (min_confidence, _iso(now - timedelta(days=30)))).fetchone()[0]
+    s.flagged_7d = db.execute("SELECT COUNT(*) FROM processed WHERE flagged = 1 AND processed_at >= ?",
+                              (_iso(now - timedelta(days=7)),)).fetchone()[0]
+    jev_only = " AND source = 'jev'" if _has_column(db, "processed", "source") else ""  # DBs before 1.2
+    cost, n = db.execute(
+        f"SELECT COALESCE(SUM(cost_usd), 0), COUNT(*) FROM processed WHERE processed_at >= ?{jev_only}",
+        (month,)).fetchone()
+    s.cost_month, s.jev_mails_month = cost, n
+    if _has_table(db, "runs"):
+        row = db.execute("SELECT * FROM runs WHERE kind = 'run' ORDER BY started DESC, id DESC LIMIT 1").fetchone()
+        s.last_run = dict(row) if row else None
+        s.errors_today = db.execute("SELECT COUNT(*) FROM runs WHERE exit_code != 0 AND started >= ?",
+                                    (today,)).fetchone()[0]
+    return s
+
+
+def distribution(db: sqlite3.Connection | None, days: int = 7, now: datetime | None = None) -> list[tuple[str, int]]:
+    """(category, count) of mail sorted in the last `days` days; '' stands for 'left in the inbox'."""
+    if db is None:
+        return []
+    since = _iso((now or datetime.now()) - timedelta(days=days))
+    rows = db.execute(
+        "SELECT CASE WHEN moved_to IS NULL THEN '' ELSE category END AS c, COUNT(*) FROM processed "
+        "WHERE processed_at >= ? GROUP BY c ORDER BY COUNT(*) DESC", (since,)).fetchall()
+    return [(r[0], r[1]) for r in rows]
+
+
+def expired_moved(db: sqlite3.Connection | None, days: int = 7, now: datetime | None = None) -> int:
+    if db is None or not _has_table(db, "runs"):
+        return 0
+    since = _iso((now or datetime.now()) - timedelta(days=days))
+    return db.execute("SELECT COALESCE(SUM(expired_moved), 0) FROM runs WHERE started >= ? AND live = 1",
+                      (since,)).fetchone()[0]
+
+
+def recent_runs(db: sqlite3.Connection | None, limit: int = 8, skip_empty: bool = True) -> list[dict]:
+    """Latest runs; normal runs that found nothing are left out unless they failed."""
+    if db is None or not _has_table(db, "runs"):
+        return []
+    where = "WHERE NOT (kind = 'run' AND classified = 0 AND exit_code = 0)" if skip_empty else ""
+    return [dict(r) for r in db.execute(f"SELECT * FROM runs {where} ORDER BY started DESC, id DESC LIMIT ?",
+                                        (limit,))]
+
+
+def uncertain_mails(db: sqlite3.Connection | None, min_confidence: float, limit: int = 10) -> list[dict]:
+    if db is None:
+        return []
+    return [dict(r) for r in db.execute(
+        "SELECT * FROM processed WHERE moved_to IS NULL AND confidence < ? ORDER BY processed_at DESC LIMIT ?",
+        (min_confidence, limit))]
+
+
+@dataclass
+class MailFilter:
+    q: str = ""
+    category: str = ""
+    folder: str = ""      # a folder path, "inbox" or ""
+    period: str = "7d"
+    uncertain: bool = False
+    flagged: bool = False
+    page: int = 1
+
+
+def mails(db: sqlite3.Connection | None, f: MailFilter, min_confidence: float,
+          now: datetime | None = None) -> tuple[list[dict], int]:
+    """One page of processed mail matching the filter, newest first, and the total count."""
+    if db is None:
+        return [], 0
+    where, args = [], []
+    span = PERIODS.get(f.period)
+    if span:
+        where.append("processed_at >= ?")
+        args.append(_iso((now or datetime.now()) - span))
+    if f.q:
+        where.append("(sender LIKE ? ESCAPE '!' OR subject LIKE ? ESCAPE '!')")
+        like = "%" + f.q.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
+        args += [like, like]
+    if f.category:
+        where.append("category = ?")
+        args.append(f.category)
+    if f.folder == "inbox":
+        where.append("moved_to IS NULL")
+    elif f.folder:
+        where.append("moved_to = ?")
+        args.append(f.folder)
+    if f.uncertain:
+        where.append("moved_to IS NULL AND confidence < ?")
+        args.append(min_confidence)
+    if f.flagged:
+        where.append("flagged = 1")
+    sql_where = ("WHERE " + " AND ".join(where)) if where else ""
+    total = db.execute(f"SELECT COUNT(*) FROM processed {sql_where}", args).fetchone()[0]
+    offset = (max(f.page, 1) - 1) * PAGE_SIZE
+    rows = db.execute(f"SELECT * FROM processed {sql_where} ORDER BY processed_at DESC, received DESC "
+                      f"LIMIT ? OFFSET ?", args + [PAGE_SIZE, offset]).fetchall()
+    return [dict(r) for r in rows], total
+
+
+def mail(db: sqlite3.Connection | None, key: str) -> dict | None:
+    if db is None or not key:
+        return None
+    row = db.execute("SELECT * FROM processed WHERE message_key = ?", (key,)).fetchone()
+    return dict(row) if row else None
+
+
+def folders(db: sqlite3.Connection | None) -> list[str]:
+    if db is None:
+        return []
+    return [r[0] for r in db.execute("SELECT DISTINCT moved_to FROM processed WHERE moved_to IS NOT NULL ORDER BY 1")]
+
+
+def month_start(today: date | None = None) -> date:
+    return (today or date.today()).replace(day=1)

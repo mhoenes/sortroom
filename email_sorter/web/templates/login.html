@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anmelden · E-Mail-Sorter</title>
+<link rel="stylesheet" href="/ui/static/app.css?v={{ version }}">
+</head>
+<body>
+<div class="login">
+  <form class="card" method="post" action="/login">
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <h1>E-Mail-Sorter</h1>
+      <span class="muted">Administration · v{{ version }}</span>
+    </div>
+    {% if not configured %}
+      <p class="error" role="alert">Die Anmeldung ist gesperrt: In der <code>.env</code> fehlt <code>ADMIN_PASSWORD</code> (mindestens 8 Zeichen). Danach den Container neu starten.</p>
+    {% else %}
+      <label class="f">Passwort
+        <input type="password" name="password" autocomplete="current-password" autofocus required>
+      </label>
+      {% if error %}<p class="error" role="alert" style="margin:0">{{ error }}</p>{% endif %}
+      <input type="hidden" name="next" value="{{ next }}">
+      <button class="btn primary" type="submit">Anmelden</button>
+    {% endif %}
+  </form>
+</div>
+</body>
+</html>

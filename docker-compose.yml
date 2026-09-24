@@ -1,7 +1,8 @@
 # email-sorter as a service next to n8n.
 #
-# The container publishes no port: it is only reachable from containers on the
-# same Docker network as n8n, at http://email-sorter:8765.
+# n8n reaches the API over the shared Docker network at http://email-sorter:8765.
+# The admin UI is published on the host (http://<host>:8765, login with ADMIN_PASSWORD);
+# set UI_PORT in .env to use another port, or remove `ports` to keep it internal.
 # Set N8N_NETWORK in .env to the network your n8n container uses
 # (docker inspect <n8n-container> --format '{{json .NetworkSettings.Networks}}').
 
@@ -13,6 +14,8 @@ services:
     # EMAIL_SORTER_IMAGE empty.
     image: ${EMAIL_SORTER_IMAGE:-email-sorter:latest}
     container_name: email-sorter
+    ports:
+      - "${UI_PORT:-8765}:8765"
     restart: unless-stopped
     env_file: .env
     environment:

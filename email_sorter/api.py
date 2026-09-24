@@ -28,6 +28,7 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from . import __version__
 from .config import ConfigError, Mailbox, load_credentials, load_mailboxes
 from .runtime import BASE_DIR, _lock_is_stale, setup_logging, single_instance
 from .sorter import run, run_backfill, run_recheck_expiry
@@ -65,7 +66,7 @@ async def _lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="email-sorter", version="1.2", lifespan=_lifespan)
+app = FastAPI(title="email-sorter", version=__version__, lifespan=_lifespan)
 
 
 def _require_token(authorization: str = Header(default="")) -> None:
@@ -216,3 +217,28 @@ def get_job(job_id: str) -> dict:
 
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
+
+
+# ---------------------------------------------------------------- web UI (session login, see email_sorter/web)
+
+from urllib.parse import quote  # noqa: E402
+
+from fastapi import Request  # noqa: E402
+from fastapi.responses import RedirectResponse  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+from starlette.middleware.sessions import SessionMiddleware  # noqa: E402
+
+from . import web  # noqa: E402
+
+app.state.load_mailboxes = lambda: load_mailboxes(BASE_DIR, CONFIG_PATH)
+app.state.is_busy = _busy
+app.add_middleware(SessionMiddleware, secret_key=web.session_secret(), session_cookie="email_sorter_session",
+                   max_age=web.SESSION_DAYS * 86400, same_site="lax",
+                   https_only=os.environ.get("UI_SECURE_COOKIES") == "1")
+app.mount("/ui/static", StaticFiles(directory=str(web.HERE / "static")), name="static")
+app.include_router(web.router)
+
+
+@app.exception_handler(web.LoginRequired)
+def _to_login(request: Request, exc: web.LoginRequired):
+    return RedirectResponse(f"/login?next={quote(exc.next_url, safe='/')}", status_code=303)

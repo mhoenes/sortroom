@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Mails · {{ box.name }}{% endblock %}
+{% block content %}
+<div class="head">
+  <div class="title">
+    <h1>Mails · {{ box.name }}</h1>
+    <div class="sub">Was der Sorter in diesem Postfach verarbeitet hat · {{ total|de_num }} {{ 'Eintrag' if total == 1 else 'Einträge' }}</div>
+  </div>
+</div>
+
+<form class="filters" method="get" action="/ui/m/{{ box.id }}/mails">
+  <label class="f" style="flex-grow:1;min-width:220px">Suche
+    <input type="search" name="q" value="{{ f.q }}" placeholder="Absender oder Betreff">
+  </label>
+  <label class="f" style="width:190px">Kategorie
+    <select name="category" onchange="this.form.submit()">
+      <option value="">Alle</option>
+      {% for key, c in box.cfg.categories.items() %}<option value="{{ key }}" {% if f.category == key %}selected{% endif %}>{{ c.label }}</option>{% endfor %}
+    </select>
+  </label>
+  <label class="f" style="width:210px">Ort
+    <select name="folder" onchange="this.form.submit()">
+      <option value="">Alle</option>
+      <option value="inbox" {% if f.folder == 'inbox' %}selected{% endif %}>Posteingang</option>
+      {% for p in folders %}<option value="{{ p }}" {% if f.folder == p %}selected{% endif %}>{{ p|folder_label }}</option>{% endfor %}
+    </select>
+  </label>
+  <label class="f" style="width:160px">Zeitraum
+    <select name="period" onchange="this.form.submit()">
+      {% for p, label in [('24h', 'Letzte 24 h'), ('7d', '7 Tage'), ('30d', '30 Tage'), ('all', 'Alle')] %}
+      <option value="{{ p }}" {% if f.period == p %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </label>
+  <label class="check"><input type="checkbox" name="uncertain" value="1" {% if f.uncertain %}checked{% endif %} onchange="this.form.submit()">Nur unsichere</label>
+  <label class="check"><input type="checkbox" name="flagged" value="1" {% if f.flagged %}checked{% endif %} onchange="this.form.submit()">Mit Stern</label>
+  <button class="btn" type="submit">Suchen</button>
+</form>
+
+<div class="grid mails">
+  <section class="card" style="padding:6px 12px">
+    {% if rows %}
+    <table>
+      <thead><tr><th scope="col">Eingang</th><th scope="col">Absender</th><th scope="col">Betreff</th><th scope="col">Kategorie</th><th scope="col">Konfidenz</th><th scope="col">Ort</th></tr></thead>
+      <tbody>
+      {% for m in rows %}
+        {% set href = '/ui/m/' ~ box.id ~ '/mails?' ~ query ~ ('&' if query else '') ~ 'page=' ~ f.page ~ '&key=' ~ link_key(m.message_key) %}
+        {% set low = m.confidence < min_conf %}
+        <tr class="link {% if selected and selected.message_key == m.message_key %}sel{% endif %}">
+          <td class="mono" style="white-space:nowrap"><a class="rowlink" href="{{ href }}">{{ m.received|de_dt }}</a></td>
+          <td class="clip" style="width:20%"><a class="rowlink" href="{{ href }}">{{ m.sender }}</a></td>
+          <td class="clip" style="width:36%"><a class="rowlink" href="{{ href }}">{{ m.subject or '(ohne Betreff)' }}</a></td>
+          <td><span class="pill {% if m.category == 'verdaechtig' %}err{% endif %}">{{ label(m.category) }}</span></td>
+          <td>{% if m.source == 'rule' %}<span class="muted">Regel</span>{% else %}<span class="meter"><span class="track"><span class="fill {% if low %}low{% endif %}" style="width:{{ (m.confidence * 100)|round|int }}%"></span></span><span class="mono">{{ m.confidence|de_conf }}</span></span>{% endif %}</td>
+          <td style="white-space:nowrap">{{ m.moved_to|folder_label }}{% if m.flagged %} <span class="pill info">Stern</span>{% endif %}{% if low and not m.moved_to %} <span class="pill warn">unsicher</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div class="pager">
+      Seite {{ f.page }} von {{ pages }}
+      {% if f.page > 1 %}<a class="btn small" href="/ui/m/{{ box.id }}/mails?{{ query }}{{ '&' if query }}page={{ f.page - 1 }}">Zurück</a>{% endif %}
+      {% if f.page < pages %}<a class="btn small" href="/ui/m/{{ box.id }}/mails?{{ query }}{{ '&' if query }}page={{ f.page + 1 }}">Weiter</a>{% endif %}
+    </div>
+    {% else %}<div class="empty">Keine Mails für diese Filter.</div>{% endif %}
+  </section>
+
+  <aside class="card detail" aria-label="Details">
+    {% if selected %}
+      {% set m = selected %}
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <div class="mono muted" style="font-size:12px">{{ m.received|de_dt(true) }} · {{ m.sender }}</div>
+        <h2>{{ m.subject or '(ohne Betreff)' }}</h2>
+        <div>
+          {% if m.moved_to %}<span class="pill ok">In {{ m.moved_to|folder_label }}</span>
+          {% elif m.confidence < min_conf %}<span class="pill warn">Unsicher – liegt im Posteingang</span>
+          {% else %}<span class="pill">Im Posteingang</span>{% endif %}
+        </div>
+      </div>
+      <dl>
+        <dt>Kategorie</dt><dd>{{ label(m.category) }}</dd>
+        <dt>Entschieden von</dt><dd>{{ 'Absender-Regel' if m.source == 'rule' else 'Jev' }}</dd>
+        {% if m.source != 'rule' %}<dt>Konfidenz</dt><dd class="mono">{{ m.confidence|de_conf }}</dd>
+        <dt>Handlungsbedarf</dt><dd class="mono">{{ m.needs_action|de_conf }}</dd>{% endif %}
+        <dt>Stern</dt><dd>{{ 'ja' if m.flagged else 'nein' }}</dd>
+        {% if m.expires %}<dt>Angebot bis</dt><dd>{{ m.expires|de_date }}{% if m.expired_tagged == 1 %} · nach „Abgelaufen“ verschoben{% endif %}</dd>{% endif %}
+        <dt>Kosten</dt><dd class="mono">{{ m.cost_usd|usd(6) }}</dd>
+        <dt>Verarbeitet</dt><dd>{{ m.processed_at|de_dt(true) }}</dd>
+      </dl>
+      <p class="muted" style="font-size:13px;margin:0">Korrigieren und verschieben folgt in einer späteren Version.</p>
+    {% else %}
+      <div class="empty">Eine Mail in der Liste anklicken, um Details zu sehen.</div>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

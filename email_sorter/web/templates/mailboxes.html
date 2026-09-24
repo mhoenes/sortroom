@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Alle Postfächer{% endblock %}
+{% block content %}
+<div class="head">
+  <div class="title">
+    <h1>Alle Postfächer</h1>
+    <div class="sub">Jedes Postfach hat eigene Kategorien, Regeln und ein eigenes Protokoll</div>
+  </div>
+</div>
+
+<div class="grid cols-4">
+  <div class="card kpi"><span class="k">Postfächer</span><span class="v">{{ cards|length }}</span></div>
+  <div class="card kpi"><span class="k">Heute einsortiert</span><span class="v">{{ totals.today|de_num }}</span></div>
+  <div class="card kpi"><span class="k">Zur Prüfung</span><span class="v">{{ totals.uncertain|de_num }}</span><span class="d">unsicher, letzte 30 Tage</span></div>
+  <div class="card kpi"><span class="k">Kosten diesen Monat, gesamt</span><span class="v mono">{{ totals.cost|usd }}</span></div>
+</div>
+
+<div class="grid cols-3">
+{% for c in cards %}
+  {% set st = c.stats %}
+  <section class="card boxcard">
+    <div class="row" style="align-items:center">
+      <div class="grow" style="display:flex;flex-direction:column;gap:2px">
+        <h2 style="font-size:18px">{{ c.box.name }}</h2>
+        <span class="muted" style="font-size:13px">{{ c.box.cfg.imap_host }}</span>
+      </div>
+      {% if c.busy %}<span class="pill info">Läuft gerade</span>
+      {% elif st.last_run and st.last_run.exit_code %}<span class="pill warn">Fehler</span>
+      {% elif st.last_run %}<span class="pill ok">OK</span>
+      {% else %}<span class="pill">Noch kein Lauf</span>{% endif %}
+    </div>
+    <div class="stats">
+      <div><span>Heute</span><b>{{ st.sorted_today|de_num }}</b></div>
+      <div><span>Zur Prüfung</span><b>{{ st.uncertain|de_num }}</b></div>
+      <div><span>Mit Stern, 7 T.</span><b>{{ st.flagged_7d|de_num }}</b></div>
+      <div><span>Kosten Monat</span><b class="mono" style="font-size:18px">{{ st.cost_month|usd }}</b></div>
+    </div>
+    <div class="muted" style="font-size:13px">{{ c.categories }} Kategorien · letzter Lauf {{ st.last_run.started|ago if st.last_run else 'noch nie' }}{% if st.errors_today %} · {{ st.errors_today }} Fehler heute{% endif %}</div>
+    <div class="actions">
+      <a class="btn primary" href="/ui/m/{{ c.box.id }}">Öffnen</a>
+      <a class="btn" href="/ui/m/{{ c.box.id }}/mails">Mails</a>
+    </div>
+  </section>
+{% endfor %}
+</div>
+{% endblock %}

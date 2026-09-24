@@ -21,6 +21,7 @@ class Category:
     flag: bool
     flag_on_action: bool
     track_expiry: bool
+    label: str = ""  # display name; defaults to the key with umlauts, e.g. "Persönlich"
 
 
 INBOX_ACTION = "inbox"  # sender rule action: leave the mail in the inbox, untouched
@@ -79,6 +80,14 @@ class Credentials:
     jev_api_key: str
 
 
+def default_label(key: str) -> str:
+    """'persoenlich' -> 'Persönlich', 'verdaechtig' -> 'Verdächtig'."""
+    word = key.replace("_", " ")
+    for a, b in (("ae", "ä"), ("oe", "ö"), ("ue", "ü")):
+        word = word.replace(a, b)
+    return word[:1].upper() + word[1:]
+
+
 def _read_toml(path: Path) -> dict:
     try:
         with open(path, "rb") as f:
@@ -106,6 +115,7 @@ def config_from_raw(raw: dict, where: str) -> Config:
                 flag=bool(c.get("flag", False)),
                 flag_on_action=bool(c.get("flag_on_action", True)),
                 track_expiry=bool(c.get("track_expiry", False)),
+                label=str(c.get("label") or default_label(key)),
             )
         cfg = Config(
             imap_host=imap["host"],
