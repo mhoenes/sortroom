@@ -20,7 +20,7 @@ SAMPLE_RESPONSE = {
             "type": "choice",
             "choice": "finanzen",
             "confidence": 0.91,
-            "probabilities": {"finanzen": 0.93, "vertraege": 0.05, "sonstiges": 0.02},
+            "probabilities": {"finanzen": 0.93, "unterlagen": 0.05, "sonstiges": 0.02},
         },
         "needs_action": {"type": "noul", "noul": 0.87},
     },
@@ -52,7 +52,7 @@ def test_build_request_has_both_questions():
 def test_parse_response():
     d = parse_response(SAMPLE_RESPONSE, CFG.descriptions)
     assert (d.category, d.confidence, d.needs_action, d.cost) == ("finanzen", 0.91, 0.87, 0.00002)
-    assert d.runner_up == ("vertraege", 0.05)
+    assert d.runner_up == ("unterlagen", 0.05)
 
 
 def test_parse_response_reads_vercel_gateway_cost():

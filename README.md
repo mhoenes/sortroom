@@ -183,15 +183,17 @@ create a tag named `abgelaufen` (Settings → General → Tags) to see the tag.
 
 | Key | Folder | Notes |
 |---|---|---|
-| finanzen | INBOX/Finanzen | |
+| finanzen | INBOX/Finanzen | routine bills, receipts, statements |
 | bestellungen | INBOX/Bestellungen | |
-| reisen | INBOX/Reisen | |
-| vertraege | INBOX/Verträge | |
+| reisen | INBOX/Reisen | travel only |
+| termine | INBOX/Termine | booked events and appointments |
+| unterlagen | INBOX/Unterlagen | documents to keep for years: contracts, official letters, tax certificates |
 | werbung | INBOX/Werbung | expired offers → Werbung/Abgelaufen |
 | benachrichtigungen | INBOX/Benachrichtigungen | |
-| verdaechtig | INBOX/Verdächtig | phishing/scams, never flagged |
+| portal | – (inbox) | "new document in your customer portal" notices |
 | persoenlich | – (inbox) | |
 | sicherheit | – (inbox) | always flagged |
+| verdaechtig | INBOX/Verdächtig | phishing/scams, never flagged |
 | sonstiges | – (inbox) | |
 
 Add, rename or remove categories freely – the `description` is what Jev

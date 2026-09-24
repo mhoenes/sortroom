@@ -45,7 +45,7 @@ max_per_run = 200             # safety cap on mails classified per run
 # ---------------------------------------------------------------------------
 
 [categories.finanzen]
-description = "Anything about money owed or paid: invoices and bills of any kind (including electricity, gas, water, phone and internet bills), receipts, direct debit notices, bank and credit card statements, insurance premiums, taxes, payment reminders, dunning letters"
+description = "Routine money matters: invoices and bills of any kind (including electricity, gas, water, phone and internet bills), receipts and payment confirmations, direct debit notices, monthly bank and credit card statements, insurance premium invoices, payment reminders and dunning letters. Not annual tax certificates, tax assessments or contract documents"
 folder = "INBOX/Finanzen"
 
 [categories.bestellungen]
@@ -53,12 +53,16 @@ description = "Online shop order confirmations, shipping and delivery notificati
 folder = "INBOX/Bestellungen"
 
 [categories.reisen]
-description = "Travel bookings, train/flight/event tickets, hotel and rental confirmations, check-in reminders, appointment confirmations and reminders"
+description = "Travel: flight, train and long-distance bus bookings and tickets, hotel and holiday rental confirmations, rental cars, check-in and boarding reminders, itinerary changes, delays and cancellations of a trip. Not event tickets or local appointments"
 folder = "INBOX/Reisen"
 
-[categories.vertraege]
-description = "Contract matters that are not a bill: new contracts, contract changes, price change announcements, terminations and renewals with utility, internet or mobile providers; landlord and housing; government, authorities and official letters"
-folder = "INBOX/Verträge"
+[categories.termine]
+description = "Appointments and events the recipient booked or was personally invited to: tickets and booking confirmations for concerts, cinema, theatre, sports and other events; doctor, dentist, craftsman, hairdresser, car service and other appointment confirmations, reminders, reschedules and cancellations; calendar invitations. Not advertising for events and not travel"
+folder = "INBOX/Termine"
+
+[categories.unterlagen]
+description = "Documents worth keeping for years: new contracts and contract changes, price change announcements, cancellations and cancellation confirmations, insurance policies and annual insurance statements, rental agreements and landlord or housing matters, official letters and decisions from authorities (tax office, tax assessments, city, vehicle registration, broadcasting fee, pension insurance, courts), annual tax certificates from banks, employers or funds, certificates and diplomas, medical findings. Not routine monthly bills, receipts or account statements"
+folder = "INBOX/Unterlagen"
 
 [categories.werbung]
 description = "Marketing and editorial mail sent to many recipients: newsletters, advertising, promotions, discounts, vouchers and coupons, sales, product and event announcements (e.g. new concerts or shows), subscription upgrade or renewal offers, club and association newsletters and member invitations, general service announcements to all customers. Not job alerts, social network digests or notifications about the recipient's own accounts"
