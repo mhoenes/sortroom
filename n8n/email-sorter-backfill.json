@@ -127,7 +127,7 @@
             {
               "id": "7c1f9e1b-2d3e-4f5a-8b20-0000000000b2",
               "name": "zusammenfassung",
-              "value": "={{ $json.result ? `${$json.result.classified} Mails, ${$json.result.moved} verschoben, ${$json.result.kept_in_inbox} im Posteingang, ${$json.result.expired_tagged} abgelaufen, ${$json.result.failed} Fehler, $${$json.result.cost_usd}` : $json.error }}",
+              "value": "={{ $json.result ? `${$json.result.classified} Mails, ${$json.result.moved} verschoben, ${$json.result.kept_in_inbox} im Posteingang, ${$json.result.expired_moved} abgelaufen, ${$json.result.failed} Fehler, $${$json.result.cost_usd}` : $json.error }}",
               "type": "string"
             },
             {

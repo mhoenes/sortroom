@@ -6,7 +6,7 @@ import pytest
 
 from email_sorter.expiry import find_deadline, resolve_expiry, window_deadline
 from email_sorter.jev import Decision, build_request, parse_response
-from email_sorter.store import GONE, TAGGED, Store
+from email_sorter.store import GONE, MOVED, Store
 
 SENT = date(2026, 9, 23)  # a Wednesday
 
@@ -95,10 +95,10 @@ def test_store_due_and_tagging(tmp_path):
     store.record(_outcome("none"))
     due = store.due_expired(date(2026, 9, 23))
     assert [k for k, _, _ in due] == ["past"]
-    store.mark_tagged(["past"], TAGGED)
+    store.mark_expired(["past"], MOVED)
     assert store.due_expired(date(2026, 9, 23)) == []
     assert [k for k, _, _ in store.due_expired(date(2026, 9, 24))] == ["today"]
-    store.mark_tagged(["today"], GONE)
+    store.mark_expired(["today"], GONE)
     assert store.due_expired(date(2026, 9, 30)) == []
     store.close()
 
@@ -165,7 +165,7 @@ class _FakeMailBox:
         self.moves.append((sorted(uids), folder))
 
 
-def test_tag_expired_sets_keyword_and_marks_missing(tmp_path):
+def test_move_expired_moves_and_marks_missing(tmp_path):
     from email_sorter import sorter
     from email_sorter.config import load_config
     from pathlib import Path
@@ -177,16 +177,16 @@ def test_tag_expired_sets_keyword_and_marks_missing(tmp_path):
     store.record(_outcome("<later@x>", expires=date(2026, 10, 1)))
     mb = _FakeMailBox([_Head("7", "<a@x>"), _Head("8", "<later@x>")])
 
-    assert sorter.tag_expired(mb, cfg, store, today=date(2026, 9, 25)) == 1
-    assert mb.flags == [(["7"], "abgelaufen", True)]
+    assert sorter.move_expired(mb, cfg, store, today=date(2026, 9, 25)) == 1
+    assert mb.flags == []  # no IMAP keywords any more
     assert mb.moves == [(["7"], "INBOX.Werbung.Abgelaufen")]
     assert mb.folder.created == ["INBOX.Werbung.Abgelaufen"]
     assert mb.folder.selected == ["INBOX.Werbung", "INBOX"]
-    assert store.due_expired(date(2026, 9, 25)) == []  # tagged + gone are both settled
+    assert store.due_expired(date(2026, 9, 25)) == []  # moved + gone are both settled
     store.close()
 
 
-def test_tag_expired_splits_long_uid_lists(tmp_path, monkeypatch):
+def test_move_expired_splits_long_uid_lists(tmp_path, monkeypatch):
     from email_sorter import sorter
     from email_sorter.config import load_config
     from pathlib import Path
@@ -197,7 +197,22 @@ def test_tag_expired_splits_long_uid_lists(tmp_path, monkeypatch):
     for i in range(5):
         store.record(_outcome(f"<k{i}@x>", expires=date(2026, 9, 1)))
     mb = _FakeMailBox([_Head(str(10 + i), f"<k{i}@x>") for i in range(5)])
-    assert sorter.tag_expired(mb, cfg, store, today=date(2026, 9, 25)) == 5
-    assert [len(u) for u, _, _ in mb.flags] == [2, 2, 1]
+    assert sorter.move_expired(mb, cfg, store, today=date(2026, 9, 25)) == 5
     assert [len(u) for u, _ in mb.moves] == [2, 2, 1]
+    store.close()
+
+
+def test_move_expired_does_nothing_without_expired_folder(tmp_path):
+    from email_sorter import sorter
+    from email_sorter.config import Config, load_config
+    from pathlib import Path
+
+    cfg = load_config(Path(__file__).resolve().parent.parent / "config.toml")
+    cfg = Config(**{**cfg.__dict__, "expired_folder": None})
+    store = Store(tmp_path / "s.db")
+    store.record(_outcome("<a@x>", expires=date(2026, 9, 1)))
+    mb = _FakeMailBox([_Head("7", "<a@x>")])
+    assert sorter.move_expired(mb, cfg, store, today=date(2026, 9, 25)) == 0
+    assert mb.moves == []
+    assert len(store.due_expired(date(2026, 9, 25))) == 1  # kept until a folder is configured
     store.close()

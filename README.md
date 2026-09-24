@@ -178,29 +178,26 @@ The expired-offers folder is refused. Re-sorting `INBOX` leaves mail
 younger than `min_age_hours` alone, like normal runs. In Docker:
 `docker compose run --rm email-sorter python -m email_sorter --resort-folder INBOX/Reisen --live`.
 
-## Expired offers ("abgelaufen" tag)
+## Expired offers
 
-For categories with `track_expiry = true` (Newsletter), Jev also answers
+For categories with `track_expiry = true` (Werbung), Jev also answers
 whether the mail is a time-limited offer and roughly when it ends (same day,
 1–2 days, a week, a month). An explicit deadline in the text ("gültig bis
 30.09.", "endet am 1. Oktober", "ends October 3rd") takes precedence.
 
-Every live run takes mails whose last valid day has passed, tags them with
-the IMAP keyword `abgelaufen` (`expired_keyword`) and moves them to
-`INBOX/Werbung/Abgelaufen` (`expired_folder` in `config.toml`). To clean
-up, open that folder, select all, delete. The folder works in every client –
-Outlook, for example, does not show IMAP keywords. Mails you deleted or moved
-meanwhile are skipped.
+Every live run moves mails whose last valid day has passed to
+`expired_folder` (`INBOX/Werbung/Abgelaufen`), so they can be deleted in one
+go. Without an `expired_folder` the dates are only recorded. Mails you deleted
+or moved meanwhile are skipped. (IMAP keywords were dropped in 1.2: no common
+client showed them reliably.)
 
 Mails sorted before this feature existed can be checked once:
 
 ```powershell
 .venv\Scripts\python -m email_sorter --recheck-expiry          # find dates only
-.venv\Scripts\python -m email_sorter --recheck-expiry --live   # and tag expired ones
+.venv\Scripts\python -m email_sorter --recheck-expiry --live   # and move expired ones
 ```
 
-Remove `expired_folder` from `config.toml` to only tag. In Thunderbird,
-create a tag named `abgelaufen` (Settings → General → Tags) to see the tag.
 
 ## Categories (`config.toml`)
 

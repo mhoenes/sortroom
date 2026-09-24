@@ -25,8 +25,7 @@ min_interval_seconds = 0    # pause between requests; OpenRouter needs none.
 min_confidence = 0.70         # below this, mail stays in the inbox untouched
 action_flag_threshold = 0.80  # "needs action" probability at/above this -> mail gets flagged
 expiry_threshold = 0.70       # "time-limited offer" probability at/above this -> expiry date is tracked
-expired_keyword = "abgelaufen" # IMAP tag set once a tracked offer has expired
-expired_folder = "INBOX/Werbung/Abgelaufen"  # expired offers are moved here; remove to only tag
+expired_folder = "INBOX/Werbung/Abgelaufen"  # expired offers are moved here the day after their deadline
 lookback_days = 7             # only look at mail received in the last N days
 min_age_hours = 24            # leave mail alone until it has been in the inbox this long (0 = sort at once)
 # Mail from these senders always stays in the inbox and is not sent to Jev.
@@ -45,7 +44,7 @@ max_per_run = 200             # safety cap on mails classified per run
 #   flag_on_action  false = never flag because of "needs action" (default true);
 #                   for advertising ("voucher expires!") and anything suspicious
 #   track_expiry  true = find the end date of time-limited offers; the day after it
-#                 has passed, tag the mail with expired_keyword and move it to expired_folder
+#                 has passed, move the mail to expired_folder
 # Order does not matter. Keys must be unique, lowercase, no spaces.
 # ---------------------------------------------------------------------------
 

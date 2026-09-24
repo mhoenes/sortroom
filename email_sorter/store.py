@@ -1,6 +1,6 @@
 """SQLite log of processed mails, so nothing is classified (and paid for) twice.
 
-Also remembers when time-limited offers expire, so they can be tagged later.
+Also remembers when time-limited offers expire, so they can be moved to the expired folder later.
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS processed (
     cost_usd        REAL NOT NULL,
     expires         TEXT,                        -- last valid day of the offer (ISO date)
     expiry_checked  INTEGER NOT NULL DEFAULT 1,  -- 0 = processed before expiry tracking existed
-    expired_tagged  INTEGER NOT NULL DEFAULT 0   -- 1 = tagged, 2 = mail no longer found
+    expired_tagged  INTEGER NOT NULL DEFAULT 0   -- 1 = moved to the expired folder, 2 = mail no longer found
 )
 """
 
@@ -35,7 +35,7 @@ _MIGRATIONS = {
     "expired_tagged": "INTEGER NOT NULL DEFAULT 0",
 }
 
-TAGGED, GONE = 1, 2
+MOVED, GONE = 1, 2
 
 
 class Store:
@@ -103,7 +103,7 @@ class Store:
             (today.isoformat(),),
         ).fetchall()
 
-    def mark_tagged(self, keys: Iterable[str], state: int) -> None:
+    def mark_expired(self, keys: Iterable[str], state: int) -> None:
         self.db.executemany(
             "UPDATE processed SET expired_tagged = ? WHERE message_key = ?",
             [(state, k) for k in keys],

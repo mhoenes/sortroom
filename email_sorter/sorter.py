@@ -16,7 +16,7 @@ from .config import Config, Credentials
 from .expiry import resolve_expiry
 from .jev import Decision, JevAuthError, JevClient, JevError
 from .mailtext import build_state, full_text, message_key, sent_date
-from .store import GONE, TAGGED, Store
+from .store import GONE, MOVED, Store
 
 log = logging.getLogger(__name__)
 
@@ -304,39 +304,36 @@ def _group_by_folder(rows, cfg: Config, delim: str) -> dict[str, dict[str, str |
     return groups
 
 
-def tag_expired(mb: MailBox, cfg: Config, store: Store, today: date | None = None) -> int:
-    """Tag offers whose last valid day has passed and move them to expired_folder.
+def move_expired(mb: MailBox, cfg: Config, store: Store, today: date | None = None) -> int:
+    """Move offers whose last valid day has passed to expired_folder. Returns the number moved.
 
-    Returns the number of mails handled. The keyword is set before the move, so it travels along.
+    Without an expired_folder nothing happens: the dates stay in the log until one is configured.
     """
+    if not cfg.expired_folder:
+        return 0
     due = store.due_expired(today or date.today())
     if not due:
         return 0
     delim = _delimiter(mb)
-    target = server_folder(cfg.expired_folder, delim) if cfg.expired_folder else None
-    tagged = 0
+    target = server_folder(cfg.expired_folder, delim)
+    moved = 0
     try:
         for folder, wanted in _group_by_folder(due, cfg, delim).items():
             try:
                 uids = _find_uids(mb, folder, wanted, fallback_days=MAX_EXPIRY_AGE_DAYS)
-                if uids:
-                    if target and target != folder:
-                        _ensure_folder(mb, target)
+                if uids and target != folder:
+                    _ensure_folder(mb, target)
                     for chunk in _chunks(list(uids.values())):
-                        mb.flag(chunk, cfg.expired_keyword, True)
-                        if target and target != folder:
-                            mb.move(chunk, target)
-                store.mark_tagged(uids, TAGGED)
-                store.mark_tagged(set(wanted) - set(uids), GONE)  # deleted or moved away by the user
-                tagged += len(uids)
-                if uids:
-                    log.info("tagged %d expired offer(s) in %s as '%s'%s", len(uids), folder,
-                             cfg.expired_keyword, f" and moved them to {target}" if target else "")
+                        mb.move(chunk, target)
+                    log.info("moved %d expired offer(s) %s -> %s", len(uids), folder, target)
+                store.mark_expired(uids, MOVED)
+                store.mark_expired(set(wanted) - set(uids), GONE)  # deleted or moved away by the user
+                moved += len(uids)
             except Exception as e:
-                log.error("tagging expired offers in %s failed, will retry next run: %s", folder, e)
+                log.error("moving expired offers out of %s failed, will retry next run: %s", folder, e)
     finally:
         mb.folder.set(cfg.source_folder)
-    return tagged
+    return moved
 
 
 def recheck_expiry(mb: MailBox, cfg: Config, jev: JevClient, store: Store) -> int:
@@ -390,7 +387,7 @@ class RunResult:
     flagged: int = 0
     kept_in_inbox: int = 0
     time_limited_offers: int = 0
-    expired_tagged: int = 0
+    expired_moved: int = 0
     failed: int = 0
     cost_usd: float = 0.0
     categories: dict[str, int] | None = None
@@ -402,7 +399,7 @@ class RunResult:
 
 
 def summarize(outcomes: list[Outcome], live: bool, exit_code: int, failed: int = 0,
-              expired_tagged: int = 0, report: Path | None = None) -> RunResult:
+              expired_moved: int = 0, report: Path | None = None) -> RunResult:
     counts = Counter(o.decision.category for o in outcomes)
     moved = sum(1 for o in outcomes if o.folder)
     result = RunResult(
@@ -413,7 +410,7 @@ def summarize(outcomes: list[Outcome], live: bool, exit_code: int, failed: int =
         flagged=sum(1 for o in outcomes if o.flag),
         kept_in_inbox=len(outcomes) - moved,
         time_limited_offers=sum(1 for o in outcomes if o.expires),
-        expired_tagged=expired_tagged,
+        expired_moved=expired_moved,
         failed=failed,
         cost_usd=round(sum(o.decision.cost for o in outcomes), 6),
         categories=dict(counts.most_common()),
@@ -451,11 +448,11 @@ def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int 
             failures = tagged = 0
             if live:
                 failures = apply(mb, outcomes, store)
-                tagged = tag_expired(mb, cfg, store)
+                tagged = move_expired(mb, cfg, store)
             elif outcomes:
                 log.info("dry run - nothing changed. Report: %s", report.path)
             code = 1 if (failed or failures) else 0
-            return summarize(outcomes, live, code, failed=len(failed) + failures, expired_tagged=tagged,
+            return summarize(outcomes, live, code, failed=len(failed) + failures, expired_moved=tagged,
                              report=report.path if report and report.rows else None)
     finally:
         store.close()
@@ -518,13 +515,13 @@ def run_backfill(cfg: Config, creds: Credentials, base_dir: Path, live: bool,
                     break
             tagged = 0
             if live:
-                tagged = tag_expired(mb, cfg, store)
+                tagged = move_expired(mb, cfg, store)
             elif all_outcomes:
                 log.info("dry run - nothing changed. Report: %s", report.path)
             if all_failed:
                 log.warning("%d mail(s) could not be classified; run the backfill again to retry", len(all_failed))
             code = 1 if (all_failed or failures) else 0
-            return summarize(all_outcomes, live, code, failed=len(all_failed) + failures, expired_tagged=tagged,
+            return summarize(all_outcomes, live, code, failed=len(all_failed) + failures, expired_moved=tagged,
                              report=report.path if report and report.rows else None)
     finally:
         store.close()
@@ -546,9 +543,9 @@ def run_recheck_expiry(cfg: Config, creds: Credentials, base_dir: Path, live: bo
                 return _auth_failed(cfg, e)
             tagged = 0
             if live:
-                tagged = tag_expired(mb, cfg, store)
+                tagged = move_expired(mb, cfg, store)
             else:
                 log.info("dry run - expiry dates saved, no tags set (use --live to tag)")
-            return RunResult(exit_code=0, live=live, time_limited_offers=found, expired_tagged=tagged)
+            return RunResult(exit_code=0, live=live, time_limited_offers=found, expired_moved=tagged)
     finally:
         store.close()
