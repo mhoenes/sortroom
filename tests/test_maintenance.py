@@ -123,3 +123,77 @@ def test_rename_folder_refuses_existing_target(tmp_path, monkeypatch):
     fake = _setup(tmp_path, monkeypatch, {"INBOX": 5, "INBOX.Newsletter": 1, "INBOX.Werbung": 1})
     result = maintenance.rename_folder(CFG, CREDS, "INBOX/Newsletter", "INBOX/Werbung", live=True, base_dir=tmp_path)
     assert result.exit_code == 2 and fake.folder.renames == []
+
+
+class Head:
+    def __init__(self, uid, key):
+        self.uid, self.headers = uid, {"message-id": (key,)}
+
+
+class RelocateMailBox:
+    def __init__(self, folders):
+        self.folders = folders  # server name -> {uid: message key}
+        self.selected, self.moves, self.created = None, [], []
+        self.folder = SimpleNamespace(
+            list=lambda: [SimpleNamespace(name="INBOX", delim=".")],
+            exists=lambda n: n in self.folders,
+            set=lambda n: setattr(self, "selected", n),
+            create=lambda n: (self.created.append(n), self.folders.setdefault(n, {})),
+            subscribe=lambda n, v: None,
+        )
+
+    def login(self, *a, **kw):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def fetch(self, *a, **kw):
+        return iter([Head(u, k) for u, k in self.folders[self.selected].items()])
+
+    def move(self, uids, target):
+        self.moves.append((self.selected, sorted(uids), target))
+
+
+def _record_conf(store, key, category, moved_to, confidence):
+    store.record(SimpleNamespace(key=key, received="2026-09-20T10:00+02:00", sender="s", subject="x",
+                                 decision=Decision(category, confidence, {}, 0.0, 0.0), folder=moved_to,
+                                 flag=False, expires=None))
+
+
+def _relocate_setup(tmp_path, monkeypatch):
+    fake = RelocateMailBox({"INBOX": {"1": "<p1@x>", "2": "<p2@x>", "3": "<n1@x>"},
+                            "INBOX.Benachrichtigungen": {}})
+    monkeypatch.setattr(maintenance, "MailBox", lambda *a, **kw: fake)
+    store = Store(tmp_path / "data" / "state.db")
+    _record_conf(store, "<p1@x>", "portal", None, 0.95)
+    _record_conf(store, "<p2@x>", "portal", None, 0.50)                      # uncertain: not moved
+    _record_conf(store, "<p3@x>", "portal", None, 0.99)                      # deleted meanwhile
+    _record_conf(store, "<p4@x>", "portal", "INBOX/Benachrichtigungen", 0.9)  # already there
+    _record_conf(store, "<n1@x>", "sicherheit", None, 0.99)
+    store.close()
+    return fake
+
+
+def test_relocate_moves_confident_mails_of_the_category(tmp_path, monkeypatch):
+    fake = _relocate_setup(tmp_path, monkeypatch)
+    result = maintenance.relocate_category(CFG, CREDS, "portal", live=True, base_dir=tmp_path)
+    assert result.exit_code == 0 and result.moved == 1 and result.failed == 1  # p3 not found
+    assert fake.moves == [("INBOX", ["1"], "INBOX.Benachrichtigungen")]
+    store = Store(tmp_path / "data" / "state.db")
+    assert store.misplaced("portal", "INBOX/Benachrichtigungen", 0.7) == [("<p3@x>", None, "2026-09-20T10:00+02:00")]
+    store.close()
+
+
+def test_relocate_dry_run_moves_nothing(tmp_path, monkeypatch):
+    fake = _relocate_setup(tmp_path, monkeypatch)
+    result = maintenance.relocate_category(CFG, CREDS, "portal", live=False, base_dir=tmp_path)
+    assert result.moved == 1 and fake.moves == []
+
+
+def test_relocate_refuses_category_without_folder(tmp_path, monkeypatch):
+    _relocate_setup(tmp_path, monkeypatch)
+    assert maintenance.relocate_category(CFG, CREDS, "sicherheit", live=True, base_dir=tmp_path).exit_code == 2

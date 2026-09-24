@@ -77,8 +77,8 @@ flag_on_action = false
 
 [categories.portal]
 description = "Notice that a new document or message is waiting in an online customer portal or postbox (bank PostBox, health insurance mailbox, tenant or property management portal), without the document itself"
+folder = "INBOX/Benachrichtigungen"  # own category so Jev recognises them reliably, filed with notifications
 flag_on_action = false
-# no folder: stays in the inbox so documents waiting in portals are not overlooked
 
 [categories.persoenlich]
 description = "Personal mail written by a real person to the recipient: friends, family, acquaintances, private conversations"

@@ -132,6 +132,18 @@ class Store:
         )
         self.db.commit()
 
+    def misplaced(self, category: str, folder: str, min_confidence: float) -> list[tuple[str, str | None, str | None]]:
+        """(key, moved_to, received) of confidently classified mails of `category` not in `folder`."""
+        return self.db.execute(
+            "SELECT message_key, moved_to, received FROM processed "
+            "WHERE category = ? AND COALESCE(moved_to, '') != ? AND confidence >= ?",
+            (category, folder, min_confidence),
+        ).fetchall()
+
+    def set_moved_to(self, keys: Iterable[str], folder: str) -> None:
+        self.db.executemany("UPDATE processed SET moved_to = ? WHERE message_key = ?", [(folder, k) for k in keys])
+        self.db.commit()
+
     def close(self) -> None:
         self.db.close()
 

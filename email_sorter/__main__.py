@@ -45,6 +45,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--resort-folder", metavar="FOLDER",
                         help="classify all mail in FOLDER again (e.g. INBOX/Reisen) and move what now belongs "
                              "elsewhere; with --limit N only the newest N (with --live)")
+    parser.add_argument("--relocate", metavar="CATEGORY",
+                        help="move already sorted mail of CATEGORY into the folder config.toml now gives it "
+                             "(uses the log, no Jev requests; with --live)")
     parser.add_argument("--config", type=Path, default=BASE_DIR / "config.toml")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
@@ -68,10 +71,13 @@ def main(argv: list[str] | None = None) -> int:
         if not acquired:
             log.info("another run is still active, skipping")
             return 0
-        task = ("folder re-sort" if args.resort_folder else "category rename" if args.rename_category else "folder rename" if args.rename_folder
+        task = ("relocate" if args.relocate else "folder re-sort" if args.resort_folder else "category rename" if args.rename_category else "folder rename" if args.rename_folder
                 else "expiry recheck" if args.recheck_expiry else "run")
         log.info("starting %s %s", "LIVE" if args.live else "dry", task)
         try:
+            if args.relocate:
+                from .maintenance import relocate_category
+                return relocate_category(cfg, creds, args.relocate, live=args.live).exit_code
             if args.resort_folder:
                 from .resort import run_resort
                 return run_resort(cfg, creds, BASE_DIR, args.resort_folder, live=args.live,
