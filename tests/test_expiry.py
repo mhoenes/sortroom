@@ -82,7 +82,7 @@ def test_unknown_window_is_ignored():
     assert parse_response(resp, {"a": "x", "b": "y"}).expiry_window is None
 
 
-def _outcome(key, category="newsletter", expires=None, folder="INBOX/Newsletter"):
+def _outcome(key, category="werbung", expires=None, folder="INBOX/Werbung"):
     decision = Decision(category, 1.0, {}, 0.0, 0.0)
     return SimpleNamespace(key=key, received="2026-09-20T10:00+02:00", sender="s", subject="x",
                            decision=decision, folder=folder, flag=False, expires=expires)
@@ -179,9 +179,9 @@ def test_tag_expired_sets_keyword_and_marks_missing(tmp_path):
 
     assert sorter.tag_expired(mb, cfg, store, today=date(2026, 9, 25)) == 1
     assert mb.flags == [(["7"], "abgelaufen", True)]
-    assert mb.moves == [(["7"], "INBOX.Newsletter.Abgelaufen")]
-    assert mb.folder.created == ["INBOX.Newsletter.Abgelaufen"]
-    assert mb.folder.selected == ["INBOX.Newsletter", "INBOX"]
+    assert mb.moves == [(["7"], "INBOX.Werbung.Abgelaufen")]
+    assert mb.folder.created == ["INBOX.Werbung.Abgelaufen"]
+    assert mb.folder.selected == ["INBOX.Werbung", "INBOX"]
     assert store.due_expired(date(2026, 9, 25)) == []  # tagged + gone are both settled
     store.close()
 

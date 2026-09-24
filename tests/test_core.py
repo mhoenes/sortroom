@@ -163,7 +163,7 @@ def test_plan_moves_confident_mail():
 
 
 def test_plan_keeps_low_confidence_mail_in_inbox():
-    folder, flag, note = plan(decision("newsletter", 0.5), CFG)
+    folder, flag, note = plan(decision("werbung", 0.5), CFG)
     assert folder is None and not flag and "low confidence" in note
 
 
@@ -173,12 +173,12 @@ def test_plan_flags_mail_needing_action_even_if_unsure():
 
 
 def test_plan_does_not_flag_advertising_needing_action():
-    assert plan(decision("newsletter", 1.0, needs_action=0.95), CFG) == ("INBOX/Newsletter", False, "")
+    assert plan(decision("werbung", 1.0, needs_action=0.95), CFG) == ("INBOX/Werbung", False, "")
 
 
 def test_plan_never_flags_suspicious_mail():
-    assert plan(decision("verdacht", 0.95, needs_action=0.97), CFG) == ("INBOX/Verdacht", False, "")
-    folder, flag, _ = plan(decision("verdacht", 0.5, needs_action=0.97), CFG)
+    assert plan(decision("verdaechtig", 0.95, needs_action=0.97), CFG) == ("INBOX/Verdächtig", False, "")
+    folder, flag, _ = plan(decision("verdaechtig", 0.5, needs_action=0.97), CFG)
     assert folder is None and not flag
 
 

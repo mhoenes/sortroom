@@ -37,6 +37,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="test IMAP login and the Jev connection, list folders, change nothing")
     parser.add_argument("--recheck-expiry", action="store_true",
                         help="one-off: find expiry dates of already sorted offers (with --live also tag expired ones)")
+    parser.add_argument("--rename-category", nargs=2, metavar=("OLD", "NEW"),
+                        help="after renaming a category key in config.toml: update the log (with --live)")
+    parser.add_argument("--rename-folder", nargs=2, metavar=("OLD", "NEW"),
+                        help="rename a folder on the server incl. subfolders and in the log, "
+                             "e.g. INBOX/Newsletter INBOX/Werbung (with --live)")
     parser.add_argument("--config", type=Path, default=BASE_DIR / "config.toml")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
@@ -60,8 +65,16 @@ def main(argv: list[str] | None = None) -> int:
         if not acquired:
             log.info("another run is still active, skipping")
             return 0
-        log.info("starting %s %s", "LIVE" if args.live else "dry", "expiry recheck" if args.recheck_expiry else "run")
+        task = ("category rename" if args.rename_category else "folder rename" if args.rename_folder
+                else "expiry recheck" if args.recheck_expiry else "run")
+        log.info("starting %s %s", "LIVE" if args.live else "dry", task)
         try:
+            if args.rename_category:
+                from .maintenance import rename_category
+                return rename_category(*args.rename_category, live=args.live).exit_code
+            if args.rename_folder:
+                from .maintenance import rename_folder
+                return rename_folder(cfg, creds, *args.rename_folder, live=args.live).exit_code
             if args.recheck_expiry:
                 return run_recheck_expiry(cfg, creds, BASE_DIR, live=args.live).exit_code
             if args.since:

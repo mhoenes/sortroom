@@ -55,7 +55,7 @@ It works month by month, newest first, in batches of `max_per_run`. Live
 batches are applied immediately, so you can stop it (Ctrl+C) and start it
 again later – it continues where it left off. While it runs, scheduled runs
 are skipped (shared lock). Old offers whose deadline has passed go straight
-to `Newsletter/Abgelaufen`.
+to `Werbung/Abgelaufen`.
 
 ## Running in Docker next to n8n
 
@@ -140,6 +140,21 @@ Folders are created automatically on the first live run
 (`INBOX/Finanzen` → `INBOX.Finanzen` if Strato uses `.` as separator;
 `--check` shows which).
 
+## Renaming categories or folders
+
+Change `config.toml`, then bring the log (and the server) in line – otherwise
+the sorter creates a new empty folder and old mail stays under the old name.
+Stop any running sorter first, run without `--live` to preview:
+
+```powershell
+.venv\Scripts\python -m email_sorter --rename-category newsletter werbung --live
+.venv\Scripts\python -m email_sorter --rename-folder INBOX/Newsletter INBOX/Werbung --live
+```
+
+`--rename-folder` renames the folder on the IMAP server including subfolders
+and mail, moves the subscriptions and updates the log. In Docker:
+`docker compose run --rm email-sorter python -m email_sorter --rename-folder …`.
+
 ## Expired offers ("abgelaufen" tag)
 
 For categories with `track_expiry = true` (Newsletter), Jev also answers
@@ -149,7 +164,7 @@ whether the mail is a time-limited offer and roughly when it ends (same day,
 
 Every live run takes mails whose last valid day has passed, tags them with
 the IMAP keyword `abgelaufen` (`expired_keyword`) and moves them to
-`INBOX/Newsletter/Abgelaufen` (`expired_folder` in `config.toml`). To clean
+`INBOX/Werbung/Abgelaufen` (`expired_folder` in `config.toml`). To clean
 up, open that folder, select all, delete. The folder works in every client –
 Outlook, for example, does not show IMAP keywords. Mails you deleted or moved
 meanwhile are skipped.
@@ -172,9 +187,9 @@ create a tag named `abgelaufen` (Settings → General → Tags) to see the tag.
 | bestellungen | INBOX/Bestellungen | |
 | reisen | INBOX/Reisen | |
 | vertraege | INBOX/Verträge | |
-| newsletter | INBOX/Newsletter | expired offers → Newsletter/Abgelaufen |
+| werbung | INBOX/Werbung | expired offers → Werbung/Abgelaufen |
 | benachrichtigungen | INBOX/Benachrichtigungen | |
-| verdacht | INBOX/Verdacht | phishing/scams, never flagged |
+| verdaechtig | INBOX/Verdächtig | phishing/scams, never flagged |
 | persoenlich | – (inbox) | |
 | sicherheit | – (inbox) | always flagged |
 | sonstiges | – (inbox) | |

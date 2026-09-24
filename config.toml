@@ -26,7 +26,7 @@ min_confidence = 0.70         # below this, mail stays in the inbox untouched
 action_flag_threshold = 0.80  # "needs action" probability at/above this -> mail gets flagged
 expiry_threshold = 0.70       # "time-limited offer" probability at/above this -> expiry date is tracked
 expired_keyword = "abgelaufen" # IMAP tag set once a tracked offer has expired
-expired_folder = "INBOX/Newsletter/Abgelaufen"  # expired offers are moved here; remove to only tag
+expired_folder = "INBOX/Werbung/Abgelaufen"  # expired offers are moved here; remove to only tag
 lookback_days = 7             # only look at mail received in the last N days
 min_age_hours = 24            # leave mail alone until it has been in the inbox this long (0 = sort at once)
 max_per_run = 200             # safety cap on mails classified per run
@@ -60,9 +60,9 @@ folder = "INBOX/Reisen"
 description = "Contract matters that are not a bill: new contracts, contract changes, price change announcements, terminations and renewals with utility, internet or mobile providers; landlord and housing; government, authorities and official letters"
 folder = "INBOX/Verträge"
 
-[categories.newsletter]
+[categories.werbung]
 description = "Marketing and editorial mail sent to many recipients: newsletters, advertising, promotions, discounts, vouchers and coupons, sales, product and event announcements (e.g. new concerts or shows), subscription upgrade or renewal offers, club and association newsletters and member invitations, general service announcements to all customers. Not job alerts, social network digests or notifications about the recipient's own accounts"
-folder = "INBOX/Newsletter"
+folder = "INBOX/Werbung"
 flag_on_action = false
 track_expiry = true
 
@@ -71,7 +71,7 @@ description = "Automated notifications about the recipient's own accounts, devic
 folder = "INBOX/Benachrichtigungen"
 flag_on_action = false
 
-[categories.postfach]
+[categories.portal]
 description = "Notice that a new document or message is waiting in an online customer portal or postbox (bank PostBox, health insurance mailbox, tenant or property management portal), without the document itself"
 flag_on_action = false
 # no folder: stays in the inbox so documents waiting in portals are not overlooked
@@ -81,12 +81,12 @@ description = "Personal mail written by a real person to the recipient: friends,
 # no folder: stays in the inbox
 
 [categories.sicherheit]
-description = "Genuine account security mail sent from the service's own official domain: password resets you requested, login alerts, new device sign-ins, two-factor and verification codes, account changes"
+description = "Genuine account security mail sent from the service's own official domain: password resets, login alerts, new device sign-ins, two-factor and verification codes, account changes"
 flag = true
 
-[categories.verdacht]
+[categories.verdaechtig]
 description = "Phishing, scams and fraud: fake account warnings, suspended or locked account claims, urgent requests to log in, verify or pay, sender domain that does not belong to the brand it names, misspelled brand names (e.g. AppIe, PayPaI), unexpected prizes, inheritances, crypto or investment offers"
-folder = "INBOX/Verdacht"
+folder = "INBOX/Verdächtig"
 flag_on_action = false   # never star suspicious mail
 
 [categories.sonstiges]

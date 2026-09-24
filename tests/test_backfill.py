@@ -85,7 +85,7 @@ class FakeJev:
         self.calls += 1
         if state["subject"] in self.fail:
             raise JevError("boom")
-        return Decision("newsletter", 1.0, {"newsletter": 1.0}, 0.0, 0.0)
+        return Decision("werbung", 1.0, {"werbung": 1.0}, 0.0, 0.0)
 
 
 @pytest.fixture

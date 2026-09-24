@@ -110,5 +110,33 @@ class Store:
         )
         self.db.commit()
 
+    def count_category(self, category: str) -> int:
+        return self.db.execute("SELECT COUNT(*) FROM processed WHERE category = ?", (category,)).fetchone()[0]
+
+    def rename_category(self, old: str, new: str) -> None:
+        self.db.execute("UPDATE processed SET category = ? WHERE category = ?", (new, old))
+        self.db.commit()
+
+    def count_moved_to(self, folder: str) -> int:
+        """Records moved to `folder` or one of its subfolders (config notation, "/" separated)."""
+        return self.db.execute(
+            "SELECT COUNT(*) FROM processed WHERE moved_to = ? OR moved_to LIKE ? ESCAPE '!'",
+            (folder, _like_prefix(folder)),
+        ).fetchone()[0]
+
+    def rename_moved_to(self, old: str, new: str) -> None:
+        self.db.execute(
+            "UPDATE processed SET moved_to = ? || substr(moved_to, ?) "
+            "WHERE moved_to = ? OR moved_to LIKE ? ESCAPE '!'",
+            (new, len(old) + 1, old, _like_prefix(old)),
+        )
+        self.db.commit()
+
     def close(self) -> None:
         self.db.close()
+
+
+def _like_prefix(folder: str) -> str:
+    """LIKE pattern for subfolders of `folder`, with LIKE wildcards in the name escaped by '!'."""
+    escaped = folder.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+    return escaped + "/%"
