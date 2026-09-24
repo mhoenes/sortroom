@@ -9,3 +9,4 @@ n8n/
 __pycache__/
 .pytest_cache/
 *.bak*
+mailboxes/

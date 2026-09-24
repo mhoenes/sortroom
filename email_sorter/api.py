@@ -3,12 +3,14 @@
     uvicorn email_sorter.api:app --host 0.0.0.0 --port 8765
 
 Every endpoint except /health needs `Authorization: Bearer <API_TOKEN>`.
-Runs share the same lock as the CLI; a second run while one is active gets 409.
+Each mailbox has its own lock, shared with the CLI; a run on a busy mailbox is skipped (409 when
+that mailbox was asked for explicitly).
 
-    POST /run              normal run (new mail of the last lookback_days)   -> summary
-    POST /backfill         manual backfill from a date, runs in background   -> 202 + job
+    GET  /mailboxes        configured mailboxes and whether one is busy
+    POST /run              normal run, all mailboxes or {"mailbox": id}         -> summary per mailbox
+    POST /backfill         manual backfill from a date, runs in background       -> 202 + job
     GET  /jobs/{id}        status and summary of a backfill job
-    POST /recheck-expiry   find expiry dates of already sorted offers        -> summary
+    POST /recheck-expiry   find expiry dates of already sorted offers            -> summary
     GET  /health           liveness probe, no auth
 """
 from __future__ import annotations
@@ -26,8 +28,8 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from .config import ConfigError, load_config, load_credentials
-from .runtime import BASE_DIR, LOCK_PATH, _lock_is_stale, setup_logging, single_instance
+from .config import ConfigError, Mailbox, load_credentials, load_mailboxes
+from .runtime import BASE_DIR, _lock_is_stale, setup_logging, single_instance
 from .sorter import run, run_backfill, run_recheck_expiry
 
 load_dotenv(BASE_DIR / ".env")
@@ -41,17 +43,29 @@ _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
 
 
+def _mailboxes() -> dict[str, Mailbox]:
+    try:
+        return load_mailboxes(BASE_DIR, CONFIG_PATH)
+    except ConfigError as e:
+        raise HTTPException(500, f"configuration error: {e}") from None
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     # In a container the server is PID 1 after every restart, so a lock left behind by a
     # crashed process would look alive forever. No run can be active before startup.
-    if LOCK_PATH.exists():
-        log.info("removing run lock left over from a previous process")
-        LOCK_PATH.unlink(missing_ok=True)
+    try:
+        boxes = load_mailboxes(BASE_DIR, CONFIG_PATH).values()
+    except ConfigError:
+        boxes = []
+    for box in boxes:
+        if box.lock_path.exists():
+            log.info("[%s] removing run lock left over from a previous process", box.id)
+            box.lock_path.unlink(missing_ok=True)
     yield
 
 
-app = FastAPI(title="email-sorter", version="1.0", lifespan=_lifespan)
+app = FastAPI(title="email-sorter", version="1.2", lifespan=_lifespan)
 
 
 def _require_token(authorization: str = Header(default="")) -> None:
@@ -62,73 +76,111 @@ def _require_token(authorization: str = Header(default="")) -> None:
         raise HTTPException(401, "invalid or missing bearer token")
 
 
-def _load():
+def _busy(box: Mailbox) -> bool:
+    return box.lock_path.exists() and not _lock_is_stale(box.lock_path)
+
+
+def _pick(boxes: dict[str, Mailbox], box_id: str | None) -> Mailbox:
+    """The mailbox a single-mailbox task works on: the one named, or the only one."""
+    if box_id:
+        if box_id not in boxes:
+            raise HTTPException(404, f"unknown mailbox {box_id!r}")
+        return boxes[box_id]
+    if len(boxes) == 1:
+        return next(iter(boxes.values()))
+    raise HTTPException(422, f"several mailboxes configured, name one: {', '.join(boxes)}")
+
+
+def _credentials(box: Mailbox):
     try:
-        cfg = load_config(CONFIG_PATH)
-        return cfg, load_credentials(cfg)
+        return load_credentials(box.cfg)
     except ConfigError as e:
-        raise HTTPException(500, f"configuration error: {e}") from None
+        raise HTTPException(500, f"[{box.id}] configuration error: {e}") from None
 
 
-def _busy() -> bool:
-    return LOCK_PATH.exists() and not _lock_is_stale(LOCK_PATH)
-
-
-def _run_locked(label: str, fn) -> dict:
-    with single_instance(LOCK_PATH) as acquired:
+def _run_locked(box: Mailbox, label: str, fn) -> dict | None:
+    """Run fn under the mailbox's lock; None when the mailbox is busy."""
+    with single_instance(box.lock_path) as acquired:
         if not acquired:
-            raise HTTPException(409, "another run is active")
-        log.info("API: starting %s", label)
+            return None
+        log.info("API [%s]: starting %s", box.id, label)
         try:
             return fn().as_dict()
         except Exception as e:
-            log.exception("API: %s failed", label)
-            raise HTTPException(500, f"{label} failed: {e}") from None
+            log.exception("API [%s]: %s failed", box.id, label)
+            raise HTTPException(500, f"[{box.id}] {label} failed: {e}") from None
 
 
 class RunRequest(BaseModel):
     live: bool = True
     limit: int | None = Field(default=None, ge=1)
+    mailbox: str | None = None  # none: every mailbox
 
 
 class BackfillRequest(BaseModel):
     since: date
     live: bool = False  # like the CLI: a dry run unless asked otherwise
     limit: int | None = Field(default=None, ge=1)
+    mailbox: str | None = None
 
 
 class RecheckRequest(BaseModel):
     live: bool = True
+    mailbox: str | None = None
 
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "busy": _busy()}
+    try:
+        busy = any(_busy(b) for b in load_mailboxes(BASE_DIR, CONFIG_PATH).values())
+    except ConfigError:
+        busy = False
+    return {"status": "ok", "busy": busy}
+
+
+@app.get("/mailboxes", dependencies=[Depends(_require_token)])
+def mailboxes() -> list[dict]:
+    return [{"id": b.id, "name": b.name, "busy": _busy(b)} for b in _mailboxes().values()]
 
 
 @app.post("/run", dependencies=[Depends(_require_token)])
 def run_now(req: RunRequest | None = None) -> dict:
     req = req or RunRequest()
-    cfg, creds = _load()
-    return _run_locked("LIVE run" if req.live else "dry run",
-                       lambda: run(cfg, creds, BASE_DIR, live=req.live, limit=req.limit))
+    boxes = _mailboxes()
+    selected = [_pick(boxes, req.mailbox)] if req.mailbox else list(boxes.values())
+    results: dict[str, dict] = {}
+    for box in selected:
+        creds = _credentials(box)
+        result = _run_locked(box, "LIVE run" if req.live else "dry run",
+                             lambda: run(box.cfg, creds, box.workspace, live=req.live, limit=req.limit))
+        if result is None:
+            if req.mailbox:
+                raise HTTPException(409, f"[{box.id}] another run is active")
+            result = {"ok": True, "skipped": "another run is active"}
+        results[box.id] = result
+    return {"ok": all(r["ok"] for r in results.values()), "results": results}
 
 
 @app.post("/recheck-expiry", dependencies=[Depends(_require_token)])
 def recheck(req: RecheckRequest | None = None) -> dict:
     req = req or RecheckRequest()
-    cfg, creds = _load()
-    return _run_locked("expiry recheck", lambda: run_recheck_expiry(cfg, creds, BASE_DIR, live=req.live))
+    box = _pick(_mailboxes(), req.mailbox)
+    creds = _credentials(box)
+    result = _run_locked(box, "expiry recheck", lambda: run_recheck_expiry(box.cfg, creds, box.workspace, live=req.live))
+    if result is None:
+        raise HTTPException(409, f"[{box.id}] another run is active")
+    return result
 
 
 @app.post("/backfill", status_code=202, dependencies=[Depends(_require_token)])
 def backfill(req: BackfillRequest) -> dict:
     if req.since > date.today():
         raise HTTPException(422, "since must not be in the future")
-    if _busy():
-        raise HTTPException(409, "another run is active")
-    cfg, creds = _load()
-    job = {"id": uuid.uuid4().hex[:12], "status": "running", "started": _now(), "finished": None,
+    box = _pick(_mailboxes(), req.mailbox)
+    if _busy(box):
+        raise HTTPException(409, f"[{box.id}] another run is active")
+    creds = _credentials(box)
+    job = {"id": uuid.uuid4().hex[:12], "mailbox": box.id, "status": "running", "started": _now(), "finished": None,
            "request": req.model_dump(mode="json"), "result": None, "error": None}
     with _jobs_lock:
         _jobs[job["id"]] = job
@@ -137,15 +189,15 @@ def backfill(req: BackfillRequest) -> dict:
 
     def work() -> None:
         try:
-            with single_instance(LOCK_PATH) as acquired:
+            with single_instance(box.lock_path) as acquired:
                 if not acquired:
                     job.update(status="rejected", error="another run is active")
                     return
-                log.info("API: starting %s backfill since %s", "LIVE" if req.live else "dry", req.since)
-                result = run_backfill(cfg, creds, BASE_DIR, live=req.live, since=req.since, limit=req.limit)
+                log.info("API [%s]: starting %s backfill since %s", box.id, "LIVE" if req.live else "dry", req.since)
+                result = run_backfill(box.cfg, creds, box.workspace, live=req.live, since=req.since, limit=req.limit)
                 job.update(status="done", result=result.as_dict())
         except Exception as e:
-            log.exception("API: backfill failed")
+            log.exception("API [%s]: backfill failed", box.id)
             job.update(status="failed", error=str(e))
         finally:
             job["finished"] = _now()

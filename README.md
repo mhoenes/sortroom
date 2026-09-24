@@ -13,6 +13,45 @@ For every new mail it asks Jev two questions in one request:
 
 Cost is roughly $0.00002 per mail (input tokens only; output is free).
 
+## Several mailboxes
+
+Each mailbox lives in its own folder with its own settings, log and reports:
+
+```
+config.toml                  # shared: [jev] (gateway, model, key name, text length)
+mailboxes/
+  privat/
+    mailbox.toml             # name, [imap], [rules], [categories.*]
+    data/state.db, data/run.lock
+    reports/
+  gmail/
+    mailbox.toml
+    ...
+```
+
+`mailbox.toml` starts with `name = "Privat"`; in `[imap]`, `user_env` and
+`password_env` name the `.env` variables with that mailbox's login (default
+`IMAP_USER` / `IMAP_PASSWORD`), e.g. `GMAIL_USER` / `GMAIL_PASSWORD`.
+
+Without a `mailboxes/` folder, a `config.toml` that still holds `[imap]`,
+`[rules]` and `[categories]` is the single mailbox `default`, exactly as
+before. To switch an existing setup (dry run first, then `--live`):
+
+```powershell
+.venv\Scripts\python -m email_sorter --migrate-mailbox privat --name Privat
+```
+
+It writes `mailboxes/privat/mailbox.toml` from those sections and moves
+`data/state.db` and the reports there. `config.toml` is not touched; its
+mailbox sections are ignored from then on and can be deleted.
+
+Normal runs and `--check` cover every mailbox; `--mailbox privat` limits to
+one. Maintenance commands (`--since`, `--resort-folder`, `--rename-*`,
+`--relocate`, `--recheck-expiry`) need `--mailbox` when there are several.
+The HTTP API: `POST /run` runs all (or `{"mailbox": "privat"}`) and answers
+`{"ok": …, "results": {"privat": {…}}}`; `/backfill` and `/recheck-expiry`
+take `"mailbox"`; `GET /mailboxes` lists them.
+
 ## Setup
 
 ```powershell

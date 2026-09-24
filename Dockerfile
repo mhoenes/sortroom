@@ -13,9 +13,9 @@ RUN pip install -r requirements-api.txt
 COPY email_sorter ./email_sorter
 COPY config.toml ./
 
-# unprivileged user; data/, logs/ and reports/ are mounted as volumes
+# unprivileged user; mailboxes/, data/, logs/ and reports/ are mounted as volumes
 RUN useradd --system --uid 1000 --home /app sorter \
-    && mkdir -p data logs reports \
+    && mkdir -p data logs reports mailboxes \
     && chown -R sorter:sorter /app
 USER sorter
 

@@ -18,7 +18,8 @@ services:
     environment:
       TZ: Europe/Berlin  # expiry dates and "today" follow local time
     volumes:
-      - ./data:/app/data          # state.db: which mails were sorted, expiry dates
+      - ./data:/app/data          # single-mailbox setups only (before --migrate-mailbox)
+      - ./mailboxes:/app/mailboxes  # one folder per mailbox: mailbox.toml, data/state.db, reports/
       - ./logs:/app/logs
       - ./reports:/app/reports    # dry-run CSV reports
       - ./config.toml:/app/config.toml:ro

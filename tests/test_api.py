@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from email_sorter import api
-from email_sorter.config import Credentials, load_config
+from email_sorter.config import Credentials, Mailbox, load_config
 from email_sorter.sorter import RunResult
 
 TOKEN = "t" * 32
@@ -15,27 +15,45 @@ AUTH = {"Authorization": f"Bearer {TOKEN}"}
 CFG = load_config(Path(__file__).resolve().parent.parent / "config.toml")
 
 
+def _boxes(tmp_path, ids):
+    return {i: Mailbox(i, i.title(), tmp_path / i, CFG) for i in ids}
+
+
 @pytest.fixture
-def client(tmp_path, monkeypatch):
+def make_client(tmp_path, monkeypatch):
     monkeypatch.setenv("API_TOKEN", TOKEN)
-    lock = tmp_path / "run.lock"
-    monkeypatch.setattr(api, "LOCK_PATH", lock)
-    monkeypatch.setattr(api, "_load", lambda: (CFG, Credentials("u", "p", "k")))
     calls = []
 
     def fake_run(cfg, creds, base_dir, live, limit):
-        calls.append(("run", live, limit))
-        return RunResult(exit_code=0, live=live, classified=3, moved=2, categories={"newsletter": 3})
+        calls.append(("run", base_dir.name, live, limit))
+        return RunResult(exit_code=0, live=live, classified=3, moved=2, categories={"werbung": 3})
 
     def fake_backfill(cfg, creds, base_dir, live, since, limit):
-        calls.append(("backfill", live, since, limit))
+        calls.append(("backfill", base_dir.name, live, since, limit))
         return RunResult(exit_code=0, live=live, classified=10)
 
     monkeypatch.setattr(api, "run", fake_run)
     monkeypatch.setattr(api, "run_backfill", fake_backfill)
-    with TestClient(api.app) as c:
-        c.calls, c.lock = calls, lock
-        yield c
+    monkeypatch.setattr(api, "_credentials", lambda box: Credentials("u", "p", "k"))
+
+    clients = []
+
+    def make(ids=("privat",)):
+        boxes = _boxes(tmp_path, ids)
+        monkeypatch.setattr(api, "load_mailboxes", lambda base, path: boxes)
+        c = TestClient(api.app).__enter__()
+        c.calls, c.boxes = calls, boxes
+        clients.append(c)
+        return c
+
+    yield make
+    for c in clients:
+        c.__exit__(None, None, None)
+
+
+@pytest.fixture
+def client(make_client):
+    return make_client()
 
 
 def test_health_needs_no_token(client):
@@ -52,24 +70,45 @@ def test_run_refuses_when_token_not_configured(client, monkeypatch):
     assert client.post("/run", headers={"Authorization": "Bearer short"}).status_code == 500
 
 
-def test_run_returns_summary_and_defaults_to_live(client):
+def test_run_returns_summary_per_mailbox_and_defaults_to_live(client):
     r = client.post("/run", headers=AUTH)
     assert r.status_code == 200
     body = r.json()
-    assert body["ok"] and body["classified"] == 3 and body["categories"] == {"newsletter": 3}
-    assert client.calls == [("run", True, None)]
-    assert not client.lock.exists()  # released afterwards
+    assert body["ok"] and body["results"]["privat"]["classified"] == 3
+    assert client.calls == [("run", "privat", True, None)]
+    assert not client.boxes["privat"].lock_path.exists()  # released afterwards
 
 
-def test_run_dry_with_limit(client):
-    client.post("/run", headers=AUTH, json={"live": False, "limit": 5})
-    assert client.calls == [("run", False, 5)]
+def test_run_covers_all_mailboxes(make_client):
+    c = make_client(("gmail", "privat"))
+    body = c.post("/run", headers=AUTH, json={"live": False, "limit": 5}).json()
+    assert set(body["results"]) == {"gmail", "privat"}
+    assert c.calls == [("run", "gmail", False, 5), ("run", "privat", False, 5)]
 
 
-def test_run_rejected_while_another_run_holds_the_lock(client):
-    client.lock.write_text(str(os.getpid()))  # a live process holds it
-    assert client.post("/run", headers=AUTH).status_code == 409
-    assert client.get("/health").json()["busy"] is True
+def test_run_one_mailbox(make_client):
+    c = make_client(("gmail", "privat"))
+    c.post("/run", headers=AUTH, json={"mailbox": "gmail"})
+    assert c.calls == [("run", "gmail", True, None)]
+    assert c.post("/run", headers=AUTH, json={"mailbox": "nope"}).status_code == 404
+
+
+def test_busy_mailbox_is_skipped_others_still_run(make_client):
+    c = make_client(("gmail", "privat"))
+    lock = c.boxes["privat"].lock_path
+    lock.parent.mkdir(parents=True)
+    lock.write_text(str(os.getpid()))  # a live process holds it
+    body = c.post("/run", headers=AUTH).json()
+    assert body["ok"] and body["results"]["privat"]["skipped"]
+    assert c.calls == [("run", "gmail", True, None)]
+    assert c.post("/run", headers=AUTH, json={"mailbox": "privat"}).status_code == 409
+    assert c.get("/health").json()["busy"] is True
+
+
+def test_mailboxes_listing(make_client):
+    c = make_client(("gmail", "privat"))
+    assert c.get("/mailboxes", headers=AUTH).json() == [
+        {"id": "gmail", "name": "Gmail", "busy": False}, {"id": "privat", "name": "Privat", "busy": False}]
 
 
 def test_backfill_runs_in_background_and_reports_via_job(client):
@@ -81,8 +120,14 @@ def test_backfill_runs_in_background_and_reports_via_job(client):
         if job["status"] != "running":
             break
         time.sleep(0.05)
-    assert job["status"] == "done" and job["result"]["classified"] == 10
-    assert client.calls == [("backfill", True, date(2025, 1, 1), None)]
+    assert job["status"] == "done" and job["result"]["classified"] == 10 and job["mailbox"] == "privat"
+    assert client.calls == [("backfill", "privat", True, date(2025, 1, 1), None)]
+
+
+def test_backfill_needs_mailbox_when_several(make_client):
+    c = make_client(("gmail", "privat"))
+    assert c.post("/backfill", headers=AUTH, json={"since": "2025-01-01"}).status_code == 422
+    assert c.post("/backfill", headers=AUTH, json={"since": "2025-01-01", "mailbox": "gmail"}).status_code == 202
 
 
 def test_backfill_defaults_to_dry_run(client):
@@ -99,9 +144,11 @@ def test_unknown_job_is_404(client):
     assert client.get("/jobs/nope", headers=AUTH).status_code == 404
 
 
-def test_stale_lock_from_previous_container_is_removed_on_startup(tmp_path, monkeypatch):
-    lock = tmp_path / "run.lock"
-    lock.write_text("1")  # PID 1 is "alive" in a container, but belonged to the crashed process
-    monkeypatch.setattr(api, "LOCK_PATH", lock)
+def test_stale_locks_from_previous_container_are_removed_on_startup(tmp_path, monkeypatch):
+    boxes = _boxes(tmp_path, ("gmail", "privat"))
+    for b in boxes.values():
+        b.lock_path.parent.mkdir(parents=True)
+        b.lock_path.write_text("1")  # PID 1 is "alive" in a container, but belonged to the crashed process
+    monkeypatch.setattr(api, "load_mailboxes", lambda base, path: boxes)
     with TestClient(api.app):
-        assert not lock.exists()
+        assert not any(b.lock_path.exists() for b in boxes.values())

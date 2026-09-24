@@ -7,12 +7,21 @@
       "name": "Backfill starten",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [0, 0]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
         "assignments": {
           "assignments": [
+            {
+              "id": "7c1f9e1b-2d3e-4f5a-8b20-0000000000a0",
+              "name": "mailbox",
+              "value": "",
+              "type": "string"
+            },
             {
               "id": "7c1f9e1b-2d3e-4f5a-8b20-0000000000a1",
               "name": "since",
@@ -39,8 +48,11 @@
       "name": "Parameter",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [220, 0],
-      "notes": "since = Startdatum (YYYY-MM-DD). live = false: nur Probelauf mit CSV-Bericht. limit = 0: kein Limit."
+      "position": [
+        220,
+        0
+      ],
+      "notes": "mailbox = Postfach-ID (Ordnername unter mailboxes/), leer wenn es nur eines gibt. since = Startdatum (YYYY-MM-DD). live = false: nur Probelauf mit CSV-Bericht. limit = 0: kein Limit."
     },
     {
       "parameters": {
@@ -50,14 +62,17 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ since: $json.since, live: $json.live, limit: $json.limit > 0 ? $json.limit : null }) }}",
+        "jsonBody": "={{ JSON.stringify({ mailbox: $json.mailbox || null, since: $json.since, live: $json.live, limit: $json.limit > 0 ? $json.limit : null }) }}",
         "options": {}
       },
       "id": "7c1f9e1b-2d3e-4f5a-8b20-000000000003",
       "name": "Backfill anstoßen",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [440, 0],
+      "position": [
+        440,
+        0
+      ],
       "notes": "Antwortet sofort mit 202 und einer Job-ID; der Backfill läuft im Sorter-Container weiter."
     },
     {
@@ -69,7 +84,10 @@
       "name": "1 Minute warten",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [660, 0],
+      "position": [
+        660,
+        0
+      ],
       "webhookId": "7c1f9e1b-2d3e-4f5a-8b20-0000000000w1"
     },
     {
@@ -83,7 +101,10 @@
       "name": "Status abfragen",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [880, 0]
+      "position": [
+        880,
+        0
+      ]
     },
     {
       "parameters": {
@@ -112,7 +133,10 @@
       "name": "Läuft noch?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1100, 0]
+      "position": [
+        1100,
+        0
+      ]
     },
     {
       "parameters": {
@@ -144,29 +168,84 @@
       "name": "Ergebnis",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [1320, 100]
+      "position": [
+        1320,
+        100
+      ]
     }
   ],
   "connections": {
     "Backfill starten": {
-      "main": [[{ "node": "Parameter", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Parameter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Parameter": {
-      "main": [[{ "node": "Backfill anstoßen", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Backfill anstoßen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Backfill anstoßen": {
-      "main": [[{ "node": "1 Minute warten", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "1 Minute warten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "1 Minute warten": {
-      "main": [[{ "node": "Status abfragen", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Status abfragen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Status abfragen": {
-      "main": [[{ "node": "Läuft noch?", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Läuft noch?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Läuft noch?": {
       "main": [
-        [{ "node": "1 Minute warten", "type": "main", "index": 0 }],
-        [{ "node": "Ergebnis", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "1 Minute warten",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ergebnis",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },

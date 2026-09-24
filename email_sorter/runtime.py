@@ -14,7 +14,7 @@ STALE_LOCK_SECONDS = 3600
 
 log = logging.getLogger("email_sorter")
 
-LOCK_PATH = BASE_DIR / "data" / "run.lock"
+LOCK_PATH = BASE_DIR / "data" / "run.lock"  # the single-mailbox location; each Mailbox has its own lock_path
 
 
 def setup_logging(verbose: bool) -> None:
