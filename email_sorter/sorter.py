@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import csv
 import logging
+import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Iterable
 
@@ -53,6 +54,38 @@ def plan(decision: Decision, cfg: Config) -> tuple[str | None, bool, str]:
     flag = (category.flag and confident) or needs_action
     note = "" if confident else f"low confidence (< {cfg.min_confidence:.2f}), stays in inbox"
     return folder, flag, note
+
+
+_INTERNALDATE = re.compile(rb'UID (\d+) INTERNALDATE "([^"]+)"|INTERNALDATE "([^"]+)" UID (\d+)')
+
+
+def received_times(mb: MailBox, uids: list[str]) -> dict[str, datetime]:
+    """When each mail arrived on the server (IMAP INTERNALDATE), not the sender's Date header."""
+    times: dict[str, datetime] = {}
+    for chunk in _chunks(uids):
+        typ, data = mb.client.uid("FETCH", ",".join(chunk), "(INTERNALDATE)")
+        if typ != "OK":
+            raise RuntimeError(f"INTERNALDATE fetch failed: {typ} {data!r}")
+        for item in data:
+            line = item[0] if isinstance(item, tuple) else item
+            m = _INTERNALDATE.search(line or b"")
+            if not m:
+                continue
+            uid, stamp = (m[1], m[2]) if m[1] else (m[4], m[3])
+            try:
+                times[uid.decode()] = datetime.strptime(stamp.decode().strip(), "%d-%b-%Y %H:%M:%S %z")
+            except ValueError:
+                log.debug("unparsable INTERNALDATE %r", stamp)
+    return times
+
+
+def old_enough(times: dict[str, datetime], uids: list[str], min_age_hours: float,
+               now: datetime | None = None) -> list[str]:
+    """UIDs that arrived at least min_age_hours ago. Unknown arrival time counts as old enough."""
+    if min_age_hours <= 0:
+        return uids
+    cutoff = (now or datetime.now(timezone.utc)) - timedelta(hours=min_age_hours)
+    return [u for u in uids if u not in times or times[u] <= cutoff]
 
 
 def expiry_for(decision: Decision, cfg: Config, msg: MailMessage) -> date | None:
@@ -103,6 +136,12 @@ def classify_new(
         key = message_key(head)
         if not store.is_processed(key) and not (exclude and key in exclude):
             pending[head.uid] = key
+
+    if cfg.min_age_hours > 0 and pending:
+        ready = old_enough(received_times(mb, list(pending)), list(pending), cfg.min_age_hours)
+        if len(ready) < len(pending):
+            log.info("%d mail(s) younger than %gh, left for a later run", len(pending) - len(ready), cfg.min_age_hours)
+        pending = {u: pending[u] for u in ready}
 
     uids = sorted(pending, key=int, reverse=True)[:limit]  # newest first
     span = f"{since} to {before - timedelta(days=1)}" if before else f"since {since}"

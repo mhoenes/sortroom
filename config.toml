@@ -28,6 +28,7 @@ expiry_threshold = 0.70       # "time-limited offer" probability at/above this -
 expired_keyword = "abgelaufen" # IMAP tag set once a tracked offer has expired
 expired_folder = "INBOX/Newsletter/Abgelaufen"  # expired offers are moved here; remove to only tag
 lookback_days = 7             # only look at mail received in the last N days
+min_age_hours = 24            # leave mail alone until it has been in the inbox this long (0 = sort at once)
 max_per_run = 200             # safety cap on mails classified per run
 
 # ---------------------------------------------------------------------------

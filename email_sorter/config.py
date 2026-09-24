@@ -41,6 +41,7 @@ class Config:
     expired_keyword: str
     expired_folder: str | None
     lookback_days: int
+    min_age_hours: float
     max_per_run: int
     categories: dict[str, Category]
 
@@ -103,6 +104,7 @@ def load_config(path: Path) -> Config:
             expired_keyword=rules.get("expired_keyword", "abgelaufen"),
             expired_folder=rules.get("expired_folder") or None,
             lookback_days=int(rules["lookback_days"]),
+            min_age_hours=float(rules.get("min_age_hours", 0)),
             max_per_run=int(rules["max_per_run"]),
             categories=categories,
         )
@@ -111,6 +113,8 @@ def load_config(path: Path) -> Config:
 
     if len(cfg.categories) < 2:
         raise ConfigError("at least two categories are required")
+    if cfg.min_age_hours < 0:
+        raise ConfigError("min_age_hours must not be negative")
     if not _KEYWORD_RE.match(cfg.expired_keyword):
         raise ConfigError("expired_keyword may only contain letters, digits, _, - and $")
     for name in ("min_confidence", "action_flag_threshold", "expiry_threshold"):

@@ -111,7 +111,9 @@ other's work.
 ## How it decides
 
 1. Looks at mails in `INBOX` from the last `lookback_days` (default 7) that
-   aren't in `data/state.db` yet.
+   aren't in `data/state.db` yet and arrived at least `min_age_hours` ago
+   (default 24, by the server's arrival time) – newer mail stays in the
+   inbox for a day and is picked up by a later run.
 2. Sends sender, recipient, subject, attachment names, whether it's a mailing
    list, and the cleaned body (first 3000 chars, quotes/signatures removed).
 3. Confidence ≥ `min_confidence` (0.70) → moved to the category's folder.

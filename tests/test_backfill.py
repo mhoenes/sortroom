@@ -93,7 +93,7 @@ def env(tmp_path, monkeypatch):
     FakeMailBox.instances.clear()
     monkeypatch.setattr(sorter, "MailBox", FakeMailBox)
     monkeypatch.setattr(sorter, "month_windows", lambda since, until: [(since, until)])
-    small = Config(**{**CFG.__dict__, "max_per_run": 3})
+    small = Config(**{**CFG.__dict__, "max_per_run": 3, "min_age_hours": 0})
     return SimpleNamespace(cfg=small, tmp=tmp_path, monkeypatch=monkeypatch)
 
 
