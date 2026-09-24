@@ -17,20 +17,26 @@ from .config import Config, Credentials
 from .jev import JevAuthError, JevClient, JevError
 from .mailtext import build_state, message_key
 from .sorter import (IMAP_TIMEOUT, UID_CHUNK, Outcome, ReportWriter, RunResult, _auth_failed, _chunks,
-                     _delimiter, _ensure_folder, expiry_for, plan, server_folder)
+                     _delimiter, _ensure_folder, expiry_for, old_enough, plan, received_times,
+                     server_folder)
 from .store import Store
 
 log = logging.getLogger(__name__)
 
 
 def resort_outcomes(mb: MailBox, cfg: Config, jev: JevClient, folder: str, limit: int | None,
-                    on_outcome=None) -> tuple[list[Outcome], list[str], list[Outcome]]:
+                    on_outcome=None, min_age_hours: float = 0) -> tuple[list[Outcome], list[str], list[Outcome]]:
     """Classify the mails of the selected `folder` (config notation).
 
     Returns (all outcomes, failed keys, outcomes to move). Outcome.folder is the folder the
     mail will be in afterwards - the same folder for mails that stay.
     """
     uids = sorted(mb.uids(), key=int, reverse=True)  # newest first
+    if min_age_hours > 0 and uids:  # re-sorting the inbox: leave fresh mail alone like normal runs do
+        ready = old_enough(received_times(mb, uids), uids, min_age_hours)
+        if len(ready) < len(uids):
+            log.info("%d mail(s) younger than %gh left alone", len(uids) - len(ready), min_age_hours)
+        uids = ready
     if limit:
         uids = uids[:limit]
     log.info("re-sorting %d mail(s) in %s", len(uids), folder)
@@ -38,12 +44,16 @@ def resort_outcomes(mb: MailBox, cfg: Config, jev: JevClient, folder: str, limit
     moving: list[Outcome] = []
     failed: list[str] = []
     seen: set[str] = set()
+    kept = 0
     for chunk in _chunks(uids):
         wanted = set(chunk)
         for msg in mb.fetch(AND(uid=chunk), mark_seen=False, bulk=UID_CHUNK):
             if msg.uid not in wanted or msg.uid in seen:
                 continue  # unsolicited FETCH response
             seen.add(msg.uid)
+            if cfg.keeps_in_inbox(msg.from_):
+                kept += 1
+                continue
             key = message_key(msg)
             try:
                 decision = jev.decide(build_state(msg, cfg.max_body_chars), cfg.descriptions)
@@ -72,6 +82,8 @@ def resort_outcomes(mb: MailBox, cfg: Config, jev: JevClient, folder: str, limit
                 moving.append(outcome)
             if on_outcome:
                 on_outcome(outcome)
+    if kept:
+        log.info("%d mail(s) from keep_in_inbox_from senders left alone", kept)
     missing = len(uids) - len(seen)
     if missing:
         log.warning("%d mail(s) were not returned by the server", missing)
@@ -99,8 +111,10 @@ def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, liv
                 return RunResult(exit_code=2, error=f"folder {srv} not found")
             mb.folder.set(srv)
             try:
+                min_age = cfg.min_age_hours if folder == cfg.source_folder.strip("/") else 0
                 outcomes, failed, moving = resort_outcomes(mb, cfg, jev, folder, limit,
-                                                           on_outcome=report.write if report else None)
+                                                           on_outcome=report.write if report else None,
+                                                           min_age_hours=min_age)
             except JevAuthError as e:
                 return _auth_failed(cfg, e)
 

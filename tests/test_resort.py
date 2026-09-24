@@ -126,3 +126,38 @@ def test_expired_offers_folder_is_refused(env):
 
 def test_unknown_folder(env):
     assert resort.run_resort(CFG, CREDS, env.tmp, "INBOX/Gibtsnicht", live=False, limit=None).exit_code == 2
+
+
+def test_inbox_resort_respects_min_age(env, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    env.mb.folders["INBOX"] = dict(env.mb.folders.pop("INBOX.Reisen"))
+    ages = {"1": 30, "2": 2, "3": 48, "4": 1, "5": 72}  # hours since arrival
+    monkeypatch.setattr(resort, "received_times",
+                        lambda mb, uids: {u: now - timedelta(hours=ages[u]) for u in uids})
+    cfg = Config(**{**CFG.__dict__, "min_age_hours": 24})
+    resort.run_resort(cfg, CREDS, env.tmp, "INBOX", live=False, limit=None)
+    assert env.jev.calls == 3  # uids 2 and 4 are younger than 24h
+
+
+def test_other_folders_ignore_min_age(env, monkeypatch):
+    monkeypatch.setattr(resort, "received_times", lambda mb, uids: pytest.fail("not needed"))
+    cfg = Config(**{**CFG.__dict__, "min_age_hours": 24})
+    resort.run_resort(cfg, CREDS, env.tmp, "INBOX/Reisen", live=False, limit=None)
+    assert env.jev.calls == 5
+
+
+def test_keep_in_inbox_senders_are_not_classified_or_moved(env):
+    raw = (b"Message-ID: <scan@x>\r\nFrom: FromBrotherDevice@brother.com\r\nTo: me@x.de\r\n"
+           b"Subject: From_BrotherDevice\r\nDate: Mon, 21 Sep 2026 10:00:00 +0200\r\n\r\nscan")
+    env.mb.folders["INBOX.Reisen"]["9"] = MailMessage([(b"9 (UID 9 RFC822 {1}", raw)])
+    result = resort.run_resort(CFG, CREDS, env.tmp, "INBOX/Reisen", live=True, limit=None)
+    assert env.jev.calls == 5 and result.classified == 5
+    assert "9" in env.mb.folders["INBOX.Reisen"]
+
+
+def test_keeps_in_inbox_matches_case_insensitive_part_of_address():
+    assert CFG.keeps_in_inbox("FromBrotherDevice@brother.com")
+    assert CFG.keeps_in_inbox("Scanner <frombrotherdevice@BROTHER.com>")
+    assert not CFG.keeps_in_inbox("info@brother.de")
+    assert not CFG.keeps_in_inbox("")

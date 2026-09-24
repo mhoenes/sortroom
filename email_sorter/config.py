@@ -42,8 +42,14 @@ class Config:
     expired_folder: str | None
     lookback_days: int
     min_age_hours: float
+    keep_in_inbox_from: tuple[str, ...]
     max_per_run: int
     categories: dict[str, Category]
+
+    def keeps_in_inbox(self, sender: str) -> bool:
+        """True for senders that config.toml says to always leave in the inbox."""
+        sender = (sender or "").lower()
+        return any(pattern in sender for pattern in self.keep_in_inbox_from)
 
     @property
     def descriptions(self) -> dict[str, str]:
@@ -105,6 +111,7 @@ def load_config(path: Path) -> Config:
             expired_folder=rules.get("expired_folder") or None,
             lookback_days=int(rules["lookback_days"]),
             min_age_hours=float(rules.get("min_age_hours", 0)),
+            keep_in_inbox_from=tuple(s.strip().lower() for s in rules.get("keep_in_inbox_from", []) if s.strip()),
             max_per_run=int(rules["max_per_run"]),
             categories=categories,
         )

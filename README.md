@@ -155,6 +155,12 @@ Stop any running sorter first, run without `--live` to preview:
 and mail, moves the subscriptions and updates the log. In Docker:
 `docker compose run --rm email-sorter python -m email_sorter --rename-folder …`.
 
+## Senders that always stay in the inbox
+
+`keep_in_inbox_from` in `config.toml` lists sender addresses (or parts of
+them, case-insensitive) whose mail is never sorted or sent to Jev – e.g. the
+scanner's scan-to-mail. Applies to normal runs, backfills and re-sorts.
+
 ## Re-sorting a folder
 
 After changing categories, mail that is already sorted stays where it is.
@@ -168,7 +174,8 @@ To sort one folder again with the current categories:
 Only mails Jev assigns confidently to a category with a *different* folder
 are moved; uncertain mails and mails of inbox categories (e.g. sicherheit)
 stay. Flags are not changed. `--limit N` re-sorts only the newest N mails.
-The expired-offers folder is refused. In Docker:
+The expired-offers folder is refused. Re-sorting `INBOX` leaves mail
+younger than `min_age_hours` alone, like normal runs. In Docker:
 `docker compose run --rm email-sorter python -m email_sorter --resort-folder INBOX/Reisen --live`.
 
 ## Expired offers ("abgelaufen" tag)

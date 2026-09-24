@@ -29,6 +29,11 @@ expired_keyword = "abgelaufen" # IMAP tag set once a tracked offer has expired
 expired_folder = "INBOX/Werbung/Abgelaufen"  # expired offers are moved here; remove to only tag
 lookback_days = 7             # only look at mail received in the last N days
 min_age_hours = 24            # leave mail alone until it has been in the inbox this long (0 = sort at once)
+# Mail from these senders always stays in the inbox and is not sent to Jev.
+# Case-insensitive; an entry matches if it is part of the sender address.
+keep_in_inbox_from = [
+    "frombrotherdevice@brother.com",  # scan-to-mail from the Brother scanner
+]
 max_per_run = 200             # safety cap on mails classified per run
 
 # ---------------------------------------------------------------------------

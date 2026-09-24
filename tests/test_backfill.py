@@ -221,3 +221,11 @@ def test_mail_without_uid_is_matched_by_message_key(env):
     code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None).exit_code
     assert code == 0 and jev.calls == 7
     assert sum(len(u) for u, _ in FakeMailBox.instances[0].moves) == 7
+
+
+def test_keep_in_inbox_senders_are_skipped_in_normal_sorting(env):
+    jev = FakeJev()
+    _use_jev(env, jev)
+    cfg = Config(**{**env.cfg.__dict__, "keep_in_inbox_from": ("news@shop.de",)})  # sender of all fake mails
+    code = sorter.run_backfill(cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None).exit_code
+    assert code == 0 and jev.calls == 0 and FakeMailBox.instances[0].moves == []

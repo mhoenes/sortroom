@@ -132,10 +132,17 @@ def classify_new(
     """
     criteria = AND(date_gte=since, date_lt=before) if before else AND(date_gte=since)
     pending: dict[str, str] = {}  # uid -> message key
+    kept = 0
     for head in mb.fetch(criteria, mark_seen=False, headers_only=True, bulk=UID_CHUNK):
         key = message_key(head)
-        if not store.is_processed(key) and not (exclude and key in exclude):
-            pending[head.uid] = key
+        if store.is_processed(key) or (exclude and key in exclude):
+            continue
+        if cfg.keeps_in_inbox(head.from_):
+            kept += 1
+            continue
+        pending[head.uid] = key
+    if kept:
+        log.info("%d mail(s) from keep_in_inbox_from senders left alone", kept)
 
     if cfg.min_age_hours > 0 and pending:
         ready = old_enough(received_times(mb, list(pending)), list(pending), cfg.min_age_hours)
