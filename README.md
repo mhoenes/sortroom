@@ -155,6 +155,22 @@ Stop any running sorter first, run without `--live` to preview:
 and mail, moves the subscriptions and updates the log. In Docker:
 `docker compose run --rm email-sorter python -m email_sorter --rename-folder …`.
 
+## Re-sorting a folder
+
+After changing categories, mail that is already sorted stays where it is.
+To sort one folder again with the current categories:
+
+```powershell
+.venv\Scripts\python -m email_sorter --resort-folder INBOX/Reisen            # dry run, CSV report
+.venv\Scripts\python -m email_sorter --resort-folder INBOX/Reisen --live     # move
+```
+
+Only mails Jev assigns confidently to a category with a *different* folder
+are moved; uncertain mails and mails of inbox categories (e.g. sicherheit)
+stay. Flags are not changed. `--limit N` re-sorts only the newest N mails.
+The expired-offers folder is refused. In Docker:
+`docker compose run --rm email-sorter python -m email_sorter --resort-folder INBOX/Reisen --live`.
+
 ## Expired offers ("abgelaufen" tag)
 
 For categories with `track_expiry = true` (Newsletter), Jev also answers
