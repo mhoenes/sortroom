@@ -194,11 +194,32 @@ Stop any running sorter first, run without `--live` to preview:
 and mail, moves the subscriptions and updates the log. In Docker:
 `docker compose run --rm email-sorter python -m email_sorter --rename-folder …`.
 
-## Senders that always stay in the inbox
+## Sender rules
 
-`keep_in_inbox_from` in `config.toml` lists sender addresses (or parts of
-them, case-insensitive) whose mail is never sorted or sent to Jev – e.g. the
-scanner's scan-to-mail. Applies to normal runs, backfills and re-sorts.
+`[[sender_rules]]` entries are checked before Jev, in order; the first whose
+`match` is part of the sender address (case-insensitive) decides:
+
+```toml
+[[sender_rules]]
+match = "frombrotherdevice@brother.com"   # scanner: always stays in the inbox
+action = "inbox"
+
+[[sender_rules]]
+match = "newsletter@update.lieferando.de"
+action = "werbung"                        # any category key
+```
+
+`inbox` leaves the mail untouched; a category moves it to that category's
+folder without a Jev request (no cost, no flag, no expiry date). Rule-sorted
+mail is logged with source `rule`. Applies to normal runs, backfills and
+re-sorts; the 24-hour wait still applies. The older
+`rules.keep_in_inbox_from = [...]` list still works and counts as `inbox` rules.
+
+## Run log
+
+Every run, backfill, re-sort and expiry recheck is written to the `runs`
+table of the mailbox's `state.db` (counts, cost, categories, errors, also
+for dry runs and crashes); entries older than 180 days are dropped.
 
 ## Re-sorting a folder
 

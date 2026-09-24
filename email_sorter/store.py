@@ -4,9 +4,10 @@ Also remembers when time-limited offers expire, so they can be moved to the expi
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections.abc import Iterable
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 _SCHEMA = """
@@ -24,15 +25,37 @@ CREATE TABLE IF NOT EXISTS processed (
     cost_usd        REAL NOT NULL,
     expires         TEXT,                        -- last valid day of the offer (ISO date)
     expiry_checked  INTEGER NOT NULL DEFAULT 1,  -- 0 = processed before expiry tracking existed
-    expired_tagged  INTEGER NOT NULL DEFAULT 0   -- 1 = moved to the expired folder, 2 = mail no longer found
-)
+    expired_tagged  INTEGER NOT NULL DEFAULT 0,  -- 1 = moved to the expired folder, 2 = mail no longer found
+    source          TEXT NOT NULL DEFAULT 'jev'  -- 'jev' or 'rule' (sender rule, no Jev request)
+);
+CREATE TABLE IF NOT EXISTS runs (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    started         TEXT NOT NULL,
+    finished        TEXT NOT NULL,
+    kind            TEXT NOT NULL,               -- run, backfill, resort, recheck
+    detail          TEXT,                        -- backfill start date, re-sorted folder
+    live            INTEGER NOT NULL,
+    exit_code       INTEGER NOT NULL,
+    classified      INTEGER NOT NULL DEFAULT 0,
+    moved           INTEGER NOT NULL DEFAULT 0,
+    flagged         INTEGER NOT NULL DEFAULT 0,
+    kept_in_inbox   INTEGER NOT NULL DEFAULT 0,
+    expired_moved   INTEGER NOT NULL DEFAULT 0,
+    failed          INTEGER NOT NULL DEFAULT 0,
+    cost_usd        REAL NOT NULL DEFAULT 0,
+    categories      TEXT,                        -- JSON {category: count}
+    error           TEXT
+);
+CREATE INDEX IF NOT EXISTS runs_started ON runs (started);
 """
+RUN_RETENTION_DAYS = 180
 
 # columns added after the first release: name -> definition for ALTER TABLE
 _MIGRATIONS = {
     "expires": "TEXT",
     "expiry_checked": "INTEGER NOT NULL DEFAULT 0",  # existing rows still need a check
     "expired_tagged": "INTEGER NOT NULL DEFAULT 0",
+    "source": "TEXT NOT NULL DEFAULT 'jev'",
 }
 
 MOVED, GONE = 1, 2
@@ -42,7 +65,7 @@ class Store:
     def __init__(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(path)
-        self.db.execute(_SCHEMA)
+        self.db.executescript(_SCHEMA)
         existing = {row[1] for row in self.db.execute("PRAGMA table_info(processed)")}
         for column, definition in _MIGRATIONS.items():
             if column not in existing:
@@ -57,8 +80,8 @@ class Store:
         self.db.execute(
             """INSERT OR REPLACE INTO processed
                (message_key, processed_at, received, sender, subject, category, confidence,
-                needs_action, moved_to, flagged, cost_usd, expires, expiry_checked, expired_tagged)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,0)""",
+                needs_action, moved_to, flagged, cost_usd, expires, expiry_checked, expired_tagged, source)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,0,?)""",
             (
                 outcome.key,
                 datetime.now().isoformat(timespec="seconds"),
@@ -72,9 +95,34 @@ class Store:
                 int(outcome.flag),
                 d.cost,
                 outcome.expires.isoformat() if outcome.expires else None,
+                getattr(outcome, "source", "jev"),
             ),
         )
         self.db.commit()
+
+    def record_run(self, kind: str, detail: str | None, started: datetime, finished: datetime, result) -> None:
+        """One line in the run log; entries older than RUN_RETENTION_DAYS are dropped."""
+        self.db.execute(
+            """INSERT INTO runs (started, finished, kind, detail, live, exit_code, classified, moved, flagged,
+                                 kept_in_inbox, expired_moved, failed, cost_usd, categories, error)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (started.isoformat(timespec="seconds"), finished.isoformat(timespec="seconds"), kind, detail,
+             int(result.live), result.exit_code, result.classified, result.moved, result.flagged,
+             result.kept_in_inbox, result.expired_moved, result.failed, result.cost_usd,
+             json.dumps(result.categories or {}, ensure_ascii=False), result.error),
+        )
+        cutoff = (finished - timedelta(days=RUN_RETENTION_DAYS)).isoformat(timespec="seconds")
+        self.db.execute("DELETE FROM runs WHERE started < ?", (cutoff,))
+        self.db.commit()
+
+    def recent_runs(self, limit: int = 50) -> list[dict]:
+        cur = self.db.execute("SELECT * FROM runs ORDER BY started DESC, id DESC LIMIT ?", (limit,))
+        names = [c[0] for c in cur.description]
+        rows = [dict(zip(names, r)) for r in cur.fetchall()]
+        for r in rows:
+            r["live"] = bool(r["live"])
+            r["categories"] = json.loads(r["categories"] or "{}")
+        return rows
 
     def unchecked_expiry(self, categories: Iterable[str]) -> list[tuple[str, str | None, str | None]]:
         """(key, moved_to, received) of mails processed before expiry tracking existed."""

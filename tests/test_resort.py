@@ -156,8 +156,25 @@ def test_keep_in_inbox_senders_are_not_classified_or_moved(env):
     assert "9" in env.mb.folders["INBOX.Reisen"]
 
 
-def test_keeps_in_inbox_matches_case_insensitive_part_of_address():
-    assert CFG.keeps_in_inbox("FromBrotherDevice@brother.com")
-    assert CFG.keeps_in_inbox("Scanner <frombrotherdevice@BROTHER.com>")
-    assert not CFG.keeps_in_inbox("info@brother.de")
-    assert not CFG.keeps_in_inbox("")
+def test_rule_for_matches_case_insensitive_part_of_address():
+    rule = CFG.rule_for("Scanner <FromBrotherDevice@BROTHER.com>")
+    assert rule and rule.action == "inbox"
+    assert CFG.rule_for("info@brother.de") is None
+    assert CFG.rule_for("") is None
+
+
+def test_category_rule_moves_in_resort_without_jev(env):
+    from email_sorter.config import SenderRule
+    raw = (b"Message-ID: <shop@x>\r\nFrom: rechnung@shop.de\r\nTo: me@x.de\r\n"
+           b"Subject: Rechnung 42\r\nDate: Mon, 21 Sep 2026 10:00:00 +0200\r\n\r\nx")
+    env.mb.folders["INBOX.Reisen"]["9"] = MailMessage([(b"9 (UID 9 RFC822 {1}", raw)])
+    env.mb.folders["INBOX.Finanzen"] = {}
+    cfg = Config(**{**CFG.__dict__, "sender_rules": (SenderRule("@shop.de", "finanzen"),)})
+    result = resort.run_resort(cfg, CREDS, env.tmp, "INBOX/Reisen", live=True, limit=None)
+    assert env.jev.calls == 5 and result.moved == 3  # the 2 Termine plus the rule mail
+    assert "9" in env.mb.folders["INBOX.Finanzen"]
+    store = Store(env.tmp / "data" / "state.db")
+    assert store.db.execute("SELECT source FROM processed WHERE message_key = '<shop@x>'").fetchone() == ("rule",)
+    [entry] = store.recent_runs()
+    assert entry["kind"] == "resort" and entry["detail"] == "INBOX/Reisen"
+    store.close()

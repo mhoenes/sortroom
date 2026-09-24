@@ -223,9 +223,49 @@ def test_mail_without_uid_is_matched_by_message_key(env):
     assert sum(len(u) for u, _ in FakeMailBox.instances[0].moves) == 7
 
 
-def test_keep_in_inbox_senders_are_skipped_in_normal_sorting(env):
+def test_inbox_rule_senders_are_skipped_in_normal_sorting(env):
+    from email_sorter.config import SenderRule
     jev = FakeJev()
     _use_jev(env, jev)
-    cfg = Config(**{**env.cfg.__dict__, "keep_in_inbox_from": ("news@shop.de",)})  # sender of all fake mails
+    cfg = Config(**{**env.cfg.__dict__, "sender_rules": (SenderRule("news@shop.de", "inbox"),)})  # all fake mails
     code = sorter.run_backfill(cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None).exit_code
     assert code == 0 and jev.calls == 0 and FakeMailBox.instances[0].moves == []
+
+
+def test_category_rule_moves_without_jev_and_ignores_the_limit(env):
+    from email_sorter.config import SenderRule
+    jev = FakeJev()
+    _use_jev(env, jev)
+    cfg = Config(**{**env.cfg.__dict__, "sender_rules": (SenderRule("@shop.de", "finanzen"),)})
+    result = sorter.run_backfill(cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None)
+    assert result.exit_code == 0 and jev.calls == 0 and result.cost_usd == 0
+    moves = FakeMailBox.instances[0].moves
+    assert sum(len(u) for u, _ in moves) == 7 and {f for _, f in moves} == {"INBOX.Finanzen"}
+    store = Store(env.tmp / "data" / "state.db")
+    rows = store.db.execute("SELECT category, confidence, source FROM processed").fetchall()
+    assert set(rows) == {("finanzen", 1.0, "rule")}
+    store.close()
+
+
+def test_runs_are_logged(env):
+    jev = FakeJev()
+    _use_jev(env, jev)
+    sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None)
+    store = Store(env.tmp / "data" / "state.db")
+    [entry] = store.recent_runs()
+    assert entry["kind"] == "backfill" and entry["detail"] == "since 2026-01-01" and entry["live"] is True
+    assert entry["classified"] == 7 and entry["moved"] == 7 and entry["categories"] == {"werbung": 7}
+    assert entry["exit_code"] == 0 and entry["error"] is None
+    store.close()
+
+
+def test_crashed_run_is_logged_with_error(env, monkeypatch):
+    jev = FakeJev()
+    _use_jev(env, jev)
+    monkeypatch.setattr(sorter, "classify_new", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("boom")))
+    with pytest.raises(RuntimeError):
+        sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None)
+    store = Store(env.tmp / "data" / "state.db")
+    [entry] = store.recent_runs()
+    assert entry["exit_code"] == 1 and entry["error"] == "boom"
+    store.close()

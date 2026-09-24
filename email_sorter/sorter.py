@@ -12,7 +12,7 @@ from typing import Callable, Iterable
 
 from imap_tools import AND, MailBox, MailMessage, MailMessageFlags
 
-from .config import Config, Credentials
+from .config import INBOX_ACTION, Config, Credentials, SenderRule
 from .expiry import resolve_expiry
 from .jev import Decision, JevAuthError, JevClient, JevError
 from .mailtext import build_state, full_text, message_key, sent_date
@@ -43,6 +43,18 @@ class Outcome:
     flag: bool
     note: str = ""
     expires: date | None = None  # last valid day of a time-limited offer
+    source: str = "jev"          # "jev" or "rule" (sender rule, no Jev request)
+
+
+def rule_outcome(cfg: Config, rule: SenderRule, uid: str, key: str, msg: MailMessage,
+                 where: str | None = None) -> Outcome:
+    """A mail placed by a sender rule: its category's folder (or `where`), no flag, no Jev cost."""
+    decision = Decision(rule.action, 1.0, {rule.action: 1.0}, 0.0, 0.0)
+    folder = cfg.categories[rule.action].folder if where is None else where
+    return Outcome(key=key, uid=uid,
+                   received=msg.date.isoformat(timespec="minutes") if msg.date else msg.date_str,
+                   sender=msg.from_, subject=msg.subject, decision=decision, folder=folder, flag=False,
+                   note=f"sender rule: {rule.match}", source="rule")
 
 
 def plan(decision: Decision, cfg: Config) -> tuple[str | None, bool, str]:
@@ -132,17 +144,21 @@ def classify_new(
     """
     criteria = AND(date_gte=since, date_lt=before) if before else AND(date_gte=since)
     pending: dict[str, str] = {}  # uid -> message key
+    by_rule: dict[str, tuple[SenderRule, MailMessage]] = {}  # uid -> category rule and headers
     kept = 0
     for head in mb.fetch(criteria, mark_seen=False, headers_only=True, bulk=UID_CHUNK):
         key = message_key(head)
         if store.is_processed(key) or (exclude and key in exclude):
             continue
-        if cfg.keeps_in_inbox(head.from_):
+        rule = cfg.rule_for(head.from_)
+        if rule and rule.action == INBOX_ACTION:
             kept += 1
             continue
         pending[head.uid] = key
+        if rule:
+            by_rule[head.uid] = (rule, head)
     if kept:
-        log.info("%d mail(s) from keep_in_inbox_from senders left alone", kept)
+        log.info("%d mail(s) left in the inbox by sender rules", kept)
 
     if cfg.min_age_hours > 0 and pending:
         ready = old_enough(received_times(mb, list(pending)), list(pending), cfg.min_age_hours)
@@ -150,15 +166,26 @@ def classify_new(
             log.info("%d mail(s) younger than %gh, left for a later run", len(pending) - len(ready), cfg.min_age_hours)
         pending = {u: pending[u] for u in ready}
 
-    uids = sorted(pending, key=int, reverse=True)[:limit]  # newest first
+    # sender rules need no Jev request, so they don't count against the limit
+    ruled = sorted((u for u in pending if u in by_rule), key=int, reverse=True)
+    uids = sorted((u for u in pending if u not in by_rule), key=int, reverse=True)[:limit]  # newest first
     span = f"{since} to {before - timedelta(days=1)}" if before else f"since {since}"
-    log.info("%d new mail(s) in %s %s, classifying %d", len(pending), cfg.source_folder, span, len(uids))
-    if not uids:
+    log.info("%d new mail(s) in %s %s, classifying %d%s", len(pending), cfg.source_folder, span, len(uids),
+             f", {len(ruled)} by sender rule" if ruled else "")
+    if not uids and not ruled:
         return [], [], []
 
     outcomes: list[Outcome] = []
+    for uid in ruled:
+        rule, head = by_rule[uid]
+        outcome = rule_outcome(cfg, rule, uid, pending[uid], head)
+        outcomes.append(outcome)
+        if on_outcome:
+            on_outcome(outcome)
     failed: list[str] = []
-    attempted = [pending[u] for u in uids]
+    attempted = [pending[u] for u in ruled + uids]
+    if not uids:
+        return outcomes, failed, attempted
     uid_by_key = {pending[u]: u for u in uids}
     done: set[str] = set()
     descriptions = cfg.descriptions
@@ -195,7 +222,7 @@ def classify_new(
         if on_outcome:
             on_outcome(outcome)
         log.debug("%.2f %-18s %s", decision.confidence, decision.category, msg.subject)
-    missing = [k for k in attempted if k not in done]
+    missing = [pending[u] for u in uids if pending[u] not in done]
     if missing:
         log.warning("%d mail(s) were not returned by the server, retried next run", len(missing))
         failed.extend(missing)
@@ -424,6 +451,15 @@ def summarize(outcomes: list[Outcome], live: bool, exit_code: int, failed: int =
     return result
 
 
+def _finish(store: Store, kind: str, detail: str | None, started: datetime, result: RunResult) -> RunResult:
+    """Write the result to the mailbox's run log; logging must never break a run."""
+    try:
+        store.record_run(kind, detail, started, datetime.now(), result)
+    except Exception:
+        log.exception("could not write the run log")
+    return result
+
+
 def _auth_failed(cfg: Config, e: Exception) -> RunResult:
     log.error("%s - check %s in .env and your gateway credits", e, cfg.jev_api_key_env)
     return RunResult(exit_code=2, error=str(e))
@@ -435,6 +471,7 @@ def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int 
     jev = cfg.jev_client(creds.jev_api_key)
     limit = min(limit or cfg.max_per_run, cfg.max_per_run)
     report = None if live else ReportWriter(base_dir / "reports")
+    started = datetime.now()
     try:
         with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(
             creds.imap_user, creds.imap_password, initial_folder=cfg.source_folder
@@ -444,7 +481,7 @@ def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int 
                 outcomes, failed, _ = classify_new(mb, cfg, jev, store, limit, since,
                                                    on_outcome=report.write if report else None)
             except JevAuthError as e:
-                return _auth_failed(cfg, e)
+                return _finish(store, "run", None, started, _auth_failed(cfg, e))
             failures = tagged = 0
             if live:
                 failures = apply(mb, outcomes, store)
@@ -452,8 +489,12 @@ def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int 
             elif outcomes:
                 log.info("dry run - nothing changed. Report: %s", report.path)
             code = 1 if (failed or failures) else 0
-            return summarize(outcomes, live, code, failed=len(failed) + failures, expired_moved=tagged,
-                             report=report.path if report and report.rows else None)
+            return _finish(store, "run", None, started,
+                           summarize(outcomes, live, code, failed=len(failed) + failures, expired_moved=tagged,
+                                     report=report.path if report and report.rows else None))
+    except Exception as e:
+        _finish(store, "run", None, started, RunResult(exit_code=1, live=live, error=str(e)))
+        raise
     finally:
         store.close()
         if report:
@@ -487,6 +528,7 @@ def run_backfill(cfg: Config, creds: Credentials, base_dir: Path, live: bool,
     all_failed: list[str] = []
     failures = 0
     seen: set[str] = set()  # dry run records nothing; don't classify the same mail twice
+    started, detail = datetime.now(), f"since {since}"
     try:
         with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(
             creds.imap_user, creds.imap_password, initial_folder=cfg.source_folder
@@ -500,7 +542,7 @@ def run_backfill(cfg: Config, creds: Credentials, base_dir: Path, live: bool,
                             on_outcome=report.write if report else None,
                         )
                     except JevAuthError as e:
-                        return _auth_failed(cfg, e)
+                        return _finish(store, "backfill", detail, started, _auth_failed(cfg, e))
                     if not attempted:
                         break  # month done
                     seen.update(attempted)  # failed ones are retried on the next backfill, not in this one
@@ -521,8 +563,12 @@ def run_backfill(cfg: Config, creds: Credentials, base_dir: Path, live: bool,
             if all_failed:
                 log.warning("%d mail(s) could not be classified; run the backfill again to retry", len(all_failed))
             code = 1 if (all_failed or failures) else 0
-            return summarize(all_outcomes, live, code, failed=len(all_failed) + failures, expired_moved=tagged,
-                             report=report.path if report and report.rows else None)
+            return _finish(store, "backfill", detail, started,
+                           summarize(all_outcomes, live, code, failed=len(all_failed) + failures,
+                                     expired_moved=tagged, report=report.path if report and report.rows else None))
+    except Exception as e:
+        _finish(store, "backfill", detail, started, RunResult(exit_code=1, live=live, error=str(e)))
+        raise
     finally:
         store.close()
         if report:
@@ -530,9 +576,10 @@ def run_backfill(cfg: Config, creds: Credentials, base_dir: Path, live: bool,
 
 
 def run_recheck_expiry(cfg: Config, creds: Credentials, base_dir: Path, live: bool) -> RunResult:
-    """--recheck-expiry: find expiry dates for already sorted mail, then tag (live only)."""
+    """--recheck-expiry: find expiry dates for already sorted mail, then move expired ones (live only)."""
     store = Store(base_dir / "data" / "state.db")
     jev = cfg.jev_client(creds.jev_api_key)
+    started = datetime.now()
     try:
         with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(
             creds.imap_user, creds.imap_password, initial_folder=cfg.source_folder
@@ -540,12 +587,16 @@ def run_recheck_expiry(cfg: Config, creds: Credentials, base_dir: Path, live: bo
             try:
                 found = recheck_expiry(mb, cfg, jev, store)
             except JevAuthError as e:
-                return _auth_failed(cfg, e)
+                return _finish(store, "recheck", None, started, _auth_failed(cfg, e))
             tagged = 0
             if live:
                 tagged = move_expired(mb, cfg, store)
             else:
-                log.info("dry run - expiry dates saved, no tags set (use --live to tag)")
-            return RunResult(exit_code=0, live=live, time_limited_offers=found, expired_moved=tagged)
+                log.info("dry run - expiry dates saved, nothing moved (use --live to move expired offers)")
+            return _finish(store, "recheck", None, started,
+                           RunResult(exit_code=0, live=live, time_limited_offers=found, expired_moved=tagged))
+    except Exception as e:
+        _finish(store, "recheck", None, started, RunResult(exit_code=1, live=live, error=str(e)))
+        raise
     finally:
         store.close()

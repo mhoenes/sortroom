@@ -2,7 +2,7 @@
 
     python -m email_sorter --migrate-mailbox privat --name Privat [--live]
 
-Creates mailboxes/<id>/mailbox.toml from the [imap], [rules] and [categories.*] sections of
+Creates mailboxes/<id>/mailbox.toml from the [imap], [rules], [[sender_rules]] and [categories.*] sections of
 config.toml (comments included) and moves data/state.db and the dry-run reports into
 mailboxes/<id>/. config.toml itself is left alone: once a mailbox folder exists, only its [jev]
 section is read. Without --live it only shows what it would do.
@@ -19,8 +19,8 @@ from .sorter import RunResult
 
 log = logging.getLogger(__name__)
 
-MAILBOX_SECTIONS = ("imap", "rules", "categories")
-_HEADER = re.compile(r"^\s*\[\s*([A-Za-z0-9_.-]+)\s*\]\s*(#.*)?$")
+MAILBOX_SECTIONS = ("imap", "rules", "categories", "sender_rules")
+_HEADER = re.compile(r"^\s*\[\[?\s*([A-Za-z0-9_.-]+)\s*\]\]?\s*(#.*)?$")  # [table] and [[array]]
 
 
 def split_sections(text: str) -> tuple[str, str]:

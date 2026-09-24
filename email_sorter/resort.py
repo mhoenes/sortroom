@@ -16,9 +16,12 @@ from imap_tools import AND, MailBox
 from .config import Config, Credentials
 from .jev import JevAuthError, JevClient, JevError
 from .mailtext import build_state, message_key
+from datetime import datetime
+
+from .config import INBOX_ACTION
 from .sorter import (IMAP_TIMEOUT, UID_CHUNK, Outcome, ReportWriter, RunResult, _auth_failed, _chunks,
-                     _delimiter, _ensure_folder, expiry_for, old_enough, plan, received_times,
-                     server_folder)
+                     _delimiter, _ensure_folder, _finish, expiry_for, old_enough, plan, received_times,
+                     rule_outcome, server_folder)
 from .store import Store
 
 log = logging.getLogger(__name__)
@@ -51,10 +54,21 @@ def resort_outcomes(mb: MailBox, cfg: Config, jev: JevClient, folder: str, limit
             if msg.uid not in wanted or msg.uid in seen:
                 continue  # unsolicited FETCH response
             seen.add(msg.uid)
-            if cfg.keeps_in_inbox(msg.from_):
+            rule = cfg.rule_for(msg.from_)
+            if rule and rule.action == INBOX_ACTION:
                 kept += 1
                 continue
             key = message_key(msg)
+            if rule:  # sender rule: its category's folder, no Jev request
+                target = cfg.categories[rule.action].folder
+                outcome = rule_outcome(cfg, rule, msg.uid, key, msg,
+                                       where=target if target and target != folder else folder)
+                outcomes.append(outcome)
+                if outcome.folder != folder:
+                    moving.append(outcome)
+                if on_outcome:
+                    on_outcome(outcome)
+                continue
             try:
                 decision = jev.decide(build_state(msg, cfg.max_body_chars), cfg.descriptions)
             except JevAuthError:
@@ -83,7 +97,7 @@ def resort_outcomes(mb: MailBox, cfg: Config, jev: JevClient, folder: str, limit
             if on_outcome:
                 on_outcome(outcome)
     if kept:
-        log.info("%d mail(s) from keep_in_inbox_from senders left alone", kept)
+        log.info("%d mail(s) left alone by inbox sender rules", kept)
     missing = len(uids) - len(seen)
     if missing:
         log.warning("%d mail(s) were not returned by the server", missing)
@@ -95,6 +109,7 @@ def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, liv
     store = Store(base_dir / "data" / "state.db")
     jev = cfg.jev_client(creds.jev_api_key)
     report = None if live else ReportWriter(base_dir / "reports")
+    started = datetime.now()
     try:
         with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(
             creds.imap_user, creds.imap_password, initial_folder=cfg.source_folder
@@ -116,7 +131,7 @@ def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, liv
                                                            on_outcome=report.write if report else None,
                                                            min_age_hours=min_age)
             except JevAuthError as e:
-                return _auth_failed(cfg, e)
+                return _finish(store, "resort", folder, started, _auth_failed(cfg, e))
 
             move_failures: set[str] = set()
             if live:
@@ -145,7 +160,7 @@ def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, liv
             log.info("%s %d mail(s) out of %s, %d stay%s", "moved" if live else "would move", moved, folder,
                      len(outcomes) - len(moving),
                      ": " + ", ".join(f"{t}={n}" for t, n in targets.most_common()) if targets else "")
-            return RunResult(
+            return _finish(store, "resort", folder, started, RunResult(
                 exit_code=1 if (failed or move_failures) else 0,
                 live=live,
                 classified=len(outcomes),
@@ -155,7 +170,10 @@ def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, liv
                 cost_usd=round(sum(o.decision.cost for o in outcomes), 6),
                 categories=dict(Counter(o.decision.category for o in outcomes).most_common()),
                 report=str(report.path) if report and report.rows else None,
-            )
+            ))
+    except Exception as e:
+        _finish(store, "resort", folder, started, RunResult(exit_code=1, live=live, error=str(e)))
+        raise
     finally:
         store.close()
         if report:

@@ -185,3 +185,53 @@ def test_maintenance_needs_mailbox_when_several(two_boxes):
 def test_unknown_mailbox(two_boxes):
     tmp, ran = two_boxes
     assert cli.main(["--config", str(tmp / "config.toml"), "--mailbox", "nope"]) == 2
+
+
+# ---------------------------------------------------------------- sender rules
+
+def _cfg_with(tmp_path, extra: str):
+    (tmp_path / "config.toml").write_text(SHARED, encoding="utf-8")
+    _box(tmp_path, "privat")
+    f = tmp_path / "mailboxes" / "privat" / "mailbox.toml"
+    f.write_text(f.read_text(encoding="utf-8") + extra, encoding="utf-8")
+    return load_mailboxes(tmp_path, tmp_path / "config.toml")["privat"].cfg
+
+
+def test_sender_rules_in_order_then_legacy_list(tmp_path):
+    cfg = _cfg_with(tmp_path, """
+[[sender_rules]]
+match = "Newsletter@Shop.de"
+action = "a"
+
+[[sender_rules]]
+match = "@shop.de"
+action = "inbox"
+""")
+    assert [(r.match, r.action) for r in cfg.sender_rules] == [("newsletter@shop.de", "a"), ("@shop.de", "inbox")]
+    assert cfg.rule_for("NEWSLETTER@shop.de").action == "a"   # first match wins
+    assert cfg.rule_for("info@shop.de").action == "inbox"
+
+
+def test_legacy_keep_in_inbox_from_becomes_inbox_rules(tmp_path):
+    cfg = _cfg_with(tmp_path, "")
+    f = tmp_path / "mailboxes" / "privat" / "mailbox.toml"
+    toml = f.read_text(encoding="utf-8")
+    f.write_text(toml.replace("max_per_run = 200", 'max_per_run = 200\nkeep_in_inbox_from = ["Scanner@x.de"]'),
+                 encoding="utf-8")
+    cfg = load_mailboxes(tmp_path, tmp_path / "config.toml")["privat"].cfg
+    assert [(r.match, r.action) for r in cfg.sender_rules] == [("scanner@x.de", "inbox")]
+
+
+@pytest.mark.parametrize("rule, message", [
+    ('match = "x@y.de"\naction = "gibtsnicht"', "action must be"),
+    ('match = ""\naction = "inbox"', "needs a match"),
+])
+def test_invalid_sender_rules(tmp_path, rule, message):
+    with pytest.raises(ConfigError, match=message):
+        _cfg_with(tmp_path, f"\n[[sender_rules]]\n{rule}\n")
+
+
+def test_sender_rules_travel_with_the_mailbox_on_migration():
+    shared, mailbox = split_sections(SHIPPED)
+    assert "[[sender_rules]]" in mailbox and "[[sender_rules]]" not in shared
+    assert "# Sender rules" in mailbox

@@ -23,6 +23,16 @@ class Category:
     track_expiry: bool
 
 
+INBOX_ACTION = "inbox"  # sender rule action: leave the mail in the inbox, untouched
+
+
+@dataclass(frozen=True)
+class SenderRule:
+    """Mail whose sender address contains `match` goes straight to `action`, without Jev."""
+    match: str   # lowercase
+    action: str  # INBOX_ACTION or a category key
+
+
 @dataclass(frozen=True)
 class Config:
     imap_host: str
@@ -40,16 +50,16 @@ class Config:
     expired_folder: str | None
     lookback_days: int
     min_age_hours: float
-    keep_in_inbox_from: tuple[str, ...]
     max_per_run: int
     categories: dict[str, Category]
     imap_user_env: str = "IMAP_USER"          # names of the .env variables holding this
     imap_password_env: str = "IMAP_PASSWORD"  # mailbox's login, so several mailboxes can coexist
+    sender_rules: tuple[SenderRule, ...] = ()  # checked in order, first match wins
 
-    def keeps_in_inbox(self, sender: str) -> bool:
-        """True for senders that config.toml says to always leave in the inbox."""
+    def rule_for(self, sender: str) -> SenderRule | None:
+        """The first sender rule matching this sender address, if any (case-insensitive)."""
         sender = (sender or "").lower()
-        return any(pattern in sender for pattern in self.keep_in_inbox_from)
+        return next((r for r in self.sender_rules if r.match in sender), None)
 
     @property
     def descriptions(self) -> dict[str, str]:
@@ -113,11 +123,11 @@ def config_from_raw(raw: dict, where: str) -> Config:
             expired_folder=rules.get("expired_folder") or None,
             lookback_days=int(rules["lookback_days"]),
             min_age_hours=float(rules.get("min_age_hours", 0)),
-            keep_in_inbox_from=tuple(s.strip().lower() for s in rules.get("keep_in_inbox_from", []) if s.strip()),
             max_per_run=int(rules["max_per_run"]),
             categories=categories,
             imap_user_env=imap.get("user_env", "IMAP_USER"),
             imap_password_env=imap.get("password_env", "IMAP_PASSWORD"),
+            sender_rules=_sender_rules(raw, categories, where),
         )
     except KeyError as e:
         raise ConfigError(f"{where}: missing setting {e}") from None
@@ -130,6 +140,24 @@ def config_from_raw(raw: dict, where: str) -> Config:
         if not 0.0 <= getattr(cfg, name) <= 1.0:
             raise ConfigError(f"{where}: {name} must be between 0 and 1")
     return cfg
+
+
+def _sender_rules(raw: dict, categories: dict[str, Category], where: str) -> tuple[SenderRule, ...]:
+    """[[sender_rules]] entries, then the older rules.keep_in_inbox_from list as inbox rules."""
+    out = []
+    for i, r in enumerate(raw.get("sender_rules", []), start=1):
+        match = str(r.get("match", "")).strip().lower()
+        action = str(r.get("action", "")).strip()
+        if not match:
+            raise ConfigError(f"{where}: sender rule {i} needs a match")
+        if action != INBOX_ACTION and action not in categories:
+            raise ConfigError(f"{where}: sender rule {i} ({match}): action must be "
+                              f"{INBOX_ACTION!r} or a category, not {action!r}")
+        out.append(SenderRule(match, action))
+    for s in raw.get("rules", {}).get("keep_in_inbox_from", []):
+        if str(s).strip():
+            out.append(SenderRule(str(s).strip().lower(), INBOX_ACTION))
+    return tuple(out)
 
 
 def load_config(path: Path) -> Config:
