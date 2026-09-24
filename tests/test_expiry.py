@@ -216,3 +216,22 @@ def test_move_expired_does_nothing_without_expired_folder(tmp_path):
     assert mb.moves == []
     assert len(store.due_expired(date(2026, 9, 25))) == 1  # kept until a folder is configured
     store.close()
+
+
+def test_move_expired_uses_category_folder_over_default(tmp_path):
+    from dataclasses import replace
+    from email_sorter import sorter
+    from email_sorter.config import Config, load_config
+    from pathlib import Path
+
+    cfg = load_config(Path(__file__).resolve().parent.parent / "config.toml")
+    cats = dict(cfg.categories)
+    cats["unterlagen"] = replace(cats["unterlagen"], expired_folder="INBOX/Unterlagen/Abgelaufen")
+    cfg = Config(**{**cfg.__dict__, "categories": cats})
+    store = Store(tmp_path / "s.db")
+    store.record(_outcome("<w@x>", category="werbung", expires=date(2026, 9, 1)))
+    store.record(_outcome("<u@x>", category="unterlagen", expires=date(2026, 9, 1), folder="INBOX/Werbung"))
+    mb = _FakeMailBox([_Head("7", "<w@x>"), _Head("8", "<u@x>")])
+    assert sorter.move_expired(mb, cfg, store, today=date(2026, 9, 25)) == 2
+    assert sorted(f for _, f in mb.moves) == ["INBOX.Unterlagen.Abgelaufen", "INBOX.Werbung.Abgelaufen"]
+    store.close()

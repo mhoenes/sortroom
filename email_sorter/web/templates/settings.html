@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Einstellungen · {{ box.name }}{% endblock %}
+{% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text }}" data-tip="{{ text }}">?</span>{% endmacro %}
+{% block content %}
+<div class="head">
+  <div class="title">
+    <h1>Einstellungen · {{ box.name }}</h1>
+    <div class="sub">Gespeichert in <span class="mono">{{ config_name }}</span> · Änderungen gelten ab dem nächsten Lauf</div>
+  </div>
+</div>
+
+{% include "_flash.html" %}
+{% if not editable %}
+<div class="banner" role="status">Nur lesen: {{ config_name }} ist schreibgeschützt eingebunden. Änderungen bitte in der Datei vornehmen.</div>
+{% endif %}
+{% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
+
+<form method="post" action="/ui/m/{{ box.id }}/settings">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <fieldset {% if not editable %}disabled{% endif %} class="stack">
+    <section class="card stack">
+      <h2>Postfach</h2>
+      <div class="grid cols-3">
+        <label class="f"><span class="lt">Anzeigename {{ help('Name des Postfachs in der Oberfläche.' ~ (' Bei einer einzelnen config.toml fest „Postfach“.' if single_file else '')) }}</span>
+          <input type="text" name="name" value="{{ form.name }}" maxlength="60" {% if single_file %}disabled{% endif %}>
+        </label>
+        <label class="f"><span class="lt">IMAP-Server {{ help('Hostname des Mailservers, z. B. imap.strato.de. Die Verbindung ist immer verschlüsselt (SSL).') }}</span>
+          <input type="text" name="imap_host" value="{{ form.imap_host }}" required>
+        </label>
+        <label class="f"><span class="lt">Port {{ help('Meist 993 für IMAP über SSL.') }}</span>
+          <input type="text" name="imap_port" value="{{ form.imap_port }}" inputmode="numeric" required>
+        </label>
+        <label class="f"><span class="lt">Posteingang {{ help('Ordner, aus dem neue Mails einsortiert werden. Meist INBOX.') }}</span>
+          <input type="text" name="source_folder" value="{{ form.source_folder }}">
+        </label>
+        <div class="f"><span class="lt">Zugangsdaten {{ help('Benutzer und Passwort stehen aus Sicherheitsgründen nur in der .env-Datei; hier stehen die Namen der Variablen.') }}</span>
+          <span class="static mono">{{ cfg.imap_user_env }} · {{ cfg.imap_password_env }}</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card stack">
+      <h2>Einsortieren</h2>
+      <div class="grid cols-3">
+        <label class="f"><span class="lt">Mindest-Konfidenz {{ help('Nur wenn Jev mindestens so sicher ist (0 bis 1), wird verschoben. Unsichere Mails bleiben im Posteingang und erscheinen unter „Zur Prüfung“.') }}</span>
+          <input type="text" name="min_confidence" value="{{ form.min_confidence }}" inputmode="decimal" required>
+        </label>
+        <label class="f"><span class="lt">Stern bei Handlungsbedarf ab {{ help('Ab dieser Wahrscheinlichkeit für „du musst etwas tun“ bekommt eine Mail einen Stern – in Kategorien, in denen das eingeschaltet ist.') }}</span>
+          <input type="text" name="action_flag_threshold" value="{{ form.action_flag_threshold }}" inputmode="decimal" required>
+        </label>
+        <label class="f"><span class="lt">Befristetes Angebot ab {{ help('Ab dieser Wahrscheinlichkeit gilt eine Mail als befristet, ihr Ablaufdatum wird verfolgt.') }}</span>
+          <input type="text" name="expiry_threshold" value="{{ form.expiry_threshold }}" inputmode="decimal" required>
+        </label>
+        <label class="f"><span class="lt">Wartezeit in Stunden {{ help('Neue Mails bleiben so lange im Posteingang, bevor sie einsortiert werden – damit du sie zuerst dort siehst. 0 = sofort.') }}</span>
+          <input type="text" name="min_age_hours" value="{{ form.min_age_hours }}" inputmode="decimal" required>
+        </label>
+        <label class="f"><span class="lt">Rückblick in Tagen {{ help('Ein normaler Lauf schaut nur auf Mails der letzten so vielen Tage. Ältere holt ein Backfill.') }}</span>
+          <input type="text" name="lookback_days" value="{{ form.lookback_days }}" inputmode="numeric" required>
+        </label>
+        <label class="f"><span class="lt">Max. Mails pro Lauf {{ help('Obergrenze für Jev-Anfragen je Lauf; begrenzt die Kosten, falls plötzlich sehr viele Mails ankommen. Absender-Regeln zählen nicht mit.') }}</span>
+          <input type="text" name="max_per_run" value="{{ form.max_per_run }}" inputmode="numeric" required>
+        </label>
+        <label class="f" style="grid-column:span 2"><span class="lt">Standard-Ordner für Abgelaufenes {{ help('Hierhin wandern befristete Angebote nach ihrem letzten gültigen Tag – außer eine Kategorie hat einen eigenen Ordner. Leer: nichts wird verschoben.') }}</span>
+          <input type="text" name="expired_folder" value="{{ form.expired_folder }}" placeholder="INBOX/Werbung/Abgelaufen">
+        </label>
+      </div>
+    </section>
+    {% if editable %}<div class="actions"><button class="btn primary" type="submit">Einstellungen speichern</button></div>{% endif %}
+  </fieldset>
+</form>
+
+<form method="post" action="/ui/m/{{ box.id }}/settings/sender-rules" id="regeln">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="rows" value="{{ rules|length }}">
+  <fieldset {% if not editable %}disabled{% endif %} class="stack">
+    <section class="card stack">
+      <div>
+        <h2>Absender-Regeln {{ help('Mails dieser Absender entscheidet nicht Jev: Sie bleiben im Posteingang oder gehen direkt in eine Kategorie. Treffer, wenn der Text in der Absenderadresse vorkommt, z. B. „@brother.com“. Die erste passende Regel gilt.') }}</h2>
+        <p class="muted hint">Leere Zeilen werden ignoriert. Für eine weitere Regel eine freie Zeile ausfüllen und speichern.</p>
+      </div>
+      <table class="rules">
+        <thead><tr><th scope="col">Absender enthält</th><th scope="col">Ziel</th><th scope="col">Entfernen</th></tr></thead>
+        <tbody>
+        {% for match, action in rules %}
+          <tr>
+            <td><input type="text" name="match_{{ loop.index0 }}" value="{{ match }}" aria-label="Absender, Zeile {{ loop.index }}" placeholder="{{ 'name@firma.de oder @firma.de' if not match }}"></td>
+            <td><select name="action_{{ loop.index0 }}" aria-label="Ziel, Zeile {{ loop.index }}">
+              <option value="inbox" {% if action == 'inbox' %}selected{% endif %}>Im Posteingang lassen</option>
+              {% for key, c in cfg.categories.items() %}<option value="{{ key }}" {% if action == key %}selected{% endif %}>{{ c.label }}{% if c.folder %} → {{ c.folder|folder_label }}{% endif %}</option>{% endfor %}
+            </select></td>
+            <td>{% if match %}<label class="check small"><input type="checkbox" name="remove_{{ loop.index0 }}" value="1">entfernen</label>{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% if editable %}<div class="actions"><button class="btn primary" type="submit">Regeln speichern</button></div>{% endif %}
+    </section>
+  </fieldset>
+</form>
+{% endblock %}

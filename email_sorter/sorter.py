@@ -331,33 +331,47 @@ def _group_by_folder(rows, cfg: Config, delim: str) -> dict[str, dict[str, str |
     return groups
 
 
-def move_expired(mb: MailBox, cfg: Config, store: Store, today: date | None = None) -> int:
-    """Move offers whose last valid day has passed to expired_folder. Returns the number moved.
+def expired_target(cfg: Config, category: str | None) -> str | None:
+    """Where an expired offer of this category goes: the category's own folder, else the default."""
+    cat = cfg.categories.get(category or "")
+    return (cat.expired_folder if cat and cat.expired_folder else None) or cfg.expired_folder
 
-    Without an expired_folder nothing happens: the dates stay in the log until one is configured.
+
+def move_expired(mb: MailBox, cfg: Config, store: Store, today: date | None = None) -> int:
+    """Move offers whose last valid day has passed to their expired folder. Returns the number moved.
+
+    Offers of a category without any expired folder stay where they are; their dates stay in the
+    log until a folder is configured.
     """
-    if not cfg.expired_folder:
+    if not cfg.expired_folder and not any(c.expired_folder for c in cfg.categories.values()):
         return 0
     due = store.due_expired(today or date.today())
     if not due:
         return 0
+    categories = store.categories_of(k for k, _, _ in due)
+    by_target: dict[str, list] = defaultdict(list)
+    for row in due:
+        target = expired_target(cfg, categories.get(row[0]))
+        if target:
+            by_target[target].append(row)
     delim = _delimiter(mb)
-    target = server_folder(cfg.expired_folder, delim)
     moved = 0
     try:
-        for folder, wanted in _group_by_folder(due, cfg, delim).items():
-            try:
-                uids = _find_uids(mb, folder, wanted, fallback_days=MAX_EXPIRY_AGE_DAYS)
-                if uids and target != folder:
-                    _ensure_folder(mb, target)
-                    for chunk in _chunks(list(uids.values())):
-                        mb.move(chunk, target)
-                    log.info("moved %d expired offer(s) %s -> %s", len(uids), folder, target)
-                store.mark_expired(uids, MOVED)
-                store.mark_expired(set(wanted) - set(uids), GONE)  # deleted or moved away by the user
-                moved += len(uids)
-            except Exception as e:
-                log.error("moving expired offers out of %s failed, will retry next run: %s", folder, e)
+        for target_path, rows in by_target.items():
+            target = server_folder(target_path, delim)
+            for folder, wanted in _group_by_folder(rows, cfg, delim).items():
+                try:
+                    uids = _find_uids(mb, folder, wanted, fallback_days=MAX_EXPIRY_AGE_DAYS)
+                    if uids and target != folder:
+                        _ensure_folder(mb, target)
+                        for chunk in _chunks(list(uids.values())):
+                            mb.move(chunk, target)
+                        log.info("moved %d expired offer(s) %s -> %s", len(uids), folder, target)
+                    store.mark_expired(uids, MOVED)
+                    store.mark_expired(set(wanted) - set(uids), GONE)  # deleted or moved away by the user
+                    moved += len(uids)
+                except Exception as e:
+                    log.error("moving expired offers out of %s failed, will retry next run: %s", folder, e)
     finally:
         mb.folder.set(cfg.source_folder)
     return moved

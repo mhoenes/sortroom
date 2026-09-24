@@ -84,6 +84,15 @@ def distribution(db: sqlite3.Connection | None, days: int = 7, now: datetime | N
     return [(r[0], r[1]) for r in rows]
 
 
+def category_counts(db: sqlite3.Connection | None, days: int = 30, now: datetime | None = None) -> dict[str, int]:
+    """Mails per category in the last `days` days (moved or not)."""
+    if db is None:
+        return {}
+    since = _iso((now or datetime.now()) - timedelta(days=days))
+    return dict(db.execute("SELECT category, COUNT(*) FROM processed WHERE processed_at >= ? GROUP BY category",
+                           (since,)).fetchall())
+
+
 def expired_moved(db: sqlite3.Connection | None, days: int = 7, now: datetime | None = None) -> int:
     if db is None or not _has_table(db, "runs"):
         return 0

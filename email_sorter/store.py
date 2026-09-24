@@ -151,6 +151,16 @@ class Store:
             (today.isoformat(),),
         ).fetchall()
 
+    def categories_of(self, keys: Iterable[str]) -> dict[str, str]:
+        keys = list(keys)
+        out: dict[str, str] = {}
+        for i in range(0, len(keys), 500):
+            chunk = keys[i:i + 500]
+            marks = ",".join("?" * len(chunk))
+            out.update(self.db.execute(
+                f"SELECT message_key, category FROM processed WHERE message_key IN ({marks})", chunk).fetchall())
+        return out
+
     def mark_expired(self, keys: Iterable[str], state: int) -> None:
         self.db.executemany(
             "UPDATE processed SET expired_tagged = ? WHERE message_key = ?",

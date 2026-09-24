@@ -27,9 +27,24 @@ logins are slowed down. Behind an HTTPS reverse proxy set `UI_SECURE_COOKIES=1`.
 - **Mails** – everything sorted, with search and filters (category, folder,
   period, uncertain, flagged) and a detail panel
 
-The pages only read each mailbox's `state.db`; they never touch IMAP or Jev.
-Editing categories and settings, maintenance jobs and correcting single mails
-follow in later versions. The API endpoints keep their bearer-token auth.
+- **Kategorien** – edit name, description, folder, star/expiry switches and a
+  per-category folder for expired offers; add or delete categories.
+  **Mit Jev testen** classifies the category's last 10 mails and 15 others with
+  the draft description (read-only, nothing is moved; about $0.002) and shows
+  what would change
+- **Einstellungen** – display name, IMAP server/port/inbox, thresholds, waiting
+  time, look-back, max per run, default folder for expired offers, and the
+  sender rules table
+
+Edits are written to the mailbox's `mailbox.toml` (comments are kept), checked
+exactly like the sorter loads them, and the previous version is kept as
+`mailbox.toml.bak`. They apply from the next run. A file the container can't
+write (e.g. a single-file `config.toml` mounted `:ro`) is shown read-only – run
+`--migrate-mailbox` to get an editable `mailboxes/<id>/mailbox.toml`, and make
+sure `./mailboxes` is writable for uid 1000. Forms carry a CSRF token.
+
+Maintenance jobs and correcting single mails follow in a later version. The
+API endpoints keep their bearer-token auth.
 
 ## Several mailboxes
 

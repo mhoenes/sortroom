@@ -301,3 +301,6 @@ def mails(request: Request, box_id: str, q: str = "", category: str = "", folder
         "selected": selected, "folders": folder_list, "pages": pages, "periods": queries.PERIODS,
         "query": urlencode(params), "label": lambda k: _label(box, k),
         "link_key": lambda k: quote(k, safe=""), "min_conf": box.cfg.min_confidence})
+
+
+from . import editor  # noqa: E402,F401  (registers the editing pages on router)

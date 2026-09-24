@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Kategorien · {{ box.name }}{% endblock %}
+{% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text }}" data-tip="{{ text }}">?</span>{% endmacro %}
+{% block content %}
+<div class="head">
+  <div class="title">
+    <h1>Kategorien · {{ box.name }}</h1>
+    <div class="sub">Jev ordnet jede Mail allein anhand dieser Beschreibungen ein · {{ box.cfg.categories|length }} Kategorien</div>
+  </div>
+  {% if editable %}<a class="btn" href="/ui/m/{{ box.id }}/categories?new=1">Neue Kategorie</a>{% endif %}
+</div>
+
+{% include "_flash.html" %}
+{% if not editable %}
+<div class="banner" role="status">Nur lesen: {{ box.config_file.name if box.config_file else 'die Konfiguration' }} ist schreibgeschützt eingebunden. Änderungen bitte in der Datei vornehmen.</div>
+{% endif %}
+
+<div class="grid catgrid">
+  <section class="card" style="padding:6px 12px" aria-label="Alle Kategorien">
+    <table>
+      <thead><tr><th scope="col">Kategorie</th><th scope="col">Ordner</th><th scope="col" class="num">30 Tage</th></tr></thead>
+      <tbody>
+      {% for key, c in box.cfg.categories.items() %}
+        <tr class="link {% if key == cat and not new %}sel{% endif %}">
+          <td><a class="rowlink" href="/ui/m/{{ box.id }}/categories?cat={{ key }}"><b>{{ c.label }}</b>
+            {% if c.flag %} <span class="pill info">Stern</span>{% endif %}{% if c.track_expiry %} <span class="pill">Ablauf</span>{% endif %}</a></td>
+          <td class="clip" style="width:40%"><a class="rowlink" href="/ui/m/{{ box.id }}/categories?cat={{ key }}">{{ c.folder|folder_label if c.folder else 'bleibt im Posteingang' }}</a></td>
+          <td class="num">{{ (counts.get(key) or 0)|de_num }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card editor" aria-label="{{ 'Neue Kategorie' if new else 'Kategorie bearbeiten' }}">
+    <h2>{{ 'Neue Kategorie' if new else form.label or form.key }}</h2>
+    {% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
+    <form method="post" action="/ui/m/{{ box.id }}/categories" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      {% if new %}<input type="hidden" name="new" value="1">{% endif %}
+      <fieldset {% if not editable %}disabled{% endif %} class="stack">
+        <div class="cols-2 grid">
+          <label class="f"><span class="lt">Schlüssel {{ help('Interner Name, unter dem Jev und das Protokoll die Kategorie führen. Nur Kleinbuchstaben, Ziffern und _. Lässt sich später nur über „Wartung“ umbenennen.') }}</span>
+            {% if new %}<input type="text" name="key" value="{{ form.key }}" required pattern="[a-z0-9_]{1,40}" placeholder="z. B. vereine">
+            {% else %}<input type="text" value="{{ form.key }}" readonly class="mono"><input type="hidden" name="key" value="{{ form.key }}">{% endif %}
+          </label>
+          <label class="f"><span class="lt">Anzeigename {{ help('So erscheint die Kategorie hier in der Oberfläche. Leer lassen für den Schlüssel mit Umlauten.') }}</span>
+            <input type="text" name="label" value="{{ form.label }}" maxlength="60">
+          </label>
+        </div>
+        <label class="f"><span class="lt">Beschreibung für Jev {{ help('Jev sieht nur diesen Text, um zu entscheiden, ob eine Mail hierher gehört. Konkret beschreiben, was dazugehört und was nicht – Beispiele für Absender und Anlässe helfen.') }}</span>
+          <textarea name="description" rows="6" required maxlength="4000">{{ form.description }}</textarea>
+        </label>
+        <label class="f"><span class="lt">Zielordner {{ help('IMAP-Ordner, in den sichere Mails dieser Kategorie verschoben werden, z. B. INBOX/Finanzen. Leer: Die Mail bleibt im Posteingang.') }}</span>
+          <input type="text" name="folder" value="{{ form.folder }}" placeholder="INBOX/…">
+        </label>
+        <div class="toggles">
+          <label class="check"><input type="checkbox" name="flag" {% if form.flag %}checked{% endif %}>Immer mit Stern
+            {{ help('Jede Mail dieser Kategorie bekommt einen Stern (z. B. Sicherheit).') }}</label>
+          <label class="check"><input type="checkbox" name="flag_on_action" {% if form.flag_on_action %}checked{% endif %}>Stern bei Handlungsbedarf
+            {{ help('Stern nur, wenn Jev meint, dass du etwas tun musst (Schwelle in den Einstellungen). Für Werbung und Benachrichtigungen meist aus.') }}</label>
+          <label class="check"><input type="checkbox" name="track_expiry" id="track_expiry" {% if form.track_expiry %}checked{% endif %}>Ablaufdatum verfolgen
+            {{ help('Jev erkennt befristete Angebote. Nach dem letzten gültigen Tag wird die Mail in den Ordner für Abgelaufenes verschoben.') }}</label>
+        </div>
+        <label class="f expiry-folder"><span class="lt">Zielordner für Abgelaufenes {{ help('Nur für diese Kategorie. Leer: der Standard-Ordner aus den Einstellungen' ~ (' (' ~ box.cfg.expired_folder ~ ')' if box.cfg.expired_folder else '') ~ '.') }}</span>
+          <input type="text" name="expired_folder" value="{{ form.expired_folder }}" placeholder="{{ box.cfg.expired_folder or 'INBOX/…/Abgelaufen' }}">
+        </label>
+        {% if editable %}
+        <div class="actions">
+          <button class="btn primary" type="submit">{{ 'Anlegen' if new else 'Speichern' }}</button>
+          <button class="btn" type="submit" formaction="/ui/m/{{ box.id }}/categories/test">Mit Jev testen</button>
+          {% if not new %}
+            {% if form.key in rules_using %}
+              <span class="muted" style="margin-left:auto;font-size:13px">Von Absender-Regeln benutzt – nicht löschbar</span>
+            {% else %}
+              <button class="btn danger" type="submit" name="delete" value="1" style="margin-left:auto"
+                onclick="return confirm('Diese Kategorie löschen? Bereits sortierte Mails bleiben in ihren Ordnern.')">Löschen</button>
+            {% endif %}
+          {% endif %}
+        </div>
+        <p class="muted hint">„Mit Jev testen“ ordnet die letzten {{ sample[0] }} Mails dieser Kategorie und {{ sample[1] }} andere mit der Beschreibung aus dem Feld neu ein – ohne etwas zu verschieben oder zu speichern (ca. {{ '%.3f'|format((sample[0] + sample[1]) * 0.0001) }} $).</p>
+        {% endif %}
+      </fieldset>
+    </form>
+  </section>
+</div>
+{% endblock %}

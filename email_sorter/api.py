@@ -232,6 +232,7 @@ from . import web  # noqa: E402
 
 app.state.load_mailboxes = lambda: load_mailboxes(BASE_DIR, CONFIG_PATH)
 app.state.is_busy = _busy
+app.state.config_path = CONFIG_PATH
 app.add_middleware(SessionMiddleware, secret_key=web.session_secret(), session_cookie="email_sorter_session",
                    max_age=web.SESSION_DAYS * 86400, same_site="lax",
                    https_only=os.environ.get("UI_SECURE_COOKIES") == "1")

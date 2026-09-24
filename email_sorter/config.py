@@ -22,6 +22,7 @@ class Category:
     flag_on_action: bool
     track_expiry: bool
     label: str = ""  # display name; defaults to the key with umlauts, e.g. "Persönlich"
+    expired_folder: str | None = None  # overrides rules.expired_folder for this category
 
 
 INBOX_ACTION = "inbox"  # sender rule action: leave the mail in the inbox, untouched
@@ -116,6 +117,7 @@ def config_from_raw(raw: dict, where: str) -> Config:
                 flag_on_action=bool(c.get("flag_on_action", True)),
                 track_expiry=bool(c.get("track_expiry", False)),
                 label=str(c.get("label") or default_label(key)),
+                expired_folder=c.get("expired_folder") or None,
             )
         cfg = Config(
             imap_host=imap["host"],
@@ -188,6 +190,7 @@ class Mailbox:
     name: str
     workspace: Path  # data/state.db, data/run.lock and reports/ live below this
     cfg: Config
+    config_file: Path | None = None  # mailbox.toml, or config.toml for a single-file setup
 
     @property
     def lock_path(self) -> Path:
@@ -214,11 +217,12 @@ def load_mailboxes(base_dir: Path, config_path: Path) -> dict[str, Mailbox]:
         if "jev" in raw:
             raise ConfigError(f"{file}: [jev] belongs in {config_path.name}, it is shared by all mailboxes")
         cfg = config_from_raw({**raw, "jev": shared["jev"]}, str(file))
-        boxes[box_id] = Mailbox(box_id, str(raw.get("name") or box_id), file.parent, cfg)
+        boxes[box_id] = Mailbox(box_id, str(raw.get("name") or box_id), file.parent, cfg, file)
     if boxes:
         return boxes
     if "imap" in shared:
-        return {LEGACY_ID: Mailbox(LEGACY_ID, "Postfach", base_dir, config_from_raw(shared, str(config_path)))}
+        return {LEGACY_ID: Mailbox(LEGACY_ID, "Postfach", base_dir, config_from_raw(shared, str(config_path)),
+                                   config_path)}
     raise ConfigError(f"no mailbox configured: add {root / '<id>' / 'mailbox.toml'}")
 
 
