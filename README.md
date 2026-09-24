@@ -74,9 +74,24 @@ reach it at `http://email-sorter:8765`.
 All endpoints except `/health` need `Authorization: Bearer <API_TOKEN>`.
 Runs share one lock: while a backfill runs, `/run` answers 409.
 
+### Docker image
+
+GitHub Actions (`.github/workflows/docker.yml`) runs the tests on every push
+and publishes the image to GitHub Container Registry for amd64 and arm64:
+
+- `ghcr.io/<owner>/email-sorter:latest` – latest `main`
+- `ghcr.io/<owner>/email-sorter:1.2.3` / `:1.2` – version tags `v1.2.3`
+- `ghcr.io/<owner>/email-sorter:sha-abc1234` – every published commit
+
+If the repository is private, the package is private too; log in once on the
+Docker host with a personal access token that has `read:packages`:
+`echo <token> | docker login ghcr.io -u <github-user> --password-stdin`.
+
 ### Setup on the Docker host
 
-1. Copy the project folder to the host (without `.venv`).
+1. On the host you only need `docker-compose.yml`, `config.toml`, `.env`
+   and `data/state.db` – the code comes with the image. Set
+   `EMAIL_SORTER_IMAGE=ghcr.io/<owner>/email-sorter:latest` in `.env`.
 2. **Move the state over:** copy `data/state.db` from the old machine into
    `data/` on the host – otherwise the sorter doesn't know what it already
    sorted and expiry dates are lost.
@@ -85,7 +100,7 @@ Runs share one lock: while a backfill runs, `/run` answers 409.
    `docker inspect <n8n> --format '{{json .NetworkSettings.Networks}}'`).
 4. `mkdir -p data logs reports && sudo chown -R 1000:1000 data logs reports`
    (the container runs as uid 1000).
-5. `docker compose up -d --build`, then check:
+5. `docker compose pull && docker compose up -d`, then check:
    `docker compose logs -f email-sorter` and
    `docker exec email-sorter python -m email_sorter --check`.
 

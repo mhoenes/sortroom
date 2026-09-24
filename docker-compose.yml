@@ -7,8 +7,11 @@
 
 services:
   email-sorter:
-    build: .
-    image: email-sorter:latest
+    # Prebuilt image from GitHub Container Registry, set EMAIL_SORTER_IMAGE in .env.
+    # Update: docker compose pull && docker compose up -d
+    # To build locally instead: docker build -t email-sorter:latest .  and leave
+    # EMAIL_SORTER_IMAGE empty.
+    image: ${EMAIL_SORTER_IMAGE:-email-sorter:latest}
     container_name: email-sorter
     restart: unless-stopped
     env_file: .env
