@@ -28,6 +28,11 @@ def _has_column(db: sqlite3.Connection, table: str, column: str) -> bool:
     return any(r[1] == column for r in db.execute(f"PRAGMA table_info({table})"))
 
 
+def _present(db: sqlite3.Connection) -> str:
+    """SQL condition for mails still in the mailbox (logs before 1.3 have no `gone` column)."""
+    return " AND gone = 0" if _has_column(db, "processed", "gone") else ""
+
+
 def _iso(dt: datetime) -> str:
     return dt.isoformat(timespec="seconds")
 
@@ -56,7 +61,8 @@ def stats(db: sqlite3.Connection | None, min_confidence: float, now: datetime | 
     month = _iso(datetime.combine(now.date().replace(day=1), datetime.min.time()))
     s.sorted_today = db.execute("SELECT COUNT(*) FROM processed WHERE processed_at >= ?", (today,)).fetchone()[0]
     s.uncertain = db.execute(
-        "SELECT COUNT(*) FROM processed WHERE moved_to IS NULL AND confidence < ? AND processed_at >= ?",
+        "SELECT COUNT(*) FROM processed WHERE moved_to IS NULL AND confidence < ? AND processed_at >= ?"
+        + _present(db),
         (min_confidence, _iso(now - timedelta(days=30)))).fetchone()[0]
     s.flagged_7d = db.execute("SELECT COUNT(*) FROM processed WHERE flagged = 1 AND processed_at >= ?",
                               (_iso(now - timedelta(days=7)),)).fetchone()[0]
@@ -114,7 +120,8 @@ def uncertain_mails(db: sqlite3.Connection | None, min_confidence: float, limit:
     if db is None:
         return []
     return [dict(r) for r in db.execute(
-        "SELECT * FROM processed WHERE moved_to IS NULL AND confidence < ? ORDER BY processed_at DESC LIMIT ?",
+        f"SELECT * FROM processed WHERE moved_to IS NULL AND confidence < ?{_present(db)} "
+        "ORDER BY processed_at DESC LIMIT ?",
         (min_confidence, limit))]
 
 
@@ -122,7 +129,7 @@ def uncertain_mails(db: sqlite3.Connection | None, min_confidence: float, limit:
 class MailFilter:
     q: str = ""
     category: str = ""
-    folder: str = ""      # a folder path, "inbox" or ""
+    folder: str = ""      # a folder path, "inbox", "gone" or ""
     period: str = "7d"
     uncertain: bool = False
     flagged: bool = False
@@ -146,13 +153,15 @@ def mails(db: sqlite3.Connection | None, f: MailFilter, min_confidence: float,
     if f.category:
         where.append("category = ?")
         args.append(f.category)
-    if f.folder == "inbox":
-        where.append("moved_to IS NULL")
+    if f.folder == "gone":
+        where.append("gone = 1" if _present(db) else "0")
+    elif f.folder == "inbox":
+        where.append("moved_to IS NULL" + _present(db))
     elif f.folder:
         where.append("moved_to = ?")
         args.append(f.folder)
     if f.uncertain:
-        where.append("moved_to IS NULL AND confidence < ?")
+        where.append("moved_to IS NULL AND confidence < ?" + _present(db))
         args.append(min_confidence)
     if f.flagged:
         where.append("flagged = 1")

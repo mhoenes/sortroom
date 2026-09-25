@@ -45,7 +45,10 @@ sure `./mailboxes` is writable for uid 1000. Forms carry a CSRF token.
 
 - **Wartung** – start a run, backfill, re-sort a folder, move a category into
   its new folder, rename a folder (server, log and settings) or a category key,
-  recheck expiry dates, check the connection. Each job runs in the background
+  recheck expiry dates, reconcile the log with the mailbox (marks mails you
+  deleted as "nicht mehr im Postfach" so they leave the review list; notes
+  uncertain mails you filed by hand; reads only, trash/spam/sent/drafts don't
+  count), check the connection. Each job runs in the background
   under the mailbox lock (dry run unless "Echt ausführen" is ticked) and shows
   its log; also shows whether the mailbox's .env variables are set
 - **Mails** detail – accept Jev's suggestion for an uncertain mail, move a mail

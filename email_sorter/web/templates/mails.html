@@ -22,6 +22,7 @@
     <select name="folder" onchange="this.form.submit()">
       <option value="">Alle</option>
       <option value="inbox" {% if f.folder == 'inbox' %}selected{% endif %}>Posteingang</option>
+      <option value="gone" {% if f.folder == 'gone' %}selected{% endif %}>Nicht mehr im Postfach</option>
       {% for p in folders %}<option value="{{ p }}" {% if f.folder == p %}selected{% endif %}>{{ p|folder_label }}</option>{% endfor %}
     </select>
   </label>
@@ -51,7 +52,7 @@
           <td class="clip" style="width:36%"><a class="rowlink" href="{{ href }}">{{ m.subject or '(ohne Betreff)' }}</a></td>
           <td><span class="pill {% if m.category == 'verdaechtig' %}err{% endif %}">{{ label(m.category) }}</span></td>
           <td>{% if m.source == 'rule' %}<span class="muted">Regel</span>{% elif m.source == 'manual' %}<span class="muted">von Hand</span>{% else %}<span class="meter"><span class="track"><span class="fill {% if low %}low{% endif %}" style="width:{{ (m.confidence * 100)|round|int }}%"></span></span><span class="mono">{{ m.confidence|de_conf }}</span></span>{% endif %}</td>
-          <td style="white-space:nowrap">{{ m.moved_to|folder_label }}{% if m.flagged %} <span class="pill info">Stern</span>{% endif %}{% if low and not m.moved_to %} <span class="pill warn">unsicher</span>{% endif %}</td>
+          <td style="white-space:nowrap">{% if m.gone %}<span class="pill">gelöscht</span>{% else %}{{ m.moved_to|folder_label }}{% endif %}{% if m.flagged %} <span class="pill info">Stern</span>{% endif %}{% if low and not m.moved_to and not m.gone %} <span class="pill warn">unsicher</span>{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>
@@ -71,7 +72,8 @@
         <div class="mono muted" style="font-size:12px">{{ m.received|de_dt(true) }} · {{ m.sender }}</div>
         <h2>{{ m.subject or '(ohne Betreff)' }}</h2>
         <div>
-          {% if m.moved_to %}<span class="pill ok">In {{ m.moved_to|folder_label }}</span>
+          {% if m.gone %}<span class="pill">Nicht mehr im Postfach</span>
+          {% elif m.moved_to %}<span class="pill ok">In {{ m.moved_to|folder_label }}</span>
           {% elif m.confidence < min_conf %}<span class="pill warn">Unsicher – liegt im Posteingang</span>
           {% else %}<span class="pill">Im Posteingang</span>{% endif %}
         </div>
@@ -86,6 +88,7 @@
         <dt>Kosten</dt><dd class="mono">{{ m.cost_usd|usd(6) }}</dd>
         <dt>Verarbeitet</dt><dd>{{ m.processed_at|de_dt(true) }}</dd>
       </dl>
+      {% if m.gone %}<p class="muted hint">Diese Mail wurde gelöscht oder liegt im Papierkorb – beim letzten Abgleich war sie in keinem Ordner mehr.</p>{% else %}
       {% set back = query ~ ('&' if query else '') ~ 'page=' ~ f.page ~ '&key=' ~ link_key(m.message_key) %}
       {% set token = csrf_token(request) %}
       {% set suggested = box.cfg.categories.get(m.category) %}
@@ -127,6 +130,7 @@
           <button class="btn" type="submit">Regel speichern</button>
         </form>
       </details>
+      {% endif %}
     {% else %}
       <div class="empty">Eine Mail in der Liste anklicken, um Details zu sehen.</div>
     {% endif %}

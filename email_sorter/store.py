@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS processed (
     expires         TEXT,                        -- last valid day of the offer (ISO date)
     expiry_checked  INTEGER NOT NULL DEFAULT 1,  -- 0 = processed before expiry tracking existed
     expired_tagged  INTEGER NOT NULL DEFAULT 0,  -- 1 = moved to the expired folder, 2 = mail no longer found
-    source          TEXT NOT NULL DEFAULT 'jev'  -- 'jev', 'rule' (sender rule) or 'manual' (set in the UI)
+    source          TEXT NOT NULL DEFAULT 'jev', -- 'jev', 'rule' (sender rule) or 'manual' (set in the UI)
+    gone            INTEGER NOT NULL DEFAULT 0   -- 1 = no longer in the mailbox (deleted), found by a reconcile
 );
 CREATE TABLE IF NOT EXISTS runs (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,6 +57,7 @@ _MIGRATIONS = {
     "expiry_checked": "INTEGER NOT NULL DEFAULT 0",  # existing rows still need a check
     "expired_tagged": "INTEGER NOT NULL DEFAULT 0",
     "source": "TEXT NOT NULL DEFAULT 'jev'",
+    "gone": "INTEGER NOT NULL DEFAULT 0",
 }
 
 MOVED, GONE = 1, 2
@@ -132,7 +134,7 @@ class Store:
         marks = ",".join("?" * len(cats))
         return self.db.execute(
             f"SELECT message_key, moved_to, received FROM processed "
-            f"WHERE expiry_checked = 0 AND category IN ({marks})",
+            f"WHERE expiry_checked = 0 AND gone = 0 AND category IN ({marks})",
             cats,
         ).fetchall()
 
@@ -147,7 +149,7 @@ class Store:
         """(key, moved_to, received) of offers whose last valid day is before today."""
         return self.db.execute(
             "SELECT message_key, moved_to, received FROM processed "
-            "WHERE expires IS NOT NULL AND expires < ? AND expired_tagged = 0",
+            "WHERE expires IS NOT NULL AND expires < ? AND expired_tagged = 0 AND gone = 0",
             (today.isoformat(),),
         ).fetchall()
 
@@ -160,6 +162,14 @@ class Store:
         """A category set by hand in the UI: certain by definition, so it leaves the review list."""
         self.db.execute("UPDATE processed SET category = ?, moved_to = ?, confidence = 1.0, source = 'manual' "
                         "WHERE message_key = ?", (category, moved_to, key))
+        self.db.commit()
+
+    def locations(self) -> list[tuple[str, str | None, int]]:
+        """(key, moved_to, gone) of every logged mail."""
+        return self.db.execute("SELECT message_key, moved_to, gone FROM processed").fetchall()
+
+    def set_gone(self, keys: Iterable[str], gone: bool) -> None:
+        self.db.executemany("UPDATE processed SET gone = ? WHERE message_key = ?", [(int(gone), k) for k in keys])
         self.db.commit()
 
     def categories_of(self, keys: Iterable[str]) -> dict[str, str]:
@@ -205,7 +215,7 @@ class Store:
         """(key, moved_to, received) of confidently classified mails of `category` not in `folder`."""
         return self.db.execute(
             "SELECT message_key, moved_to, received FROM processed "
-            "WHERE category = ? AND COALESCE(moved_to, '') != ? AND confidence >= ?",
+            "WHERE category = ? AND COALESCE(moved_to, '') != ? AND confidence >= ? AND gone = 0",
             (category, folder, min_confidence),
         ).fetchall()
 

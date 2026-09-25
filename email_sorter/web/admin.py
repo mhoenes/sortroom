@@ -15,6 +15,7 @@ from ..check import check
 from ..config import INBOX_ACTION, ConfigError, Mailbox, _read_toml, load_credentials
 from ..maintenance import relocate_category, rename_category, rename_folder
 from ..manual import ManualError, move_mail
+from ..reconcile import run_reconcile
 from ..resort import run_resort
 from ..runtime import single_instance
 from ..sorter import RunResult, run, run_backfill, run_recheck_expiry
@@ -33,6 +34,7 @@ TASKS = {
     "relocate": "Kategorie in ihren Ordner nachziehen",
     "rename_folder": "Ordner umbenennen",
     "rename_category": "Kategorie-Schlüssel umbenennen",
+    "reconcile": "Protokoll mit Postfach abgleichen",
     "check": "Verbindung prüfen",
 }
 
@@ -138,6 +140,8 @@ def _job_for(request: Request, box: Mailbox, task: str, form: dict):
                 rename_category_key(box, shared, old, new)
             return rename_category(old, new, live=live, base_dir=ws)
         return f"Kategorie {old} → {new}{mode}", rename_key, True
+    if task == "reconcile":
+        return f"Protokoll abgleichen{mode}", lambda: run_reconcile(cfg, creds, ws, live=live), True
     if task == "check":
         def run_check() -> dict:
             code = check(cfg, creds, out=lambda line: log.info("%s", line.strip("\n")))
