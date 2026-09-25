@@ -145,8 +145,12 @@ def test_unknown_mailbox_404(client):
     assert _login(client).get("/ui/m/nope").status_code == 404
 
 
-def test_static_css_served(client):
+def test_static_css_and_icons_served(client):
     assert client.get("/ui/static/app.css").status_code == 200
+    assert client.get("/ui/static/icon.svg").status_code == 200
+    r = client.get("/favicon.ico")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/png"
+    assert 'rel="icon"' in client.get("/login").text
 
 
 def test_formatters():

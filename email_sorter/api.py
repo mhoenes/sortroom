@@ -194,7 +194,7 @@ def get_job(job_id: str) -> dict:
 from urllib.parse import quote  # noqa: E402
 
 from fastapi import Request  # noqa: E402
-from fastapi.responses import RedirectResponse  # noqa: E402
+from fastapi.responses import FileResponse, RedirectResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from starlette.middleware.sessions import SessionMiddleware  # noqa: E402
 
@@ -209,6 +209,11 @@ app.add_middleware(SessionMiddleware, secret_key=web.session_secret(), session_c
                    https_only=os.environ.get("UI_SECURE_COOKIES") == "1")
 app.mount("/ui/static", StaticFiles(directory=str(web.HERE / "static")), name="static")
 app.include_router(web.router)
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def _favicon():
+    return FileResponse(web.HERE / "static" / "icon-32.png", media_type="image/png")
 
 
 @app.exception_handler(web.LoginRequired)
