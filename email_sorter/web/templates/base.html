@@ -66,9 +66,16 @@
 </nav>
 <main class="main">
 {% set flash = pop_flash(request) if request is defined else None %}
-{% if flash %}<div class="banner {{ flash[0] }}" role="status">{{ flash[1] }}</div>{% endif %}
+{% if flash %}<div class="banner {{ flash[0] }}" role="status" {% if flash[0] == 'ok' %}data-autohide{% endif %}>{{ flash[1] }}</div>{% endif %}
 {% block content %}{% endblock %}
 </main>
 </div>
+<script>
+  // success messages disappear after 3 s; warnings and errors stay
+  document.querySelectorAll('[data-autohide]').forEach(el => setTimeout(() => {
+    el.classList.add('hiding');
+    setTimeout(() => el.remove(), 300);
+  }, 3000));
+</script>
 </body>
 </html>

@@ -169,6 +169,7 @@ def test_mail_actions(client, setup, monkeypatch):
     monkeypatch.setattr(admin, "move_mail", lambda cfg, creds, ws, key, cat: moves.append((key, cat)) or "INBOX/Werbung")
     html = client.get("/ui/m/privat/mails?period=all&key=%3Cm1%40x%3E").text
     assert "Übernehmen: nach Werbung" in html and "alle von @example.de" in html
+    assert ">Werbung</option>" in html and "Werbung → Werbung" not in html  # target named once
     token = _csrf(html)
     r = client.post("/ui/m/privat/mails/action", data={"csrf": token, "key": "<m1@x>", "action": "accept",
                                                        "category": "werbung", "back": "period=all"})

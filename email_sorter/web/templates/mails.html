@@ -106,7 +106,7 @@
         <input type="hidden" name="back" value="{{ back }}"><input type="hidden" name="action" value="move">
         <label class="f">Korrigieren
           <select name="category">
-            {% for key, c in box.cfg.categories.items() %}<option value="{{ key }}" {% if key == m.category %}selected{% endif %}>{{ c.label }} → {{ c.folder|folder_label if c.folder else 'Posteingang' }}</option>{% endfor %}
+            {% for key, c in box.cfg.categories.items() %}{% set where = c.folder|folder_label %}<option value="{{ key }}" {% if key == m.category %}selected{% endif %}>{{ c.label }}{% if where != c.label %} → {{ where }}{% endif %}</option>{% endfor %}
             <option value="inbox">Zurück in den Posteingang</option>
           </select></label>
         <button class="btn" type="submit">Verschieben</button>
