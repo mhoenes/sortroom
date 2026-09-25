@@ -218,7 +218,7 @@ def _label(box: Mailbox, key: str) -> str:
 
 
 def _folder_label(path: str | None) -> str:
-    if not path:
+    if not path or path.strip("/").upper() == "INBOX":
         return "Posteingang"
     return path.split("/")[-1] if path.count("/") <= 1 else "/".join(path.split("/")[1:])
 
@@ -280,11 +280,12 @@ def overview(request: Request, box_id: str):
 
 @router.get("/ui/m/{box_id}/mails", response_class=HTMLResponse, dependencies=[Depends(require_login)])
 def mails(request: Request, box_id: str, q: str = "", category: str = "", folder: str = "", period: str = "7d",
-          uncertain: str = "", flagged: str = "", page: int = 1, key: str = ""):
+          uncertain: str = "", flagged: str = "", gone: str = "", page: int = 1, key: str = ""):
     boxes, box = _box(request, box_id)
     f = queries.MailFilter(q=q.strip()[:200], category=category, folder=folder,
                            period=period if period in queries.PERIODS else "7d",
-                           uncertain=bool(uncertain), flagged=bool(flagged), page=max(page, 1))
+                           uncertain=bool(uncertain), flagged=bool(flagged), show_gone=bool(gone),
+                           page=max(page, 1))
     db = queries.connect(box.workspace)
     try:
         rows, total = queries.mails(db, f, box.cfg.min_confidence)
@@ -294,7 +295,8 @@ def mails(request: Request, box_id: str, q: str = "", category: str = "", folder
         if db:
             db.close()
     params = {k: v for k, v in {"q": f.q, "category": f.category, "folder": f.folder, "period": f.period,
-                                "uncertain": "1" if f.uncertain else "", "flagged": "1" if f.flagged else ""}.items() if v}
+                                "uncertain": "1" if f.uncertain else "", "flagged": "1" if f.flagged else "",
+                                "gone": "1" if f.show_gone else ""}.items() if v}
     pages = max(1, -(-total // queries.PAGE_SIZE))
     return templates.TemplateResponse(request, "mails.html", {
         **_sidebar(request, boxes, box, "mails"), "box": box, "f": f, "rows": rows, "total": total,

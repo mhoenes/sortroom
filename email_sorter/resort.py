@@ -7,6 +7,8 @@ Flags are not touched. The log gets the new category, folder and expiry date.
 """
 from __future__ import annotations
 
+from dataclasses import replace
+
 import logging
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -147,10 +149,11 @@ def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, liv
                     except Exception as e:
                         log.error("moving to %s failed: %s", target, e)
                         move_failures.update(o.key for o in group)
+                source = cfg.source_folder.strip("/")
                 for o in outcomes:
                     if o.key in move_failures:
                         continue
-                    store.record(o)
+                    store.record(replace(o, folder=None) if (o.folder or "").strip("/") == source else o)
             elif outcomes:
                 log.info("dry run - nothing changed. Report: %s", report.path)
             mb.folder.set(cfg.source_folder)

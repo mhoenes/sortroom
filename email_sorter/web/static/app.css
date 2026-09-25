@@ -180,6 +180,10 @@ details.more summary { cursor: pointer; color: var(--accent); font-weight: 500; 
 details.more[open] summary { margin-bottom: 10px; }
 .btn[disabled] { opacity: .5; cursor: not-allowed; }
 
+th.star-col, td.star-col { width: 30px; padding-left: 6px; padding-right: 0; }
+svg.star { display: block; width: 16px; height: 16px; fill: #D99A06; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
 /* help tooltips: hover or keyboard focus */
 .help { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
   margin-left: 4px; border-radius: 9px; border: 1px solid var(--line-strong); color: var(--muted); font-size: 11px;

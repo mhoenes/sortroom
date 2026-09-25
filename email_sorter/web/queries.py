@@ -133,6 +133,7 @@ class MailFilter:
     period: str = "7d"
     uncertain: bool = False
     flagged: bool = False
+    show_gone: bool = False  # deleted mails are hidden unless asked for
     page: int = 1
 
 
@@ -153,18 +154,18 @@ def mails(db: sqlite3.Connection | None, f: MailFilter, min_confidence: float,
     if f.category:
         where.append("category = ?")
         args.append(f.category)
-    if f.folder == "gone":
-        where.append("gone = 1" if _present(db) else "0")
-    elif f.folder == "inbox":
-        where.append("moved_to IS NULL" + _present(db))
+    if f.folder == "inbox":
+        where.append("moved_to IS NULL")
     elif f.folder:
         where.append("moved_to = ?")
         args.append(f.folder)
     if f.uncertain:
-        where.append("moved_to IS NULL AND confidence < ?" + _present(db))
+        where.append("moved_to IS NULL AND confidence < ?")
         args.append(min_confidence)
     if f.flagged:
         where.append("flagged = 1")
+    if not f.show_gone and _present(db):
+        where.append("gone = 0")
     sql_where = ("WHERE " + " AND ".join(where)) if where else ""
     total = db.execute(f"SELECT COUNT(*) FROM processed {sql_where}", args).fetchone()[0]
     offset = (max(f.page, 1) - 1) * PAGE_SIZE
@@ -183,7 +184,8 @@ def mail(db: sqlite3.Connection | None, key: str) -> dict | None:
 def folders(db: sqlite3.Connection | None) -> list[str]:
     if db is None:
         return []
-    return [r[0] for r in db.execute("SELECT DISTINCT moved_to FROM processed WHERE moved_to IS NOT NULL ORDER BY 1")]
+    return [r[0] for r in db.execute("SELECT DISTINCT moved_to FROM processed "
+                                     "WHERE moved_to IS NOT NULL AND UPPER(moved_to) != 'INBOX' ORDER BY 1")]
 
 
 def month_start(today: date | None = None) -> date:

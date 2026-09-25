@@ -77,8 +77,8 @@ def test_reconcile_marks_deleted_and_filed(tmp_path, monkeypatch):
     try:
         assert [m["message_key"] for m in queries.uncertain_mails(db, 0.7)] == ["<inbox@x>"]
         assert queries.stats(db, 0.7).uncertain == 1
-        rows, total = queries.mails(db, queries.MailFilter(folder="gone", period="all"), 0.7)
-        assert total == 2
+        assert queries.mails(db, queries.MailFilter(period="all"), 0.7)[1] == 3           # deleted ones hidden
+        assert queries.mails(db, queries.MailFilter(period="all", show_gone=True), 0.7)[1] == 5
     finally:
         db.close()
 
@@ -91,3 +91,17 @@ def test_reconcile_dry_run_and_reappearing_mail(tmp_path, monkeypatch):
     store.set_gone(["<kept@x>"], True)
     store.close()
     assert reconcile.run_reconcile(CFG, CREDS, tmp_path, live=True)["back"] == 1
+
+
+def test_inbox_stored_as_null(tmp_path):
+    store = Store(tmp_path / "data" / "state.db")
+    _record(store, "<a@x>", "INBOX", confidence=0.3)
+    store.close()
+    store = Store(tmp_path / "data" / "state.db")  # reopening normalizes old "INBOX" rows
+    assert store.locations() == [("<a@x>", None, 0)]
+    store.close()
+    db = queries.connect(tmp_path)
+    try:
+        assert queries.folders(db) == [] and queries.stats(db, 0.7).uncertain == 1
+    finally:
+        db.close()

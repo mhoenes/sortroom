@@ -72,6 +72,8 @@ class Store:
         for column, definition in _MIGRATIONS.items():
             if column not in existing:
                 self.db.execute(f"ALTER TABLE processed ADD COLUMN {column} {definition}")
+        # the inbox is stored as NULL; re-sorts of the inbox before 1.3.1 wrote "INBOX"
+        self.db.execute("UPDATE processed SET moved_to = NULL WHERE UPPER(moved_to) = 'INBOX'")
         self.db.commit()
 
     def is_processed(self, key: str) -> bool:
