@@ -127,7 +127,7 @@ def test_mails_page_filters_and_detail(client):
     html = c.get("/ui/m/privat/mails?period=all&folder=inbox").text
     assert "1 Eintrag" in html
     html = c.get("/ui/m/privat/mails?period=all&key=%3Cr2%40x%3E").text
-    assert "Angebot bis" in html and "24.09.2026" in html and "Entschieden von" in html
+    assert "Gültig bis" in html and "24.09.2026" in html and "Entschieden von" in html
 
 
 def test_search_treats_wildcards_literally(client):

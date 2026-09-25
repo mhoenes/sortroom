@@ -41,7 +41,7 @@
   <section class="card" style="padding:6px 12px">
     {% if rows %}
     <table>
-      <thead><tr><th scope="col" class="star-col"><span class="sr-only">Stern</span></th><th scope="col">Eingang</th><th scope="col">Absender</th><th scope="col">Betreff</th><th scope="col">Kategorie</th><th scope="col">Konfidenz</th><th scope="col">Ort</th></tr></thead>
+      <thead><tr><th scope="col" class="star-col"><span class="sr-only">Stern</span></th><th scope="col">Eingang</th><th scope="col">Absender</th><th scope="col">Betreff</th><th scope="col">Kategorie</th><th scope="col">Konfidenz</th><th scope="col">Gültig bis</th><th scope="col">Ort</th></tr></thead>
       <tbody>
       {% for m in rows %}
         {% set href = '/ui/m/' ~ box.id ~ '/mails?' ~ query ~ ('&' if query else '') ~ 'page=' ~ f.page ~ '&key=' ~ link_key(m.message_key) %}
@@ -53,6 +53,7 @@
           <td class="clip" style="width:36%"><a class="rowlink" href="{{ href }}">{{ m.subject or '(ohne Betreff)' }}</a></td>
           <td><span class="pill {% if m.category == 'verdaechtig' %}err{% endif %}">{{ label(m.category) }}</span></td>
           <td>{% if m.source == 'rule' %}<span class="muted">Regel</span>{% elif m.source == 'manual' %}<span class="muted">von Hand</span>{% else %}<span class="meter"><span class="track"><span class="fill {% if low %}low{% endif %}" style="width:{{ (m.confidence * 100)|round|int }}%"></span></span><span class="mono">{{ m.confidence|de_conf }}</span></span>{% endif %}</td>
+          <td class="mono" style="white-space:nowrap">{% if m.expires %}<span class="{{ 'expired' if m.expires < today }}" {% if m.expires < today %}title="abgelaufen"{% endif %}>{{ m.expires|de_date }}</span>{% endif %}</td>
           <td style="white-space:nowrap">{% if m.gone %}<span class="pill">gelöscht</span>{% else %}{{ m.moved_to|folder_label }}{% endif %}{% if low and not m.moved_to and not m.gone %} <span class="pill warn">unsicher</span>{% endif %}</td>
         </tr>
       {% endfor %}
@@ -85,7 +86,7 @@
         {% if m.source not in ('rule', 'manual') %}<dt>Konfidenz</dt><dd class="mono">{{ m.confidence|de_conf }}</dd>
         <dt>Handlungsbedarf</dt><dd class="mono">{{ m.needs_action|de_conf }}</dd>{% endif %}
         <dt>Stern</dt><dd>{{ 'ja' if m.flagged else 'nein' }}</dd>
-        {% if m.expires %}<dt>Angebot bis</dt><dd>{{ m.expires|de_date }}{% if m.expired_tagged == 1 %} · nach „Abgelaufen“ verschoben{% endif %}</dd>{% endif %}
+        {% if m.expires %}<dt>Gültig bis</dt><dd>{{ m.expires|de_date }}{% if m.expired_tagged == 1 %} · nach „Abgelaufen“ verschoben{% endif %}</dd>{% endif %}
         <dt>Kosten</dt><dd class="mono">{{ m.cost_usd|usd(6) }}</dd>
         <dt>Verarbeitet</dt><dd>{{ m.processed_at|de_dt(true) }}</dd>
       </dl>
