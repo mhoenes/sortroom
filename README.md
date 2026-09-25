@@ -89,6 +89,15 @@ before. To switch an existing setup (dry run first, then `--live`):
 .venv\Scripts\python -m email_sorter --migrate-mailbox privat --name Privat
 ```
 
+In Docker (stop the service first; `./mailboxes` must be writable for uid 1000):
+
+```bash
+docker compose stop email-sorter
+mkdir -p mailboxes && sudo chown -R 1000:1000 mailboxes
+docker compose run --rm email-sorter python -m email_sorter --migrate-mailbox privat --name Privat --live
+docker compose up -d
+```
+
 It writes `mailboxes/privat/mailbox.toml` from those sections and moves
 `data/state.db` and the reports there. `config.toml` is not touched; its
 mailbox sections are ignored from then on and can be deleted.
