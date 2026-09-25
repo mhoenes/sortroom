@@ -18,7 +18,8 @@ from ..manual import ManualError, move_mail
 from ..reconcile import run_reconcile
 from ..resort import run_resort
 from ..runtime import single_instance
-from ..sorter import RunResult, run, run_backfill, run_recheck_expiry
+from ..sorter import RunResult, expired_target, run, run_backfill, run_recheck_expiry
+from ..store import Store
 from . import _box, _boxes, _sidebar, queries, require_login, router
 from .editing import (EditError, add_sender_rule, can_add_mailbox, create_mailbox, rename_category_key,
                       rename_folder_refs, save_shared, shared_writable, writable)
@@ -190,6 +191,13 @@ async def mail_action(request: Request, box_id: str):
         f"/ui/m/{box.id}/mails?period=all&key={quote(key, safe='')}"
     category = str(form.get("category") or "")
 
+    if action == "expiry":  # only the log changes, no IMAP and no lock needed
+        try:
+            _flash(request, _set_expiry(box, key, form))
+        except EditError as e:
+            _flash(request, str(e), "err")
+        return RedirectResponse(back, status_code=303)
+
     def act() -> str:
         creds = load_credentials(box.cfg)
         if action == "rule":
@@ -221,6 +229,28 @@ async def mail_action(request: Request, box_id: str):
         log.exception("[%s] mail action failed", box.id)
         _flash(request, f"Fehlgeschlagen: {e}", "err")
     return RedirectResponse(back, status_code=303)
+
+
+def _set_expiry(box: Mailbox, key: str, form: dict) -> str:
+    raw = "" if form.get("clear") else str(form.get("expires") or "").strip()
+    try:
+        expires = date.fromisoformat(raw) if raw else None
+    except ValueError:
+        raise EditError("Bitte ein gültiges Datum angeben.") from None
+    store = Store(box.workspace / "data" / "state.db")
+    try:
+        row = store.get(key)
+        if row is None or not store.set_manual_expiry(key, expires):
+            raise EditError("Diese Mail steht nicht im Protokoll.")
+    finally:
+        store.close()
+    if expires is None:
+        return "Ablaufdatum entfernt."
+    text = f"Gültig bis {expires:%d.%m.%Y} gespeichert."
+    target = expired_target(box.cfg, row["category"])
+    if expires < date.today() and target and row["expired_tagged"] != 1:
+        text += f" Der nächste Lauf verschiebt die Mail nach {target}."
+    return text
 
 
 # ---------------------------------------------------------------- new mailbox

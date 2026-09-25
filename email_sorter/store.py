@@ -147,6 +147,15 @@ class Store:
         )
         self.db.commit()
 
+    def set_manual_expiry(self, key: str, expires: date | None) -> bool:
+        """Expiry date set by hand; a mail marked 'not found' when it was due gets another try."""
+        cur = self.db.execute(
+            "UPDATE processed SET expires = ?, expiry_checked = 1, "
+            "expired_tagged = CASE WHEN expired_tagged = 2 THEN 0 ELSE expired_tagged END WHERE message_key = ?",
+            (expires.isoformat() if expires else None, key))
+        self.db.commit()
+        return cur.rowcount == 1
+
     def due_expired(self, today: date) -> list[tuple[str, str | None, str | None]]:
         """(key, moved_to, received) of offers whose last valid day is before today."""
         return self.db.execute(

@@ -207,3 +207,21 @@ def test_shared_settings(client, setup):
     assert cfg.jev_model == "typesafe/jev-2" and cfg.max_body_chars == 4000 and cfg.min_interval_seconds == 0.5
     r = client.post("/ui/settings", data={**form, "endpoint": "http://unsicher"})
     assert r.status_code == 422 and "https" in r.text
+
+
+def test_set_expiry_by_hand(client, setup):
+    html = client.get("/ui/m/privat/mails?period=all&key=%3Cm1%40x%3E").text
+    token = _csrf(html)
+    assert 'name="expires"' in html and "Werbung/Alt" in html  # help names the category's expired folder
+    r = client.post("/ui/m/privat/mails/action", data={"csrf": token, "key": "<m1@x>", "action": "expiry",
+                                                       "expires": "2020-01-31"})
+    assert "Gültig bis 31.01.2020 gespeichert" in r.text and "INBOX/Werbung/Alt" in r.text
+    store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
+    assert store.get("<m1@x>")["expires"] == "2020-01-31"
+    store.close()
+    r = client.post("/ui/m/privat/mails/action", data={"csrf": token, "key": "<m1@x>", "action": "expiry",
+                                                       "clear": "1"})
+    assert "Ablaufdatum entfernt" in r.text
+    r = client.post("/ui/m/privat/mails/action", data={"csrf": token, "key": "<m1@x>", "action": "expiry",
+                                                       "expires": "kein-datum"})
+    assert "gültiges Datum" in r.text

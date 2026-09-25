@@ -102,6 +102,17 @@
         <button class="btn primary" type="submit">Übernehmen: nach {{ suggested.folder|folder_label }}</button>
       </form>
       {% endif %}
+      {% if m.expired_tagged != 1 %}
+      <form method="post" action="/ui/m/{{ box.id }}/mails/action" class="stack tight">
+        <input type="hidden" name="csrf" value="{{ token }}"><input type="hidden" name="key" value="{{ m.message_key }}">
+        <input type="hidden" name="back" value="{{ back }}"><input type="hidden" name="action" value="expiry">
+        <label class="f"><span class="lt">Gültig bis
+          <span class="help" tabindex="0" role="note" data-tip="{{ 'Nach diesem Tag verschiebt der nächste Lauf die Mail nach ' ~ expired_to(m.category) ~ '.' if expired_to(m.category) else 'Es ist kein Ordner für Abgelaufenes eingestellt – das Datum wird nur angezeigt.' }}" aria-label="Hilfe">?</span></span>
+          <input type="date" name="expires" value="{{ m.expires or '' }}"></label>
+        <div class="actions"><button class="btn small" type="submit">Datum speichern</button>
+          {% if m.expires %}<button class="btn small" type="submit" name="clear" value="1">Entfernen</button>{% endif %}</div>
+      </form>
+      {% endif %}
       <form method="post" action="/ui/m/{{ box.id }}/mails/action" class="stack tight">
         <input type="hidden" name="csrf" value="{{ token }}"><input type="hidden" name="key" value="{{ m.message_key }}">
         <input type="hidden" name="back" value="{{ back }}"><input type="hidden" name="action" value="move">

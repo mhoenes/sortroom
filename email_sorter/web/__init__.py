@@ -20,6 +20,7 @@ from fastapi.templating import Jinja2Templates
 
 from .. import __version__
 from ..config import ConfigError, Mailbox, default_label
+from ..sorter import expired_target
 from . import queries
 
 HERE = Path(__file__).parent
@@ -303,7 +304,8 @@ def mails(request: Request, box_id: str, q: str = "", category: str = "", folder
         "selected": selected, "folders": folder_list, "pages": pages, "periods": queries.PERIODS,
         "query": urlencode(params), "label": lambda k: _label(box, k),
         "link_key": lambda k: quote(k, safe=""), "min_conf": box.cfg.min_confidence,
-        "today": datetime.now().date().isoformat()})
+        "today": datetime.now().date().isoformat(),
+        "expired_to": lambda cat: expired_target(box.cfg, cat)})
 
 
 from . import admin, editor  # noqa: E402,F401  (register their pages on router)
