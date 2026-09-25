@@ -1,6 +1,8 @@
 """--check: verify IMAP and Jev API access without touching any mail."""
 from __future__ import annotations
 
+from typing import Callable
+
 from imap_tools import MailBox
 
 from .config import Config, Credentials
@@ -18,36 +20,36 @@ SAMPLE_STATE = {
 }
 
 
-def check(cfg: Config, creds: Credentials) -> int:
+def check(cfg: Config, creds: Credentials, out: Callable[[str], None] = print) -> int:
     ok = True
 
-    print(f"IMAP  {cfg.imap_host}:{cfg.imap_port} as {creds.imap_user}")
+    out(f"IMAP  {cfg.imap_host}:{cfg.imap_port} as {creds.imap_user}")
     try:
         with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(creds.imap_user, creds.imap_password,
                                                          initial_folder=cfg.source_folder) as mb:
             delim = _delimiter(mb)
             existing = {f.name for f in mb.folder.list()}
             status = mb.folder.status(cfg.source_folder)
-            print(f"  OK - {cfg.source_folder} has {status.get('MESSAGES')} mails, "
+            out(f"  OK - {cfg.source_folder} has {status.get('MESSAGES')} mails, "
                   f"folder separator is {delim!r}")
-            print("  target folders:")
+            out("  target folders:")
             for cat in cfg.categories.values():
                 if cat.folder:
                     name = server_folder(cat.folder, delim)
                     state = "exists" if name in existing else "will be created on first live run"
-                    print(f"    {cat.key:<20} -> {name}  ({state})")
+                    out(f"    {cat.key:<20} -> {name}  ({state})")
     except Exception as e:
         ok = False
-        print(f"  FAILED: {e}")
+        out(f"  FAILED: {e}")
 
-    print(f"\nJev   {cfg.jev_model} via {cfg.jev_endpoint}")
+    out(f"\nJev   {cfg.jev_model} via {cfg.jev_endpoint}")
     try:
         jev = cfg.jev_client(creds.jev_api_key)
         d = jev.decide(SAMPLE_STATE, cfg.descriptions)
-        print(f"  OK - sample electricity bill -> {d.category} (confidence {d.confidence:.2f}, "
+        out(f"  OK - sample electricity bill -> {d.category} (confidence {d.confidence:.2f}, "
               f"needs_action {d.needs_action:.2f}, cost ${d.cost:.6f})")
     except JevError as e:
         ok = False
-        print(f"  FAILED: {e}")
+        out(f"  FAILED: {e}")
 
     return 0 if ok else 1

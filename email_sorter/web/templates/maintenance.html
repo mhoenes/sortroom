@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Wartung · {{ box.name }}{% endblock %}
+{% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text }}" data-tip="{{ text }}">?</span>{% endmacro %}
+{% macro live_toggle(id) %}<label class="check"><input type="checkbox" name="live" value="1">Echt ausführen
+  {{ help('Ohne Haken nur ein Probelauf: zeigt im Protokoll, was passieren würde, und ändert nichts.') }}</label>{% endmacro %}
+{% macro hidden() %}<input type="hidden" name="csrf" value="{{ csrf }}">{% endmacro %}
+{% block content %}
+<div class="head">
+  <div class="title">
+    <h1>Wartung · {{ box.name }}</h1>
+    <div class="sub">Läufe von Hand starten, nachsortieren, umbenennen · jeder Job läuft im Hintergrund</div>
+  </div>
+</div>
+
+{% if busy %}<div class="banner" role="status">Für dieses Postfach läuft gerade ein Lauf. Neue Jobs warten, bis er fertig ist.</div>{% endif %}
+
+<div class="grid split">
+  <section class="card stack">
+    <h2>Zugang</h2>
+    <table>
+      <tbody>
+      {% for name, ok in env %}
+        <tr><td class="mono">{{ name }}</td><td>{% if ok %}<span class="pill ok">gesetzt</span>{% else %}<span class="pill err">fehlt in .env</span>{% endif %}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted hint">Zugangsdaten stehen nur in der .env. Nach einer Änderung dort den Container neu starten.</p>
+    <form method="post" action="/ui/m/{{ box.id }}/maintenance/check">{{ hidden() }}
+      <button class="btn" type="submit">Verbindung prüfen</button>
+      {{ help('Meldet sich am IMAP-Server an, zeigt die Zielordner und schickt Jev eine Beispielmail. Verschiebt nichts; kostet einen Bruchteil eines Cents.') }}
+    </form>
+  </section>
+
+  <section class="card stack">
+    <h2>Letzte Jobs</h2>
+    {% if jobs %}
+    <table>
+      <thead><tr><th scope="col">Start</th><th scope="col">Aufgabe</th><th scope="col">Status</th></tr></thead>
+      <tbody>
+      {% for j in jobs %}
+        <tr class="link"><td class="mono" style="white-space:nowrap"><a class="rowlink" href="/ui/m/{{ box.id }}/jobs/{{ j.id }}">{{ j.started|de_dt }}</a></td>
+          <td class="clip" style="width:60%"><a class="rowlink" href="/ui/m/{{ box.id }}/jobs/{{ j.id }}">{{ j.label }}</a></td>
+          <td>{% include "_job_status.html" %}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<div class="empty">Seit dem letzten Neustart wurde kein Job gestartet.</div>{% endif %}
+  </section>
+</div>
+
+<div class="grid cols-2">
+  <form class="card stack" method="post" action="/ui/m/{{ box.id }}/maintenance/run">{{ hidden() }}
+    <h2>Lauf jetzt starten {{ help('Derselbe Lauf wie der geplante aus n8n: neue Mails der letzten ' ~ box.cfg.lookback_days ~ ' Tage, die älter als die Wartezeit sind.') }}</h2>
+    <label class="f">Höchstens so viele Mails <input type="text" name="limit" inputmode="numeric" placeholder="{{ box.cfg.max_per_run }}"></label>
+    <div class="actions">{{ live_toggle('run') }}<button class="btn primary" type="submit">Starten</button></div>
+  </form>
+
+  <form class="card stack" method="post" action="/ui/m/{{ box.id }}/maintenance/backfill">{{ hidden() }}
+    <h2>Backfill {{ help('Sortiert ältere Mails im Posteingang ab einem Datum, Monat für Monat. Bereits verarbeitete Mails werden übersprungen. Kostet etwa 0,01 $ pro 100 Mails.') }}</h2>
+    <div class="grid cols-2">
+      <label class="f">Ab Datum <input type="date" name="since" max="{{ today }}" required></label>
+      <label class="f">Höchstens so viele Mails <input type="text" name="limit" inputmode="numeric" placeholder="alle"></label>
+    </div>
+    <div class="actions">{{ live_toggle('backfill') }}<button class="btn primary" type="submit">Starten</button></div>
+  </form>
+
+  <form class="card stack" method="post" action="/ui/m/{{ box.id }}/maintenance/resort">{{ hidden() }}
+    <h2>Ordner neu einsortieren {{ help('Lässt Jev alle Mails eines Ordners mit den aktuellen Beschreibungen neu einordnen und verschiebt die, die woanders hingehören – z. B. nach einer geänderten Beschreibung.') }}</h2>
+    <div class="grid cols-2">
+      <label class="f">Ordner
+        <select name="folder" required>
+          <option value="{{ box.cfg.source_folder }}">Posteingang</option>
+          {% for f in folders %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
+        </select></label>
+      <label class="f">Höchstens so viele Mails <input type="text" name="limit" inputmode="numeric" placeholder="alle"></label>
+    </div>
+    <div class="actions">{{ live_toggle('resort') }}<button class="btn primary" type="submit">Starten</button></div>
+  </form>
+
+  <form class="card stack" method="post" action="/ui/m/{{ box.id }}/maintenance/relocate">{{ hidden() }}
+    <h2>Kategorie in ihren Ordner nachziehen {{ help('Nach einem geänderten Zielordner: verschiebt die bereits sortierten Mails der Kategorie laut Protokoll in den neuen Ordner. Ohne Jev, kostenlos.') }}</h2>
+    <label class="f">Kategorie
+      <select name="category" required>
+        {% for key, c in box.cfg.categories.items() if c.folder %}<option value="{{ key }}">{{ c.label }} → {{ c.folder }}</option>{% endfor %}
+      </select></label>
+    <div class="actions">{{ live_toggle('relocate') }}<button class="btn primary" type="submit">Starten</button></div>
+  </form>
+
+  <form class="card stack" method="post" action="/ui/m/{{ box.id }}/maintenance/rename_folder">{{ hidden() }}
+    <h2>Ordner umbenennen {{ help('Benennt den Ordner samt Unterordnern auf dem Server um, zieht das Protokoll nach und passt die Zielordner der Kategorien an.') }}</h2>
+    <div class="grid cols-2">
+      <label class="f">Alter Name <input type="text" name="old" list="folders" required placeholder="INBOX/…"></label>
+      <label class="f">Neuer Name <input type="text" name="new" required placeholder="INBOX/…"></label>
+    </div>
+    <datalist id="folders">{% for f in folders %}<option value="{{ f }}">{% endfor %}</datalist>
+    <div class="actions">{{ live_toggle('rename_folder') }}<button class="btn primary" type="submit" {% if not editable %}disabled title="Einstellungen schreibgeschützt"{% endif %}>Starten</button></div>
+  </form>
+
+  <form class="card stack" method="post" action="/ui/m/{{ box.id }}/maintenance/rename_category">{{ hidden() }}
+    <h2>Kategorie-Schlüssel umbenennen {{ help('Ändert den internen Schlüssel in den Einstellungen, in den Absender-Regeln und im Protokoll. Der Anzeigename bleibt; Ordner ändern sich nicht.') }}</h2>
+    <div class="grid cols-2">
+      <label class="f">Kategorie
+        <select name="old" required>{% for key, c in box.cfg.categories.items() %}<option value="{{ key }}">{{ c.label }} ({{ key }})</option>{% endfor %}</select></label>
+      <label class="f">Neuer Schlüssel <input type="text" name="new" required pattern="[a-z0-9_]{1,40}"></label>
+    </div>
+    <div class="actions">{{ live_toggle('rename_category') }}<button class="btn primary" type="submit" {% if not editable %}disabled title="Einstellungen schreibgeschützt"{% endif %}>Starten</button></div>
+  </form>
+
+  <form class="card stack" method="post" action="/ui/m/{{ box.id }}/maintenance/recheck">{{ hidden() }}
+    <h2>Ablaufdaten nachprüfen {{ help('Sucht bei bereits sortierten Mails aus Kategorien mit „Ablaufdatum verfolgen“, die noch nie geprüft wurden, nach einem Ablaufdatum.') }}</h2>
+    <div class="actions">{{ live_toggle('recheck') }}<button class="btn primary" type="submit">Starten</button></div>
+  </form>
+</div>
+{% endblock %}

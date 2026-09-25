@@ -235,3 +235,172 @@ def _detach_trailing(table: Table) -> list:
     tail = body[end:]
     del body[end:]
     return tail
+
+
+def add_sender_rule(box: Mailbox, shared_path: Path, match: str, action: str) -> None:
+    """Add a rule, or change the target of an existing rule for the same sender."""
+    match = match.strip().lower()
+    rules = [(r.match, r.action) for r in box.cfg.sender_rules]
+    if any(m == match for m, _ in rules):
+        rules = [(m, action if m == match else a) for m, a in rules]
+    else:
+        rules.append((match, action))
+    save_sender_rules(box, shared_path, rules)
+
+
+# ---------------------------------------------------------------- renames (maintenance)
+
+def _renamed_path(path: str | None, old: str, new: str) -> str | None:
+    if not path:
+        return None
+    p, o = path.strip("/"), old.strip("/")
+    if p == o:
+        return new.strip("/")
+    if p.startswith(o + "/"):
+        return new.strip("/") + p[len(o):]
+    return None
+
+
+def rename_folder_refs(box: Mailbox, shared_path: Path, old: str, new: str) -> int:
+    """Point category folders and expired folders below `old` to `new`. Returns how many changed."""
+    doc = _doc(box)
+    changed = 0
+    tables = [doc.get("rules") or {}] + list((doc.get("categories") or {}).values())
+    for table in tables:
+        for key in ("folder", "expired_folder"):
+            renamed = _renamed_path(table.get(key), old, new)
+            if renamed:
+                table[key] = renamed
+                changed += 1
+    if changed:
+        _save(box, doc, shared_path)
+    return changed
+
+
+def rename_category_key(box: Mailbox, shared_path: Path, old: str, new: str) -> None:
+    """Rename a category key in the settings, including sender rules pointing to it."""
+    if not _KEY_RE.match(new):
+        raise EditError("Neuer Schlüssel: nur Kleinbuchstaben, Ziffern und _ (max. 40).")
+    doc = _doc(box)
+    cats = doc.get("categories") or {}
+    if old not in cats:
+        raise EditError(f"Die Kategorie „{old}“ gibt es nicht.")
+    if new in cats:
+        raise EditError(f"Die Kategorie „{new}“ gibt es schon.")
+    table = cats[old]
+    if "label" not in table:  # keep the name shown in the UI
+        table["label"] = default_label(old)
+    renamed = tomlkit.table(is_super_table=True)
+    for key, t in cats.items():
+        renamed[new if key == old else key] = t
+    doc["categories"] = renamed
+    for rule in doc.get("sender_rules") or []:
+        if rule.get("action") == old:
+            rule["action"] = new
+    _save(box, doc, shared_path)
+
+
+# ---------------------------------------------------------------- new mailbox
+
+_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
+_ENV_RE = re.compile(r"^[A-Z_][A-Z0-9_]{0,63}$")
+
+
+def can_add_mailbox(boxes: dict[str, Mailbox], base_dir: Path) -> str | None:
+    """None if a mailbox can be added here, else the reason why not."""
+    if any(is_single_file(b) for b in boxes.values()):
+        return ("Dieses Setup nutzt noch eine einzelne config.toml. Zuerst mit "
+                "„python -m email_sorter --migrate-mailbox privat --live“ in einen Postfach-Ordner umziehen – "
+                "sonst würde das bestehende Postfach ausgeblendet.")
+    root = base_dir / "mailboxes"
+    if not os.access(root if root.exists() else base_dir, os.W_OK):
+        return f"Der Ordner {root.name}/ ist nicht beschreibbar."
+    return None
+
+
+def create_mailbox(base_dir: Path, shared_path: Path, template: Mailbox, form: dict) -> str:
+    """Write mailboxes/<id>/mailbox.toml with the template's rules and categories. Returns the id."""
+    box_id = _text(form, "id", 40).lower()
+    if not _ID_RE.match(box_id):
+        raise EditError("Kürzel: Kleinbuchstaben, Ziffern, _ oder -, beginnt mit Buchstabe oder Ziffer.")
+    folder = base_dir / "mailboxes" / box_id
+    if folder.exists():
+        raise EditError(f"Das Postfach „{box_id}“ gibt es schon.")
+    name = _text(form, "name", 60) or box_id
+    host = _text(form, "imap_host", 200)
+    if not host or " " in host:
+        raise EditError("IMAP-Server: bitte einen Hostnamen angeben.")
+    envs = {}
+    for field, label in (("user_env", "Variable für den Benutzer"), ("password_env", "Variable für das Passwort")):
+        value = _text(form, field, 64).upper()
+        if not _ENV_RE.match(value):
+            raise EditError(f"{label}: nur Großbuchstaben, Ziffern und _.")
+        envs[field] = value
+    if envs["user_env"] == envs["password_env"]:
+        raise EditError("Benutzer und Passwort brauchen zwei verschiedene Variablen.")
+
+    source = tomlkit.parse(template.config_file.read_text(encoding="utf-8"))
+    doc = tomlkit.document()
+    doc.add(tomlkit.comment(f"Postfach „{name}“ – angelegt in der Weboberfläche, Kategorien von „{template.name}“"))
+    doc.add(tomlkit.nl())
+    doc["name"] = name
+    imap = tomlkit.table()
+    imap["host"] = host
+    imap["port"] = _number(form, "imap_port", "Port", 1, 65535, integer=True)
+    imap["source_folder"] = _folder(form, "source_folder", "Posteingang") or "INBOX"
+    imap["user_env"] = envs["user_env"]
+    imap["password_env"] = envs["password_env"]
+    doc["imap"] = imap
+    rules = source["rules"]
+    if "keep_in_inbox_from" in rules:
+        del rules["keep_in_inbox_from"]
+    doc["rules"] = rules
+    doc["categories"] = source["categories"]
+    text = tomlkit.dumps(doc)
+    try:
+        config_from_raw({**tomllib.loads(text), "jev": _read_toml(shared_path)["jev"]}, "mailbox.toml")
+    except (ConfigError, KeyError) as e:
+        raise EditError(f"Nicht angelegt: {e}") from None
+    folder.mkdir(parents=True)
+    (folder / "mailbox.toml").write_text(text, encoding="utf-8")
+    return box_id
+
+
+# ---------------------------------------------------------------- shared settings (config.toml)
+
+def shared_writable(shared_path: Path) -> bool:
+    return shared_path.exists() and os.access(shared_path, os.W_OK) and os.access(shared_path.parent, os.W_OK)
+
+
+def save_shared(base_dir: Path, shared_path: Path, form: dict) -> None:
+    """Update [jev] in config.toml; every mailbox must still load with it."""
+    from ..config import load_mailboxes
+
+    if not shared_writable(shared_path):
+        raise EditError(f"{shared_path.name} ist schreibgeschützt.")
+    doc = tomlkit.parse(shared_path.read_text(encoding="utf-8"))
+    jev = doc["jev"]
+    for field, label in (("endpoint", "Endpunkt"), ("model", "Modell")):
+        value = _text(form, field, 300)
+        if not value or " " in value:
+            raise EditError(f"{label}: bitte angeben.")
+        jev[field] = value
+    if not _text(form, "endpoint", 300).startswith("https://"):
+        raise EditError("Endpunkt: bitte eine https-Adresse angeben.")
+    key_env = _text(form, "api_key_env", 64).upper()
+    if not _ENV_RE.match(key_env):
+        raise EditError("Variable für den API-Schlüssel: nur Großbuchstaben, Ziffern und _.")
+    jev["api_key_env"] = key_env
+    jev["max_body_chars"] = _number(form, "max_body_chars", "Mailtext-Länge", 200, 20000, integer=True)
+    jev["timeout_seconds"] = _number(form, "timeout_seconds", "Zeitlimit", 1, 300)
+    jev["min_interval_seconds"] = _number(form, "min_interval_seconds", "Mindestabstand", 0, 60)
+
+    tmp = shared_path.with_name(shared_path.name + ".tmp")
+    tmp.write_text(tomlkit.dumps(doc), encoding="utf-8")
+    try:
+        load_mailboxes(base_dir, tmp)
+    except ConfigError as e:
+        tmp.unlink(missing_ok=True)
+        raise EditError(f"Nicht gespeichert: {e}") from None
+    shutil.copy2(shared_path, shared_path.with_name(shared_path.name + ".bak"))
+    os.replace(tmp, shared_path)

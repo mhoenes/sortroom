@@ -173,6 +173,13 @@ tr.changed td { background: #FBF7EC; }
 table.rules input[type=text], table.rules select { width: 100%; }
 table.rules td { padding: 6px 8px; }
 
+pre.log { margin: 0; max-height: 520px; overflow: auto; padding: 14px 16px; border-radius: 8px; background: var(--side);
+  color: var(--side-ink); font-family: var(--mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; }
+.stack.tight { gap: 10px; }
+details.more summary { cursor: pointer; color: var(--accent); font-weight: 500; min-height: 32px; display: flex; align-items: center; }
+details.more[open] summary { margin-bottom: 10px; }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+
 /* help tooltips: hover or keyboard focus */
 .help { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
   margin-left: 4px; border-radius: 9px; border: 1px solid var(--line-strong); color: var(--muted); font-size: 11px;

@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS processed (
     expires         TEXT,                        -- last valid day of the offer (ISO date)
     expiry_checked  INTEGER NOT NULL DEFAULT 1,  -- 0 = processed before expiry tracking existed
     expired_tagged  INTEGER NOT NULL DEFAULT 0,  -- 1 = moved to the expired folder, 2 = mail no longer found
-    source          TEXT NOT NULL DEFAULT 'jev'  -- 'jev' or 'rule' (sender rule, no Jev request)
+    source          TEXT NOT NULL DEFAULT 'jev'  -- 'jev', 'rule' (sender rule) or 'manual' (set in the UI)
 );
 CREATE TABLE IF NOT EXISTS runs (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -150,6 +150,17 @@ class Store:
             "WHERE expires IS NOT NULL AND expires < ? AND expired_tagged = 0",
             (today.isoformat(),),
         ).fetchall()
+
+    def get(self, key: str) -> dict | None:
+        cur = self.db.execute("SELECT * FROM processed WHERE message_key = ?", (key,))
+        row = cur.fetchone()
+        return dict(zip([c[0] for c in cur.description], row)) if row else None
+
+    def set_manual(self, key: str, category: str, moved_to: str | None) -> None:
+        """A category set by hand in the UI: certain by definition, so it leaves the review list."""
+        self.db.execute("UPDATE processed SET category = ?, moved_to = ?, confidence = 1.0, source = 'manual' "
+                        "WHERE message_key = ?", (category, moved_to, key))
+        self.db.commit()
 
     def categories_of(self, keys: Iterable[str]) -> dict[str, str]:
         keys = list(keys)

@@ -10,7 +10,6 @@
   {% if editable %}<a class="btn" href="/ui/m/{{ box.id }}/categories?new=1">Neue Kategorie</a>{% endif %}
 </div>
 
-{% include "_flash.html" %}
 {% if not editable %}
 <div class="banner" role="status">Nur lesen: {{ box.config_file.name if box.config_file else 'die Konfiguration' }} ist schreibgeschützt eingebunden. Änderungen bitte in der Datei vornehmen.</div>
 {% endif %}

@@ -43,8 +43,23 @@ write (e.g. a single-file `config.toml` mounted `:ro`) is shown read-only – ru
 `--migrate-mailbox` to get an editable `mailboxes/<id>/mailbox.toml`, and make
 sure `./mailboxes` is writable for uid 1000. Forms carry a CSRF token.
 
-Maintenance jobs and correcting single mails follow in a later version. The
-API endpoints keep their bearer-token auth.
+- **Wartung** – start a run, backfill, re-sort a folder, move a category into
+  its new folder, rename a folder (server, log and settings) or a category key,
+  recheck expiry dates, check the connection. Each job runs in the background
+  under the mailbox lock (dry run unless "Echt ausführen" is ticked) and shows
+  its log; also shows whether the mailbox's .env variables are set
+- **Mails** detail – accept Jev's suggestion for an uncertain mail, move a mail
+  to another category (logged as "von Hand"), or create a sender rule from it
+- **Postfach hinzufügen** – creates `mailboxes/<id>/mailbox.toml` with the
+  categories of an existing mailbox; credentials go into `.env` under the
+  variable names you choose (restart the container afterwards). Not available
+  while a single-file `config.toml` is used – migrate first
+- **Gemeinsam** – the shared `[jev]` settings in `config.toml` (read-only when
+  it is mounted `:ro`)
+
+Jobs are kept in memory until the container restarts; backfills started via
+`POST /backfill` show up there too. The API endpoints keep their bearer-token
+auth.
 
 ## Several mailboxes
 

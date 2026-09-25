@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Gemeinsame Einstellungen{% endblock %}
+{% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text }}" data-tip="{{ text }}">?</span>{% endmacro %}
+{% block content %}
+<div class="head">
+  <div class="title">
+    <h1>Gemeinsame Einstellungen</h1>
+    <div class="sub">Gelten für alle Postfächer · gespeichert in <span class="mono">{{ config_name }}</span></div>
+  </div>
+</div>
+
+{% if not editable %}<div class="banner" role="status">Nur lesen: {{ config_name }} ist schreibgeschützt eingebunden. Änderungen bitte in der Datei vornehmen.</div>{% endif %}
+{% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
+
+<form method="post" action="/ui/settings">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <fieldset {% if not editable %}disabled{% endif %} class="stack">
+    <section class="card stack">
+      <h2>Jev</h2>
+      <div class="grid cols-3">
+        <label class="f" style="grid-column:span 2"><span class="lt">Endpunkt {{ help('Adresse der Decisions-API, z. B. https://openrouter.ai/api/alpha/decisions') }}</span>
+          <input type="text" name="endpoint" value="{{ form.endpoint }}" required class="mono"></label>
+        <label class="f"><span class="lt">Modell {{ help('z. B. typesafe/jev-1.13 bei OpenRouter') }}</span>
+          <input type="text" name="model" value="{{ form.model }}" required class="mono"></label>
+        <div class="f"><span class="lt">Variable für den API-Schlüssel {{ help('Der Schlüssel selbst steht nur in der .env.') }}</span>
+          <input type="text" name="api_key_env" value="{{ form.api_key_env }}" required class="mono" aria-label="Variable für den API-Schlüssel">
+          <span class="muted" style="font-weight:400">{% if key_set %}<span class="pill ok">in .env gesetzt</span>{% else %}<span class="pill err">fehlt in .env</span>{% endif %}</span></div>
+        <label class="f"><span class="lt">Mailtext-Länge {{ help('So viele Zeichen des Mailtextes bekommt Jev. Mehr Text kann genauer sein, kostet aber etwas mehr.') }}</span>
+          <input type="text" name="max_body_chars" value="{{ form.max_body_chars }}" inputmode="numeric" required></label>
+        <label class="f"><span class="lt">Zeitlimit in Sekunden {{ help('So lange wird auf eine Antwort von Jev gewartet.') }}</span>
+          <input type="text" name="timeout_seconds" value="{{ form.timeout_seconds }}" inputmode="decimal" required></label>
+        <label class="f"><span class="lt">Mindestabstand in Sekunden {{ help('Pause zwischen zwei Anfragen. Bei OpenRouter 0; über das Vercel-Gateway etwa 2.') }}</span>
+          <input type="text" name="min_interval_seconds" value="{{ form.min_interval_seconds }}" inputmode="decimal" required></label>
+      </div>
+    </section>
+    {% if editable %}<div class="actions"><button class="btn primary" type="submit">Speichern</button></div>{% endif %}
+  </fieldset>
+</form>
+{% endblock %}

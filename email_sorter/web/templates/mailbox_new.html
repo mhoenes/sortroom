@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Postfach hinzufügen{% endblock %}
+{% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text }}" data-tip="{{ text }}">?</span>{% endmacro %}
+{% block content %}
+<div class="head">
+  <div class="title">
+    <h1>Postfach hinzufügen</h1>
+    <div class="sub">Legt einen eigenen Ordner mit Einstellungen, Protokoll und Berichten an</div>
+  </div>
+  <a class="btn" href="/ui">Abbrechen</a>
+</div>
+
+{% if blocked %}
+<div class="banner" role="status">{{ blocked }}</div>
+{% else %}
+{% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
+<form method="post" action="/ui/mailboxes/new" class="stack">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <section class="card stack">
+    <h2>1 · Name</h2>
+    <div class="grid cols-3">
+      <label class="f"><span class="lt">Anzeigename {{ help('So heißt das Postfach in der Oberfläche, z. B. „Gmail“.') }}</span>
+        <input type="text" name="name" value="{{ form.name }}" maxlength="60" required></label>
+      <label class="f"><span class="lt">Kürzel {{ help('Name des Ordners unter mailboxes/ und für --mailbox bzw. die API. Kleinbuchstaben, Ziffern, _ und -. Lässt sich später nicht ändern.') }}</span>
+        <input type="text" name="id" value="{{ form.id }}" required pattern="[a-z0-9][a-z0-9_\-]{0,39}" placeholder="gmail"></label>
+    </div>
+  </section>
+
+  <section class="card stack">
+    <h2>2 · IMAP-Server</h2>
+    <div class="grid cols-3">
+      <label class="f"><span class="lt">Server {{ help('z. B. imap.gmail.com oder imap.strato.de') }}</span>
+        <input type="text" name="imap_host" value="{{ form.imap_host }}" required></label>
+      <label class="f"><span class="lt">Port {{ help('Meist 993 (IMAP über SSL).') }}</span>
+        <input type="text" name="imap_port" value="{{ form.imap_port }}" inputmode="numeric" required></label>
+      <label class="f"><span class="lt">Posteingang {{ help('Ordner, aus dem einsortiert wird. Meist INBOX.') }}</span>
+        <input type="text" name="source_folder" value="{{ form.source_folder }}"></label>
+    </div>
+  </section>
+
+  <section class="card stack">
+    <h2>3 · Zugangsdaten {{ help('Benutzer und Passwort werden nie in der Oberfläche gespeichert. Du legst sie unter den Namen hier in der .env ab.') }}</h2>
+    <div class="grid cols-3">
+      <label class="f">Variable für den Benutzer
+        <input type="text" name="user_env" value="{{ form.user_env }}" required class="mono" placeholder="GMAIL_USER"></label>
+      <label class="f">Variable für das Passwort
+        <input type="text" name="password_env" value="{{ form.password_env }}" required class="mono" placeholder="GMAIL_PASSWORD"></label>
+    </div>
+    <p class="muted hint">Danach in der .env eintragen, z. B. <span class="mono">GMAIL_USER=du@gmail.com</span> und <span class="mono">GMAIL_PASSWORD=…</span>
+      (bei Gmail ein App-Passwort), und den Container neu starten.</p>
+  </section>
+
+  <section class="card stack">
+    <h2>4 · Kategorien {{ help('Das neue Postfach startet mit Kategorien und Schwellen eines bestehenden Postfachs. Beides lässt sich danach unabhängig ändern. Absender-Regeln werden nicht übernommen.') }}</h2>
+    <label class="f" style="max-width:360px">Übernehmen von
+      <select name="template">{% for id, b in boxes.items() %}<option value="{{ id }}" {% if form.template == id %}selected{% endif %}>{{ b.name }} ({{ b.cfg.categories|length }} Kategorien)</option>{% endfor %}</select>
+    </label>
+  </section>
+
+  <div class="actions"><button class="btn primary" type="submit">Postfach anlegen</button>
+    <span class="muted hint">Es wird noch nichts sortiert: Der nächste geplante Lauf nimmt das Postfach automatisch mit, sobald die Zugangsdaten stimmen.</span></div>
+</form>
+{% endif %}
+{% endblock %}

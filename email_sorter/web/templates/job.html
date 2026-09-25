@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{{ job.label }}{% endblock %}
+{% block head %}{% if job.status == 'running' %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
+{% block content %}
+{% set j = job %}
+<div class="head">
+  <div class="title">
+    <h1>{{ job.label }}</h1>
+    <div class="sub">Gestartet {{ job.started|de_dt(true) }}{% if job.finished %} · fertig {{ job.finished|de_dt(true) }}{% endif %} · {% include "_job_status.html" %}</div>
+  </div>
+  <a class="btn" href="/ui/m/{{ box.id }}/maintenance">Zur Wartung</a>
+</div>
+
+{% if job.status == 'running' %}<div class="banner ok" role="status">Läuft … die Seite aktualisiert sich selbst.</div>{% endif %}
+{% if job.status == 'rejected' %}<div class="banner" role="status">Nicht gestartet: Für dieses Postfach lief bereits etwas.</div>{% endif %}
+{% if job.error %}<div class="banner err" role="alert">{{ job.error }}</div>{% endif %}
+
+{% set r = job.result %}
+{% if r and r.classified is defined %}
+<div class="grid cols-4">
+  <div class="card kpi"><span class="k">Verarbeitet</span><span class="v">{{ r.classified|de_num }}</span><span class="d">{{ 'echt' if r.live else 'Probelauf – nichts geändert' }}</span></div>
+  <div class="card kpi"><span class="k">{{ 'Verschoben' if r.live else 'Würde verschieben' }}</span><span class="v">{{ r.moved|de_num }}</span><span class="d">{{ r.flagged|de_num }} mit Stern · {{ r.expired_moved|de_num }} abgelaufen</span></div>
+  <div class="card kpi"><span class="k">Fehler</span><span class="v">{{ r.failed|de_num }}</span><span class="d">werden beim nächsten Lauf erneut versucht</span></div>
+  <div class="card kpi"><span class="k">Kosten</span><span class="v mono">{{ r.cost_usd|usd(4) }}</span><span class="d">{% if r.report %}Bericht: <span class="mono">{{ r.report.replace('\\', '/').split('/')[-1] }}</span>{% endif %}</span></div>
+</div>
+{% if r.error %}<div class="banner err" role="alert">{{ r.error }}</div>{% endif %}
+{% elif r %}
+<div class="banner {{ 'ok' if r.ok else 'err' }}" role="status">{{ 'Alles in Ordnung.' if r.ok else 'Es gab Fehler – siehe Protokoll.' }}</div>
+{% endif %}
+
+<section class="card stack">
+  <h2>Protokoll</h2>
+  {% if job.log %}<pre class="log">{{ job.log|join('\n') }}</pre>{% else %}<div class="empty">Noch keine Einträge.</div>{% endif %}
+</section>
+{% endblock %}

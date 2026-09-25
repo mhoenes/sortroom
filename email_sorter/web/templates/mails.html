@@ -50,7 +50,7 @@
           <td class="clip" style="width:20%"><a class="rowlink" href="{{ href }}">{{ m.sender }}</a></td>
           <td class="clip" style="width:36%"><a class="rowlink" href="{{ href }}">{{ m.subject or '(ohne Betreff)' }}</a></td>
           <td><span class="pill {% if m.category == 'verdaechtig' %}err{% endif %}">{{ label(m.category) }}</span></td>
-          <td>{% if m.source == 'rule' %}<span class="muted">Regel</span>{% else %}<span class="meter"><span class="track"><span class="fill {% if low %}low{% endif %}" style="width:{{ (m.confidence * 100)|round|int }}%"></span></span><span class="mono">{{ m.confidence|de_conf }}</span></span>{% endif %}</td>
+          <td>{% if m.source == 'rule' %}<span class="muted">Regel</span>{% elif m.source == 'manual' %}<span class="muted">von Hand</span>{% else %}<span class="meter"><span class="track"><span class="fill {% if low %}low{% endif %}" style="width:{{ (m.confidence * 100)|round|int }}%"></span></span><span class="mono">{{ m.confidence|de_conf }}</span></span>{% endif %}</td>
           <td style="white-space:nowrap">{{ m.moved_to|folder_label }}{% if m.flagged %} <span class="pill info">Stern</span>{% endif %}{% if low and not m.moved_to %} <span class="pill warn">unsicher</span>{% endif %}</td>
         </tr>
       {% endfor %}
@@ -78,15 +78,55 @@
       </div>
       <dl>
         <dt>Kategorie</dt><dd>{{ label(m.category) }}</dd>
-        <dt>Entschieden von</dt><dd>{{ 'Absender-Regel' if m.source == 'rule' else 'Jev' }}</dd>
-        {% if m.source != 'rule' %}<dt>Konfidenz</dt><dd class="mono">{{ m.confidence|de_conf }}</dd>
+        <dt>Entschieden von</dt><dd>{{ {'rule': 'Absender-Regel', 'manual': 'von Hand'}.get(m.source, 'Jev') }}</dd>
+        {% if m.source not in ('rule', 'manual') %}<dt>Konfidenz</dt><dd class="mono">{{ m.confidence|de_conf }}</dd>
         <dt>Handlungsbedarf</dt><dd class="mono">{{ m.needs_action|de_conf }}</dd>{% endif %}
         <dt>Stern</dt><dd>{{ 'ja' if m.flagged else 'nein' }}</dd>
         {% if m.expires %}<dt>Angebot bis</dt><dd>{{ m.expires|de_date }}{% if m.expired_tagged == 1 %} · nach „Abgelaufen“ verschoben{% endif %}</dd>{% endif %}
         <dt>Kosten</dt><dd class="mono">{{ m.cost_usd|usd(6) }}</dd>
         <dt>Verarbeitet</dt><dd>{{ m.processed_at|de_dt(true) }}</dd>
       </dl>
-      <p class="muted" style="font-size:13px;margin:0">Korrigieren und verschieben folgt in einer späteren Version.</p>
+      {% set back = query ~ ('&' if query else '') ~ 'page=' ~ f.page ~ '&key=' ~ link_key(m.message_key) %}
+      {% set token = csrf_token(request) %}
+      {% set suggested = box.cfg.categories.get(m.category) %}
+      {% if not m.moved_to and suggested and suggested.folder %}
+      <form method="post" action="/ui/m/{{ box.id }}/mails/action" class="stack tight">
+        <input type="hidden" name="csrf" value="{{ token }}"><input type="hidden" name="key" value="{{ m.message_key }}">
+        <input type="hidden" name="back" value="{{ back }}"><input type="hidden" name="action" value="accept">
+        <input type="hidden" name="category" value="{{ m.category }}">
+        <button class="btn primary" type="submit">Übernehmen: nach {{ suggested.folder|folder_label }}</button>
+      </form>
+      {% endif %}
+      <form method="post" action="/ui/m/{{ box.id }}/mails/action" class="stack tight">
+        <input type="hidden" name="csrf" value="{{ token }}"><input type="hidden" name="key" value="{{ m.message_key }}">
+        <input type="hidden" name="back" value="{{ back }}"><input type="hidden" name="action" value="move">
+        <label class="f">Korrigieren
+          <select name="category">
+            {% for key, c in box.cfg.categories.items() %}<option value="{{ key }}" {% if key == m.category %}selected{% endif %}>{{ c.label }} → {{ c.folder|folder_label if c.folder else 'Posteingang' }}</option>{% endfor %}
+            <option value="inbox">Zurück in den Posteingang</option>
+          </select></label>
+        <button class="btn" type="submit">Verschieben</button>
+      </form>
+      <details class="more">
+        <summary>Absender-Regel anlegen</summary>
+        <form method="post" action="/ui/m/{{ box.id }}/mails/action" class="stack tight">
+          <input type="hidden" name="csrf" value="{{ token }}"><input type="hidden" name="key" value="{{ m.message_key }}">
+          <input type="hidden" name="back" value="{{ back }}"><input type="hidden" name="action" value="rule">
+          {% set addr = (m.sender or '')|lower %}
+          <label class="f">Absender
+            <select name="match">
+              <option value="{{ addr }}">genau {{ addr }}</option>
+              {% if '@' in addr %}<option value="@{{ addr.split('@')[-1] }}">alle von @{{ addr.split('@')[-1] }}</option>{% endif %}
+            </select></label>
+          <label class="f">Immer
+            <select name="category">
+              <option value="inbox">im Posteingang lassen</option>
+              {% for key, c in box.cfg.categories.items() %}<option value="{{ key }}" {% if key == m.category %}selected{% endif %}>nach {{ c.label }}</option>{% endfor %}
+            </select></label>
+          <label class="check small"><input type="checkbox" name="apply" value="1" checked>Diese Mail gleich mit verschieben</label>
+          <button class="btn" type="submit">Regel speichern</button>
+        </form>
+      </details>
     {% else %}
       <div class="empty">Eine Mail in der Liste anklicken, um Details zu sehen.</div>
     {% endif %}

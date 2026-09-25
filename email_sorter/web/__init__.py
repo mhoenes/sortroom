@@ -303,4 +303,4 @@ def mails(request: Request, box_id: str, q: str = "", category: str = "", folder
         "link_key": lambda k: quote(k, safe=""), "min_conf": box.cfg.min_confidence})
 
 
-from . import editor  # noqa: E402,F401  (registers the editing pages on router)
+from . import admin, editor  # noqa: E402,F401  (register their pages on router)

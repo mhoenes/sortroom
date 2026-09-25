@@ -18,17 +18,15 @@ from __future__ import annotations
 import logging
 import os
 import secrets
-import threading
-import uuid
 from contextlib import asynccontextmanager
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from . import __version__
+from . import __version__, jobs
 from .config import ConfigError, Mailbox, load_credentials, load_mailboxes
 from .runtime import BASE_DIR, _lock_is_stale, setup_logging, single_instance
 from .sorter import run, run_backfill, run_recheck_expiry
@@ -38,10 +36,6 @@ setup_logging(verbose=False)
 log = logging.getLogger("email_sorter.api")
 
 CONFIG_PATH = Path(os.environ.get("EMAIL_SORTER_CONFIG", BASE_DIR / "config.toml"))
-MAX_JOBS = 50  # finished backfill jobs kept in memory for GET /jobs
-
-_jobs: dict[str, dict] = {}
-_jobs_lock = threading.Lock()
 
 
 def _mailboxes() -> dict[str, Mailbox]:
@@ -181,42 +175,18 @@ def backfill(req: BackfillRequest) -> dict:
     if _busy(box):
         raise HTTPException(409, f"[{box.id}] another run is active")
     creds = _credentials(box)
-    job = {"id": uuid.uuid4().hex[:12], "mailbox": box.id, "status": "running", "started": _now(), "finished": None,
-           "request": req.model_dump(mode="json"), "result": None, "error": None}
-    with _jobs_lock:
-        _jobs[job["id"]] = job
-        for old in [j for j in _jobs.values() if j["status"] != "running"][:-MAX_JOBS]:
-            _jobs.pop(old["id"], None)
-
-    def work() -> None:
-        try:
-            with single_instance(box.lock_path) as acquired:
-                if not acquired:
-                    job.update(status="rejected", error="another run is active")
-                    return
-                log.info("API [%s]: starting %s backfill since %s", box.id, "LIVE" if req.live else "dry", req.since)
-                result = run_backfill(box.cfg, creds, box.workspace, live=req.live, since=req.since, limit=req.limit)
-                job.update(status="done", result=result.as_dict())
-        except Exception as e:
-            log.exception("API [%s]: backfill failed", box.id)
-            job.update(status="failed", error=str(e))
-        finally:
-            job["finished"] = _now()
-
-    threading.Thread(target=work, name=f"backfill-{job['id']}", daemon=True).start()
-    return job
+    job = jobs.start(box, "backfill", f"Backfill seit {req.since:%d.%m.%Y}",
+                     lambda: run_backfill(box.cfg, creds, box.workspace, live=req.live, since=req.since, limit=req.limit),
+                     request=req.model_dump(mode="json"))
+    return jobs.public(job)
 
 
 @app.get("/jobs/{job_id}", dependencies=[Depends(_require_token)])
 def get_job(job_id: str) -> dict:
-    job = _jobs.get(job_id)
+    job = jobs.get(job_id)
     if not job:
         raise HTTPException(404, "unknown job (jobs are kept in memory until the container restarts)")
-    return job
-
-
-def _now() -> str:
-    return datetime.now().isoformat(timespec="seconds")
+    return jobs.public(job)
 
 
 # ---------------------------------------------------------------- web UI (session login, see email_sorter/web)
@@ -233,6 +203,7 @@ from . import web  # noqa: E402
 app.state.load_mailboxes = lambda: load_mailboxes(BASE_DIR, CONFIG_PATH)
 app.state.is_busy = _busy
 app.state.config_path = CONFIG_PATH
+app.state.base_dir = BASE_DIR
 app.add_middleware(SessionMiddleware, secret_key=web.session_secret(), session_cookie="email_sorter_session",
                    max_age=web.SESSION_DAYS * 86400, same_site="lax",
                    https_only=os.environ.get("UI_SECURE_COOKIES") == "1")

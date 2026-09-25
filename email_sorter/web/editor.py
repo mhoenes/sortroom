@@ -52,8 +52,15 @@ def _flash(request: Request, text: str, tone: str = "ok") -> None:
     request.session["flash"] = [tone, text]
 
 
+def pop_flash(request: Request):
+    return request.session.pop("flash", None)
+
+
+templates.env.globals["csrf_token"] = csrf_token
+templates.env.globals["pop_flash"] = pop_flash  # shown once by base.html
+
+
 def _page(request: Request, name: str, ctx: dict, status: int = 200):
-    ctx.setdefault("flash", request.session.pop("flash", None))
     return templates.TemplateResponse(request, name, {"csrf": csrf_token(request), **ctx}, status_code=status)
 
 
