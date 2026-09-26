@@ -14,8 +14,8 @@ from imap_tools import MailBox
 
 from .config import Config, Credentials
 from .runtime import BASE_DIR
-from .sorter import (IMAP_TIMEOUT, RunResult, _chunks, _delimiter, _ensure_folder, _find_uids,
-                     _group_by_folder, server_folder)
+from .sorter import (IMAP_TIMEOUT, RunResult, move_uids, server_folder, _chunks, _delimiter, _ensure_folder,
+                     _find_uids, _group_by_folder)
 from .store import Store
 
 log = logging.getLogger(__name__)
@@ -119,7 +119,7 @@ def relocate_category(cfg: Config, creds: Credentials, category: str, live: bool
                     if live and uids:
                         _ensure_folder(mb, target)
                         for chunk in _chunks(list(uids.values())):
-                            mb.move(chunk, target)
+                            move_uids(mb, chunk, target)
                         store.set_moved_to(uids, cat.folder)
                     moved += len(uids)
             finally:

@@ -21,9 +21,9 @@ from .mailtext import build_state, message_key
 from datetime import datetime
 
 from .config import INBOX_ACTION
-from .sorter import (IMAP_TIMEOUT, UID_CHUNK, Outcome, ReportWriter, RunResult, _auth_failed, _chunks,
-                     _delimiter, _ensure_folder, _finish, expiry_for, old_enough, plan, received_times,
-                     rule_outcome, server_folder)
+from .sorter import (IMAP_TIMEOUT, Outcome, ReportWriter, RunResult, UID_CHUNK, expiry_for, move_uids,
+                     old_enough, plan, received_times, rule_outcome, server_folder, _auth_failed, _chunks,
+                     _delimiter, _ensure_folder, _finish)
 from .store import Store
 
 log = logging.getLogger(__name__)
@@ -144,7 +144,7 @@ def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, liv
                     try:
                         _ensure_folder(mb, target)
                         for chunk in _chunks([o.uid for o in group]):
-                            mb.move(chunk, target)
+                            move_uids(mb, chunk, target)
                         log.info("moved %d mail(s) %s -> %s", len(group), srv, target)
                     except Exception as e:
                         log.error("moving to %s failed: %s", target, e)
