@@ -22,7 +22,7 @@ from datetime import datetime
 
 from .config import INBOX_ACTION
 from .sorter import (IMAP_TIMEOUT, Outcome, ReportWriter, RunResult, UID_CHUNK, expiry_for, move_uids,
-                     old_enough, plan, received_times, rule_outcome, server_folder, _auth_failed, _chunks,
+                     plan, ready_to_sort, rule_outcome, server_folder, _auth_failed, _chunks,
                      _delimiter, _ensure_folder, _finish)
 from .store import Store
 
@@ -37,11 +37,7 @@ def resort_outcomes(mb: MailBox, cfg: Config, jev: JevClient, folder: str, limit
     mail will be in afterwards - the same folder for mails that stay.
     """
     uids = sorted(mb.uids(), key=int, reverse=True)  # newest first
-    if min_age_hours > 0 and uids:  # re-sorting the inbox: leave fresh mail alone like normal runs do
-        ready = old_enough(received_times(mb, uids), uids, min_age_hours)
-        if len(ready) < len(uids):
-            log.info("%d mail(s) younger than %gh left alone", len(uids) - len(ready), min_age_hours)
-        uids = ready
+    uids = ready_to_sort(mb, uids, cfg, min_age_hours)  # re-sorting the inbox: fresh mail waits like in runs
     if limit:
         uids = uids[:limit]
     log.info("re-sorting %d mail(s) in %s", len(uids), folder)

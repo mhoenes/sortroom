@@ -28,6 +28,7 @@ expiry_threshold = 0.70       # "time-limited offer" probability at/above this -
 expired_folder = "INBOX/Werbung/Abgelaufen"  # expired offers are moved here the day after their deadline
 lookback_days = 7             # only look at mail received in the last N days
 min_age_hours = 24            # leave mail alone until it has been in the inbox this long (0 = sort at once)
+# sort_read_at_once = true    # mail you have already read skips that wait
 max_per_run = 200             # safety cap on mails classified per run
 
 # ---------------------------------------------------------------------------

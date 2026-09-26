@@ -91,6 +91,43 @@ def received_times(mb: MailBox, uids: list[str]) -> dict[str, datetime]:
     return times
 
 
+_FLAGS = re.compile(rb"UID (\d+) FLAGS \(([^)]*)\)|FLAGS \(([^)]*)\) UID (\d+)")
+
+
+def seen_uids(mb: MailBox, uids: list[str]) -> set[str]:
+    """UIDs the user has already read (IMAP \Seen). Fetching FLAGS does not change them."""
+    seen: set[str] = set()
+    for chunk in _chunks(uids):
+        typ, data = mb.client.uid("FETCH", ",".join(chunk), "(FLAGS)")
+        if typ != "OK":
+            raise RuntimeError(f"FLAGS fetch failed: {typ} {data!r}")
+        for item in data:
+            line = item[0] if isinstance(item, tuple) else item
+            m = _FLAGS.search(line or b"")
+            if not m:
+                continue
+            uid, flags = (m[1], m[2]) if m[1] else (m[4], m[3])
+            if b"\\seen" in flags.lower():
+                seen.add(uid.decode())
+    return seen
+
+
+def ready_to_sort(mb: MailBox, uids: list[str], cfg: Config, min_age_hours: float) -> list[str]:
+    """The UIDs past the waiting time; with sort_read_at_once also younger ones already read."""
+    if min_age_hours <= 0 or not uids:
+        return uids
+    ready = set(old_enough(received_times(mb, uids), uids, min_age_hours))
+    waiting = [u for u in uids if u not in ready]
+    if waiting and cfg.sort_read_at_once:
+        read = seen_uids(mb, waiting)
+        if read:
+            log.info("%d mail(s) younger than %gh already read, sorted now", len(read), min_age_hours)
+        ready |= read
+    if len(ready) < len(uids):
+        log.info("%d mail(s) younger than %gh, left for a later run", len(uids) - len(ready), min_age_hours)
+    return [u for u in uids if u in ready]
+
+
 def old_enough(times: dict[str, datetime], uids: list[str], min_age_hours: float,
                now: datetime | None = None) -> list[str]:
     """UIDs that arrived at least min_age_hours ago. Unknown arrival time counts as old enough."""
@@ -190,10 +227,7 @@ def classify_new(
         log.info("%d mail(s) left in the inbox by sender rules", kept)
 
     if cfg.min_age_hours > 0 and pending:
-        ready = old_enough(received_times(mb, list(pending)), list(pending), cfg.min_age_hours)
-        if len(ready) < len(pending):
-            log.info("%d mail(s) younger than %gh, left for a later run", len(pending) - len(ready), cfg.min_age_hours)
-        pending = {u: pending[u] for u in ready}
+        pending = {u: pending[u] for u in ready_to_sort(mb, list(pending), cfg, cfg.min_age_hours)}
 
     # sender rules need no Jev request, so they don't count against the limit
     ruled = sorted((u for u in pending if u in by_rule), key=int, reverse=True)

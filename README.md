@@ -134,6 +134,10 @@ copy .env.example .env      # then fill in IMAP_USER, IMAP_PASSWORD, OPENROUTER_
 Options: `--limit N` (classify at most N mails), `-v` (log every decision),
 `--config other.toml`.
 
+Fresh mail waits `min_age_hours` in the inbox before it is sorted. With
+`sort_read_at_once = true` in `[rules]` (Einstellungen → "Gelesene sofort
+einsortieren"), mail you have already read is sorted at the next run anyway.
+
 **Recommended rollout:** run dry runs for a few days, open the CSV reports
 (they open directly in German Excel), sharpen category descriptions in
 `config.toml` where Jev got it wrong, then go live.

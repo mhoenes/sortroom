@@ -121,6 +121,9 @@ def test_save_settings(setup):
     box = _box(setup)
     assert box.name == "Mein Postfach" and box.cfg.min_confidence == 0.75 and box.cfg.min_age_hours == 24
     assert box.cfg.max_per_run == 150 and box.cfg.expired_folder == "INBOX/Abgelaufen"
+    assert not box.cfg.sort_read_at_once and "sort_read_at_once" not in _raw(setup)["rules"]
+    save_settings(box, setup / "config.toml", {**form, "sort_read_at_once": "1"})
+    assert _box(setup).cfg.sort_read_at_once
     with pytest.raises(EditError, match="Mindest-Konfidenz"):
         save_settings(box, setup / "config.toml", {**form, "min_confidence": "1,5"})
     with pytest.raises(EditError, match="Port"):

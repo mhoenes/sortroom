@@ -57,6 +57,7 @@ class Config:
     imap_user_env: str = "IMAP_USER"          # names of the .env variables holding this
     imap_password_env: str = "IMAP_PASSWORD"  # mailbox's login, so several mailboxes can coexist
     sender_rules: tuple[SenderRule, ...] = ()  # checked in order, first match wins
+    sort_read_at_once: bool = False  # mail already read skips the min_age_hours wait
 
     def rule_for(self, sender: str) -> SenderRule | None:
         """The first sender rule matching this sender address, if any (case-insensitive)."""
@@ -140,6 +141,7 @@ def config_from_raw(raw: dict, where: str) -> Config:
             imap_user_env=imap.get("user_env", "IMAP_USER"),
             imap_password_env=imap.get("password_env", "IMAP_PASSWORD"),
             sender_rules=_sender_rules(raw, categories, where),
+            sort_read_at_once=bool(rules.get("sort_read_at_once", False)),
         )
     except KeyError as e:
         raise ConfigError(f"{where}: missing setting {e}") from None

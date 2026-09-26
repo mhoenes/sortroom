@@ -43,3 +43,25 @@ def test_old_enough_keeps_only_mail_older_than_threshold():
 
 def test_old_enough_disabled_with_zero():
     assert sorter.old_enough({"1": NOW}, ["1"], 0, now=NOW) == ["1"]
+
+
+def test_seen_uids_parses_flags():
+    client = FakeClient([
+        b'1 (UID 10 FLAGS (\\Seen \\Flagged))',
+        b'2 (UID 11 FLAGS ())',
+        b'3 (FLAGS (\\Answered \\Seen) UID 12)',
+    ])
+    assert sorter.seen_uids(SimpleNamespace(client=client), ["10", "11", "12"]) == {"10", "12"}
+    assert client.calls == [("FETCH", "10,11,12", "(FLAGS)")]
+
+
+def test_read_mail_skips_the_wait_only_when_enabled(monkeypatch):
+    young, old = NOW - timedelta(hours=1), NOW - timedelta(hours=30)
+    monkeypatch.setattr(sorter, "received_times", lambda mb, uids: {"1": old, "2": young, "3": young})
+    monkeypatch.setattr(sorter, "seen_uids", lambda mb, uids: {"2"} & set(uids))
+    monkeypatch.setattr(sorter, "old_enough", lambda times, uids, h: [u for u in uids if times[u] == old])
+    cfg = SimpleNamespace(sort_read_at_once=False)
+    assert sorter.ready_to_sort(None, ["1", "2", "3"], cfg, 24) == ["1"]
+    cfg.sort_read_at_once = True
+    assert sorter.ready_to_sort(None, ["1", "2", "3"], cfg, 24) == ["1", "2"]
+    assert sorter.ready_to_sort(None, ["1", "2", "3"], cfg, 0) == ["1", "2", "3"]  # no wait configured

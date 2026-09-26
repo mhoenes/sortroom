@@ -5,7 +5,7 @@
 <div class="head">
   <div class="title">
     <h1>Übersicht · {{ box.name }}</h1>
-    <div class="sub">{{ cfg.imap_host }}{% if cfg.min_age_hours %} · Neue Mails werden {{ cfg.min_age_hours|de_num }} Stunden nach Eingang einsortiert{% endif %}</div>
+    <div class="sub">{{ cfg.imap_host }}{% if cfg.min_age_hours %} · Neue Mails werden {{ cfg.min_age_hours|de_num }} Stunden nach Eingang einsortiert{% if cfg.sort_read_at_once %}, gelesene sofort{% endif %}{% endif %}</div>
   </div>
 </div>
 
