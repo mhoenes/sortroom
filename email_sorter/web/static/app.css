@@ -21,7 +21,9 @@ h1, h2 { margin: 0; }
 /* ---------- shell */
 .shell { display: flex; min-height: 100vh; }
 .side { width: 232px; flex-shrink: 0; padding: 24px 16px; background: var(--side); color: var(--side-ink);
-  display: flex; flex-direction: column; gap: 28px; position: sticky; top: 0; height: 100vh; }
+  display: flex; flex-direction: column; gap: 28px; position: sticky; top: 0; height: 100vh;
+  /* short windows: the sidebar scrolls on its own instead of cutting off its footer */
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--side-3) transparent; }
 .side-top { display: flex; align-items: center; gap: 8px; }
 .side-body { flex-grow: 1; display: flex; flex-direction: column; gap: 28px; }
 .brand { flex-grow: 1; min-width: 0; padding: 0 12px; display: flex; align-items: center; gap: 12px;
