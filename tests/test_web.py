@@ -1,3 +1,4 @@
+import hashlib
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -177,6 +178,13 @@ def test_empty_mailbox_pages(client):
 
 def test_unknown_mailbox_404(client):
     assert _login(client).get("/ui/m/nope").status_code == 404
+
+
+def test_static_urls_change_with_content(client):
+    html = client.get("/login").text
+    css = (Path(web.__file__).parent / "static" / "app.css").read_bytes()
+    url = f"/ui/static/app.css?v={hashlib.sha256(css).hexdigest()[:10]}"
+    assert f'href="{url}"' in html and client.get(url).status_code == 200
 
 
 def test_static_css_and_icons_served(client):

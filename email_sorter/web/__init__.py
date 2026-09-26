@@ -164,6 +164,17 @@ for _name, _fn in (("de_num", de_num), ("de_conf", de_conf), ("de_dt", de_dt), (
                    ("usd", usd), ("ago", ago)):
     templates.env.filters[_name] = _fn
 templates.env.globals["version"] = __version__
+
+
+def _asset_urls(static: Path) -> dict[str, str]:
+    """name -> /ui/static/name?v=<content hash>. The URL changes whenever the file does, so a
+    browser never keeps an outdated stylesheet or icon, independent of the version number."""
+    return {p.name: f"/ui/static/{p.name}?v={hashlib.sha256(p.read_bytes()).hexdigest()[:10]}"
+            for p in static.iterdir() if p.is_file()}
+
+
+_ASSETS = _asset_urls(HERE / "static")
+templates.env.globals["asset"] = _ASSETS.__getitem__  # unknown name: fails loudly while rendering
 # AGPL-3.0 section 13: users of the web UI are offered the source. Point this at your own
 # repository if you run a modified version for others.
 templates.env.globals["source_url"] = os.environ.get("SOURCE_URL", "https://github.com/mhoenes/sortroom")
