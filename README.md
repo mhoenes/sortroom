@@ -48,7 +48,7 @@ uid 1000. Forms carry a CSRF token.
   deleted as "nicht mehr im Postfach" so they leave the review list; notes
   uncertain mails you filed by hand; reads only, trash/spam/sent/drafts don't
   count), check the connection. Each job runs in the background
-  under the mailbox lock (dry run unless "Echt ausführen" is ticked) and shows
+  under the mailbox lock ("Probelauf" is a dry run, "Ausführen" the real thing) and shows
   its log; also shows whether the mailbox's .env variables are set
 - **Mails** detail – accept Jev's suggestion for an uncertain mail, move a mail
   to another category (logged as "von Hand"), or create a sender rule from it
@@ -59,7 +59,7 @@ uid 1000. Forms carry a CSRF token.
   afterwards). This is also how the first mailbox is created. For Gmail (`imap.gmail.com`) the
   copied folders lose their `INBOX/` prefix: Gmail only has top-level labels
   (`Werbung`, not `INBOX/Werbung`); Outlook still shows them under the inbox
-- **Gemeinsam** – the shared `[jev]` settings in `config/config.toml`
+- **Globale Einstellungen** (bottom of the sidebar) – the shared `[jev]` settings in `config/config.toml`
 
 Jobs are kept in memory until the container restarts; backfills started via
 `POST /backfill` show up there too. The API endpoints keep their bearer-token
