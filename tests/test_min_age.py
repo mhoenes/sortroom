@@ -15,7 +15,7 @@ class FakeClient:
         return "OK", self.data
 
 
-def test_received_times_parses_strato_response():
+def test_received_times_parses_uid_and_internaldate_in_any_order():
     client = FakeClient([
         b'68 (UID 261848 INTERNALDATE "18-Aug-2026 15:29:18 +0200")',
         b'69 (UID 261877 INTERNALDATE " 4-Sep-2026 09:34:45 +0200")',  # space-padded day

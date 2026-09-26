@@ -117,7 +117,7 @@ def test_invalid_changes_leave_file_untouched(setup):
 
 
 def test_save_settings(setup):
-    form = {"name": "Mein Postfach", "imap_host": "imap.strato.de", "imap_port": "993", "source_folder": "INBOX",
+    form = {"name": "Mein Postfach", "imap_host": "imap.example.com", "imap_port": "993", "source_folder": "INBOX",
             "min_confidence": "0,75", "action_flag_threshold": "0.8", "expiry_threshold": "0,7",
             "min_age_hours": "24", "lookback_days": "7", "max_per_run": "150", "expired_folder": "INBOX/Abgelaufen"}
     save_settings(_box(setup), setup / "config.toml", form)

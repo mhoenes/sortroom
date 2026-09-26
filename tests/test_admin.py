@@ -274,7 +274,7 @@ def test_first_mailbox_from_the_example(client, setup):
     assert "Noch kein Postfach" in client.get("/ui").text
     html = client.get("/ui/mailboxes/new").text
     assert 'value="_example" selected' in html and "Standard-Kategorien" in html
-    form = {"csrf": _csrf(html), "name": "Privat", "id": "privat", "imap_host": "imap.strato.de", "imap_port": "993",
+    form = {"csrf": _csrf(html), "name": "Privat", "id": "privat", "imap_host": "imap.example.com", "imap_port": "993",
             "source_folder": "INBOX", "user_env": "IMAP_USER", "password_env": "IMAP_PASSWORD", "template": "_example"}
     assert client.post("/ui/mailboxes/new", data=form, follow_redirects=False).status_code == 303
     box = _box(setup)

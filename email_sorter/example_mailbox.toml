@@ -6,7 +6,7 @@
 name = "Postfach"
 
 [imap]
-host = "imap.strato.de"
+host = "imap.example.com"
 port = 993
 source_folder = "INBOX"
 

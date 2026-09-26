@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 
 MAX_EXPIRY_AGE_DAYS = 200  # tracked offers expire within ~180 days of arrival
 IMAP_TIMEOUT = 120  # seconds; a stalled connection raises instead of hanging forever
-UID_CHUNK = 250  # Strato rejects IMAP command lines over ~20 KB: at most this many UIDs per command
+UID_CHUNK = 250  # some servers reject IMAP command lines over ~20 KB (seen with Strato): at most this many UIDs per command
 
 
 def _chunks(items: list[str], size: int | None = None):
