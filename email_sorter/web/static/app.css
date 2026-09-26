@@ -188,6 +188,19 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 .review .guess { width: 170px; flex-shrink: 0; font-size: 13px; }
 .review .guess .muted { font-size: 12px; font-weight: 400; }
 
+/* maintenance: task rows grouped by what they cost and touch */
+.group-head { display: flex; flex-direction: column; gap: 4px; }
+.tasks { display: flex; flex-direction: column; }
+.task { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 12px 24px; align-items: end;
+  padding: 16px 0; border-top: 1px solid var(--line-soft); }
+.task .about { align-self: start; }
+.task .about h3 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
+.task .about p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.task .fields { display: flex; gap: 12px; }
+.task .fields .f { flex: 1 1 0; min-width: 0; }
+.task .fields input, .task .fields select { width: 100%; height: 36px; }
+.task .go { display: flex; gap: 8px; }
+
 /* mailbox cards */
 .boxcard { display: flex; flex-direction: column; gap: 16px; }
 .boxcard .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
@@ -256,6 +269,8 @@ svg.star { display: block; width: 16px; height: 16px; fill: #D99A06; }
   .cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .split, .mails, .mails.has-detail, .cols-3, .catgrid { grid-template-columns: minmax(0, 1fr); }
   .detail, .editor { position: static; max-height: none; }
+  .task { grid-template-columns: minmax(0, 1fr) auto; }
+  .task .about { grid-column: 1 / -1; }
   .mails .detail { order: -1; }
   .has-detail .maillist .conf { display: table-cell; }
   .maillist .where, .has-detail .maillist .where { display: none; }
@@ -282,6 +297,9 @@ svg.star { display: block; width: 16px; height: 16px; fill: #D99A06; }
   .maillist .date { display: none; }
   .maillist .date-inline { display: inline; }
   .maillist .pill { max-width: 110px; }
+  .task { grid-template-columns: minmax(0, 1fr); }
+  .task .fields { flex-wrap: wrap; }
+  .task .fields .f { flex-basis: 140px; }
   .review a { flex-direction: column; align-items: stretch; gap: 6px; }
   .review .what, .review .guess { width: auto; }
   .review .guess { flex-direction: row; gap: 6px; }
