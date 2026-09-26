@@ -1,7 +1,6 @@
 # Sortroom as a service next to n8n.
 #
-# n8n reaches the API over the shared Docker network at http://sortroom:8765
-# (and still at http://email-sorter:8765, the name before 0.5.0, until the alias below is removed).
+# n8n reaches the API over the shared Docker network at http://sortroom:8765.
 # The admin UI is published on the host (http://<host>:8765, login with ADMIN_PASSWORD);
 # set UI_PORT in .env to use another port, or remove `ports` to keep it internal.
 # Set N8N_NETWORK in .env to the network your n8n container uses
@@ -9,11 +8,12 @@
 
 services:
   sortroom:
-    # Prebuilt image from GitHub Container Registry, set SORTROOM_IMAGE in .env.
+    # Prebuilt image from GitHub Container Registry. Pin a version (e.g. :0.5) or use a fork
+    # by editing this line or setting SORTROOM_IMAGE in .env.
     # Update: docker compose pull && docker compose up -d
-    # To build locally instead: docker build -t sortroom:latest .  and leave
-    # SORTROOM_IMAGE empty.
-    image: ${SORTROOM_IMAGE:-sortroom:latest}
+    # To build locally instead: docker build -t sortroom:latest .  and set
+    # SORTROOM_IMAGE=sortroom:latest.
+    image: ${SORTROOM_IMAGE:-ghcr.io/mhoenes/sortroom:latest}
     container_name: sortroom
     ports:
       - "${UI_PORT:-8765}:8765"
@@ -28,9 +28,7 @@ services:
       - ./reports:/app/reports    # dry-run CSV reports
       - ./config.toml:/app/config.toml:ro
     networks:
-      n8n:
-        aliases:
-          - email-sorter  # old name, so n8n workflows keep working until they use sortroom
+      - n8n
 
 networks:
   n8n:

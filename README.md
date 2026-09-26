@@ -22,13 +22,16 @@ The project was called *email-sorter* before 0.5.0. The Python package is still
 |---|---|
 | repository `mhoenes/email-sorter` | `mhoenes/sortroom` (GitHub redirects the old URL) |
 | image `ghcr.io/mhoenes/email-sorter` | `ghcr.io/mhoenes/sortroom` |
-| `.env`: `EMAIL_SORTER_IMAGE` | `SORTROOM_IMAGE` |
+| `.env`: `EMAIL_SORTER_IMAGE` (required) | `SORTROOM_IMAGE` (optional, defaults to `ghcr.io/mhoenes/sortroom:latest`) |
 | Compose service and container `email-sorter` | `sortroom` |
-| n8n URL `http://email-sorter:8765` | `http://sortroom:8765` (the old name keeps working as a network alias for now) |
+| n8n URL `http://email-sorter:8765` | `http://sortroom:8765` – switch your n8n workflows before updating |
 | `logs/email-sorter.log` | `logs/sortroom.log` |
 
-Updating a host: copy the new `docker-compose.yml`, set
-`SORTROOM_IMAGE=ghcr.io/mhoenes/sortroom:latest` in `.env`, then
+Updating a host: use the new `docker-compose.yml` (it defaults to
+`ghcr.io/mhoenes/sortroom:latest`; drop `EMAIL_SORTER_IMAGE` from `.env`), or in
+your own copy rename the service and container to `sortroom` and point `image` at
+`ghcr.io/mhoenes/sortroom:latest`. Switch the n8n workflows to
+`http://sortroom:8765`. Then
 `docker compose pull && docker compose up -d --remove-orphans` (removes the old
 `email-sorter` container; `data/`, `mailboxes/`, `logs/` and `reports/` are kept).
 
@@ -214,8 +217,9 @@ Docker host with a personal access token that has `read:packages`:
 ### Setup on the Docker host
 
 1. On the host you only need `docker-compose.yml`, `config.toml`, `.env`
-   and `data/state.db` – the code comes with the image. Set
-   `SORTROOM_IMAGE=ghcr.io/<owner>/sortroom:latest` in `.env`.
+   and `data/state.db` – the code comes with the image. `docker-compose.yml` uses
+   `ghcr.io/mhoenes/sortroom:latest`; for a fork or a pinned version change
+   the `image` line or set `SORTROOM_IMAGE` in `.env`.
 2. **Move the state over:** copy `data/state.db` from the old machine into
    `data/` on the host – otherwise the sorter doesn't know what it already
    sorted and expiry dates are lost.
