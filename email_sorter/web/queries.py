@@ -24,6 +24,16 @@ def _iso(dt: datetime) -> str:
     return dt.isoformat(timespec="seconds")
 
 
+# `received` is the mail's Date header with the sender's UTC offset, so plain text order is wrong
+# across time zones; julianday() normalises it. Unparsable headers fall back to processed_at.
+RECEIVED = "COALESCE(julianday(received), julianday(processed_at))"
+
+
+def _received_since(now: datetime, span: timedelta) -> str:
+    """The cutoff for `RECEIVED >= julianday(?)`, with the local offset so julianday() gets UTC right."""
+    return _iso(now.astimezone() - span)
+
+
 @dataclass
 class MailboxStats:
     sorted_today: int = 0
@@ -48,8 +58,9 @@ def stats(db: sqlite3.Connection | None, min_confidence: float, now: datetime | 
     month = _iso(datetime.combine(now.date().replace(day=1), datetime.min.time()))
     s.sorted_today = db.execute("SELECT COUNT(*) FROM processed WHERE processed_at >= ?", (today,)).fetchone()[0]
     s.uncertain = db.execute(
-        "SELECT COUNT(*) FROM processed WHERE moved_to IS NULL AND confidence < ? AND processed_at >= ? AND gone = 0",
-        (min_confidence, _iso(now - timedelta(days=30)))).fetchone()[0]
+        f"SELECT COUNT(*) FROM processed WHERE moved_to IS NULL AND confidence < ? AND gone = 0 "
+        f"AND {RECEIVED} >= julianday(?)",
+        (min_confidence, _received_since(now, timedelta(days=30)))).fetchone()[0]
     s.flagged_7d = db.execute("SELECT COUNT(*) FROM processed WHERE flagged = 1 AND processed_at >= ?",
                               (_iso(now - timedelta(days=7)),)).fetchone()[0]
     cost, n = db.execute(
@@ -105,7 +116,7 @@ def uncertain_mails(db: sqlite3.Connection | None, min_confidence: float, limit:
         return []
     return [dict(r) for r in db.execute(
         "SELECT * FROM processed WHERE moved_to IS NULL AND confidence < ? AND gone = 0 "
-        "ORDER BY processed_at DESC LIMIT ?",
+        f"ORDER BY {RECEIVED} DESC LIMIT ?",
         (min_confidence, limit))]
 
 
@@ -123,14 +134,14 @@ class MailFilter:
 
 def mails(db: sqlite3.Connection | None, f: MailFilter, min_confidence: float,
           now: datetime | None = None) -> tuple[list[dict], int]:
-    """One page of processed mail matching the filter, newest first, and the total count."""
+    """One page of processed mail matching the filter, newest received first, and the total count."""
     if db is None:
         return [], 0
     where, args = [], []
     span = PERIODS.get(f.period)
     if span:
-        where.append("processed_at >= ?")
-        args.append(_iso((now or datetime.now()) - span))
+        where.append(f"{RECEIVED} >= julianday(?)")
+        args.append(_received_since(now or datetime.now(), span))
     if f.q:
         where.append("(sender LIKE ? ESCAPE '!' OR subject LIKE ? ESCAPE '!')")
         like = "%" + f.q.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
@@ -153,7 +164,7 @@ def mails(db: sqlite3.Connection | None, f: MailFilter, min_confidence: float,
     sql_where = ("WHERE " + " AND ".join(where)) if where else ""
     total = db.execute(f"SELECT COUNT(*) FROM processed {sql_where}", args).fetchone()[0]
     offset = (max(f.page, 1) - 1) * PAGE_SIZE
-    rows = db.execute(f"SELECT * FROM processed {sql_where} ORDER BY processed_at DESC, received DESC "
+    rows = db.execute(f"SELECT * FROM processed {sql_where} ORDER BY {RECEIVED} DESC, processed_at DESC "
                       f"LIMIT ? OFFSET ?", args + [PAGE_SIZE, offset]).fetchall()
     return [dict(r) for r in rows], total
 

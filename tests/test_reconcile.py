@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -77,7 +78,7 @@ def test_reconcile_marks_deleted_and_filed(tmp_path, monkeypatch):
     db = queries.connect(tmp_path)
     try:
         assert [m["message_key"] for m in queries.uncertain_mails(db, 0.7)] == ["<inbox@x>"]
-        assert queries.stats(db, 0.7).uncertain == 1
+        assert queries.stats(db, 0.7, now=datetime(2026, 9, 25)).uncertain == 1
         assert queries.mails(db, queries.MailFilter(period="all"), 0.7)[1] == 3           # deleted ones hidden
         assert queries.mails(db, queries.MailFilter(period="all", show_gone=True), 0.7)[1] == 5
     finally:

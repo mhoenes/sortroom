@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from email_sorter import api, web
+from email_sorter.web import queries
 from email_sorter.config import Mailbox
 from email_sorter.jev import Decision
 from email_sorter.sorter import RunResult
@@ -136,6 +137,32 @@ def test_search_treats_wildcards_literally(client):
     assert "1 Eintrag" in html  # only "20 % Rabatt", not everything
 
 
+def test_mails_sorted_and_filtered_by_received(tmp_path):
+    store = Store(tmp_path / "data" / "state.db")
+    now = datetime.now().astimezone()
+    received = {  # offsets differ, so text order would be wrong
+        "<utc>": (now - timedelta(hours=2)).astimezone(timezone.utc).isoformat(timespec="minutes"),
+        "<la>": (now - timedelta(hours=1)).astimezone(timezone(timedelta(hours=-7))).isoformat(timespec="minutes"),
+        "<local>": (now - timedelta(hours=3)).isoformat(timespec="minutes"),
+        "<backfilled>": (now - timedelta(days=40)).isoformat(timespec="minutes"),  # processed today, received long ago
+    }
+    for key, value in received.items():
+        store.record(SimpleNamespace(key=key, received=value, sender="s", subject=key,
+                                     decision=Decision("werbung", 0.5, {"werbung": 0.5}, 0.1, 0.0001),
+                                     folder=None, flag=False, expires=None, source="jev"))
+    store.close()
+    db = queries.connect(tmp_path)
+    try:
+        rows, total = queries.mails(db, queries.MailFilter(period="30d"), 0.7)
+        assert [r["message_key"] for r in rows] == ["<la>", "<utc>", "<local>"] and total == 3
+        rows, _ = queries.mails(db, queries.MailFilter(period="all"), 0.7)
+        assert rows[-1]["message_key"] == "<backfilled>"
+        assert queries.stats(db, 0.7).uncertain == 3
+        assert [m["message_key"] for m in queries.uncertain_mails(db, 0.7)][0] == "<la>"
+    finally:
+        db.close()
+
+
 def test_empty_mailbox_pages(client):
     c = _login(client)
     assert "Noch kein Lauf protokolliert" in c.get("/ui/m/gmail").text
@@ -163,5 +190,10 @@ def test_source_link_for_agpl(client):
 def test_formatters():
     assert web.de_num(12345) == "12 345"
     assert web.de_conf(0.456) == "0,46"
-    assert web.de_dt("2026-09-24T21:58:00") == "24.09. 21:58"
+    year = date.today().year
+    assert web.de_dt(f"{year}-09-24T21:58:00") == "24.09. 21:58"
+    assert web.de_dt("2020-01-14T16:32:00") == "14.01.2020"            # earlier year: date only
+    assert web.de_dt("2020-01-14T16:32:00", True) == "14.01.2020 16:32"
+    utc = datetime(year, 9, 24, 10, 0, tzinfo=timezone.utc)
+    assert web.de_dt(utc.isoformat()) == utc.astimezone().strftime("%d.%m. %H:%M")  # sender's offset -> local
     assert web.usd(0.00009, 5) == "$0.00009"

@@ -121,7 +121,13 @@ def de_dt(value: str | None, with_year: bool = False) -> str:
         dt = datetime.fromisoformat(value)
     except ValueError:
         return value
-    return dt.strftime("%d.%m.%Y %H:%M" if with_year else "%d.%m. %H:%M")
+    if dt.tzinfo:
+        dt = dt.astimezone()  # a mail's Date header carries the sender's offset; show local time
+    if with_year:
+        return dt.strftime("%d.%m.%Y %H:%M")
+    if dt.year != datetime.now().year:
+        return dt.strftime("%d.%m.%Y")  # from an earlier year: the date matters, not the time
+    return dt.strftime("%d.%m. %H:%M")
 
 
 def de_date(value: str | None) -> str:
