@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 from imap_tools import MailMessage
 
-from email_sorter import resort
+from email_sorter import resort, sorter
 from email_sorter.config import Config, Credentials, load_config
 from email_sorter.jev import Decision
 from email_sorter.store import Store
@@ -133,7 +133,7 @@ def test_inbox_resort_respects_min_age(env, monkeypatch):
     now = datetime.now(timezone.utc)
     env.mb.folders["INBOX"] = dict(env.mb.folders.pop("INBOX.Reisen"))
     ages = {"1": 30, "2": 2, "3": 48, "4": 1, "5": 72}  # hours since arrival
-    monkeypatch.setattr(resort, "received_times",
+    monkeypatch.setattr(sorter, "received_times",
                         lambda mb, uids: {u: now - timedelta(hours=ages[u]) for u in uids})
     cfg = Config(**{**CFG.__dict__, "min_age_hours": 24})
     resort.run_resort(cfg, CREDS, env.tmp, "INBOX", live=False, limit=None)
@@ -141,7 +141,7 @@ def test_inbox_resort_respects_min_age(env, monkeypatch):
 
 
 def test_other_folders_ignore_min_age(env, monkeypatch):
-    monkeypatch.setattr(resort, "received_times", lambda mb, uids: pytest.fail("not needed"))
+    monkeypatch.setattr(sorter, "received_times", lambda mb, uids: pytest.fail("not needed"))
     cfg = Config(**{**CFG.__dict__, "min_age_hours": 24})
     resort.run_resort(cfg, CREDS, env.tmp, "INBOX/Reisen", live=False, limit=None)
     assert env.jev.calls == 5

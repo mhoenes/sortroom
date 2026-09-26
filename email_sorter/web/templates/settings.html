@@ -52,6 +52,8 @@
         </label>
         <label class="f"><span class="lt">Wartezeit in Stunden {{ help('Neue Mails bleiben so lange im Posteingang, bevor sie einsortiert werden – damit du sie zuerst dort siehst. 0 = sofort.') }}</span>
           <input type="text" name="min_age_hours" value="{{ form.min_age_hours }}" inputmode="decimal" required>
+          <label class="check small"><input type="checkbox" name="sort_read_at_once" value="1" {% if form.sort_read_at_once in (true, 'on', '1') %}checked{% endif %}>Gelesene sofort einsortieren
+            {{ help('Mails, die du schon gelesen hast, warten die Wartezeit nicht ab, sondern werden beim nächsten Lauf einsortiert. Ungelesene warten weiter.') }}</label>
         </label>
         <label class="f"><span class="lt">Rückblick in Tagen {{ help('Ein normaler Lauf schaut nur auf Mails der letzten so vielen Tage. Ältere holt ein Backfill.') }}</span>
           <input type="text" name="lookback_days" value="{{ form.lookback_days }}" inputmode="numeric" required>

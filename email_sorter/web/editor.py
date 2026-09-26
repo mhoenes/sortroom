@@ -218,6 +218,7 @@ def _settings_page(request: Request, box_id: str, form: dict | None = None, erro
                 "source_folder": cfg.source_folder, "min_confidence": de_plain(cfg.min_confidence),
                 "action_flag_threshold": de_plain(cfg.action_flag_threshold),
                 "expiry_threshold": de_plain(cfg.expiry_threshold), "min_age_hours": de_plain(cfg.min_age_hours),
+                "sort_read_at_once": cfg.sort_read_at_once,
                 "lookback_days": cfg.lookback_days, "max_per_run": cfg.max_per_run,
                 "expired_folder": cfg.expired_folder or ""}
     if rules is None:

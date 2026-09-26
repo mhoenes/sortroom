@@ -173,6 +173,7 @@ def save_settings(box: Mailbox, shared_path: Path, form: dict) -> None:
     rules["action_flag_threshold"] = _number(form, "action_flag_threshold", "Stern bei Handlungsbedarf", 0, 1)
     rules["expiry_threshold"] = _number(form, "expiry_threshold", "Befristetes Angebot", 0, 1)
     rules["min_age_hours"] = _number(form, "min_age_hours", "Wartezeit", 0, 24 * 14)
+    _set(rules, "sort_read_at_once", _checked(form, "sort_read_at_once"), default=False)
     rules["lookback_days"] = _number(form, "lookback_days", "Rückblick", 1, 365, integer=True)
     rules["max_per_run"] = _number(form, "max_per_run", "Max. pro Lauf", 1, 5000, integer=True)
     _set(rules, "expired_folder", _folder(form, "expired_folder", "Standard-Ordner für Abgelaufenes"))
