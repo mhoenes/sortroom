@@ -158,6 +158,9 @@ for _name, _fn in (("de_num", de_num), ("de_conf", de_conf), ("de_dt", de_dt), (
                    ("usd", usd), ("ago", ago)):
     templates.env.filters[_name] = _fn
 templates.env.globals["version"] = __version__
+# AGPL-3.0 section 13: users of the web UI are offered the source. Point this at your own
+# repository if you run a modified version for others.
+templates.env.globals["source_url"] = os.environ.get("SOURCE_URL", "https://github.com/mhoenes/sortroom")
 
 RUN_KINDS = {"run": "Lauf", "backfill": "Backfill", "resort": "Re-Sort", "recheck": "Ablauf-Prüfung"}
 

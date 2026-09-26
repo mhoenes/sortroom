@@ -394,3 +394,19 @@ are skipped via its `data/run.lock`.
   and `api_key_env` in `config.toml` – see the commented alternative there.
 - Exit codes: `0` ok, `1` some mails failed (retried next run), `2` config or
   API-key/credit problem.
+
+## License
+
+Copyright (C) 2026 Matthias Hönes
+
+Sortroom is free software: you can redistribute it and/or modify it under the
+terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version. It is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE. See [LICENSE](LICENSE) for the full text.
+
+Because the admin UI is a network service, the AGPL asks anyone who runs a
+**modified** version for other people to offer those users its source code.
+The sidebar links to this repository; if you change Sortroom and let others
+use your instance, point that link at your own source.

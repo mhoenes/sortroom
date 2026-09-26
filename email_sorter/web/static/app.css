@@ -54,6 +54,10 @@ h1, h2 { margin: 0; }
 .side-foot form button { width: 100%; min-height: 40px; border-radius: 8px; border: 1px solid #3F3C34; background: transparent;
   color: var(--side-link); font: inherit; cursor: pointer; }
 .side-foot form button:hover { background: var(--side-2); color: #fff; }
+.side-foot a.source, a.source-login { font-size: 12px; color: var(--side-muted); text-align: center; text-decoration: none; }
+.side-foot a.source:hover { color: #fff; text-decoration: underline; }
+a.source-login { color: var(--muted); }
+a.source-login:hover { color: var(--ink); text-decoration: underline; }
 
 .main { flex-grow: 1; min-width: 0; padding: 32px 40px; display: flex; flex-direction: column; gap: 24px; }
 .head { display: flex; align-items: flex-end; gap: 16px; }
@@ -145,7 +149,7 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 .boxcard .actions { display: flex; gap: 8px; margin-top: auto; }
 
 /* login */
-.login { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.login { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; }
 .login .card { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 18px; padding: 32px; }
 .login h1 { font-size: 22px; font-weight: 600; }
 .error { color: var(--err); font-size: 13px; }

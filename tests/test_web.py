@@ -153,6 +153,11 @@ def test_static_css_and_icons_served(client):
     assert 'rel="icon"' in client.get("/login").text
 
 
+def test_source_link_for_agpl(client):
+    assert "github.com/mhoenes/sortroom" in client.get("/login").text
+    assert "Quellcode · AGPL-3.0" in _login(client).get("/ui").text
+
+
 def test_formatters():
     assert web.de_num(12345) == "12 345"
     assert web.de_conf(0.456) == "0,46"
