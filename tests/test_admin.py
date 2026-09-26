@@ -151,6 +151,35 @@ def test_maintenance_page_and_run_job(client, monkeypatch):
     r = client.post("/ui/m/privat/maintenance/run", data={"csrf": _csrf(page), "live": "1"}, follow_redirects=False)
     _wait(r.headers["location"].rsplit("/", 1)[1])
     assert calls[-1] == (True, None)
+    assert "Jetzt ausführen" not in client.get(r.headers["location"]).text  # already live
+
+
+def test_dry_run_can_be_started_for_real_from_its_job_page(client, monkeypatch):
+    calls = []
+
+    def fake_run(cfg, creds, ws, live, limit):
+        calls.append((live, limit))
+        return RunResult(exit_code=0, live=live, classified=5, moved=4)
+
+    monkeypatch.setattr(admin, "run", fake_run)
+    token = _csrf(client.get("/ui/m/privat/maintenance").text)
+    r = client.post("/ui/m/privat/maintenance/run", data={"csrf": token, "limit": "20"}, follow_redirects=False)
+    _wait(r.headers["location"].rsplit("/", 1)[1])
+    html = client.get(r.headers["location"]).text
+    assert "Probelauf abgeschlossen" in html and 'action="/ui/m/privat/maintenance/run"' in html
+    assert '<input type="hidden" name="limit" value="20">' in html
+    form = dict(re.findall(r'<input type="hidden" name="(\w+)" value="([^"]*)">', html.split('class="card rerun"')[1]))
+    r = client.post("/ui/m/privat/maintenance/run", data={**form, "live": "1"}, follow_redirects=False)
+    _wait(r.headers["location"].rsplit("/", 1)[1])
+    assert calls == [(False, 20), (True, 20)]  # same limit, now for real
+
+
+def test_no_live_rerun_after_failed_dry_run(client, monkeypatch):
+    monkeypatch.setattr(admin, "run", lambda cfg, creds, ws, live, limit: RunResult(exit_code=1, live=live))
+    token = _csrf(client.get("/ui/m/privat/maintenance").text)
+    r = client.post("/ui/m/privat/maintenance/run", data={"csrf": token}, follow_redirects=False)
+    _wait(r.headers["location"].rsplit("/", 1)[1])
+    assert "Jetzt ausführen" not in client.get(r.headers["location"]).text
 
 
 def test_maintenance_validation_errors(client):

@@ -28,6 +28,18 @@
 <div class="banner {{ 'ok' if r.ok else 'err' }}" role="status">{{ r.summary if r.summary else ('Alles in Ordnung.' if r.ok else 'Es gab Fehler – siehe Protokoll.') }}</div>
 {% endif %}
 
+{% if rerun is not none %}
+<form class="card rerun" method="post" action="/ui/m/{{ box.id }}/maintenance/{{ job.kind }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {% for k, v in rerun.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+  <div class="grow"><b>Probelauf abgeschlossen – nichts wurde geändert.</b>
+    <span class="muted">Passt das Ergebnis, lässt sich dieselbe Aufgabe mit denselben Angaben jetzt echt ausführen.</span></div>
+  <button class="btn {{ 'danger' if risky else 'primary' }}" type="submit" name="live" value="1"
+    {% if risky and not editable %}disabled title="Einstellungen schreibgeschützt"{% endif %}
+    {% if risky %}onclick="return confirm('Wirklich ausführen?')"{% endif %}>Jetzt ausführen</button>
+</form>
+{% endif %}
+
 <section class="card stack">
   <h2>Protokoll</h2>
   {% if job.log %}<pre class="log">{{ job.log|join('\n') }}</pre>{% else %}<div class="empty">Noch keine Einträge.</div>{% endif %}
