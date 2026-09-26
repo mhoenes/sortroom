@@ -8,7 +8,7 @@ from email_sorter.config import ConfigError, LEGACY_ID, load_credentials, load_m
 from email_sorter.migrate import migrate_mailbox, split_sections
 
 ROOT = Path(__file__).resolve().parent.parent
-SHIPPED = (ROOT / "config.toml").read_text(encoding="utf-8")
+SHIPPED = (ROOT / "config" / "config.toml").read_text(encoding="utf-8")
 
 SHARED = """
 [jev]
@@ -140,7 +140,7 @@ def test_migrate_live_moves_config_log_and_reports(tmp_path):
     assert (tmp_path / "config.toml").read_text(encoding="utf-8") == SHIPPED  # left alone
     boxes = load_mailboxes(tmp_path, tmp_path / "config.toml")
     assert list(boxes) == ["privat"] and boxes["privat"].name == "Privat"
-    assert boxes["privat"].cfg.categories == load_mailboxes(ROOT, ROOT / "config.toml")[LEGACY_ID].cfg.categories
+    assert boxes["privat"].cfg.categories == load_mailboxes(ROOT, ROOT / "config" / "config.toml")[LEGACY_ID].cfg.categories
     # a second migration is refused
     assert migrate_mailbox(tmp_path, tmp_path / "config.toml", "zwei", None, live=True).exit_code == 2
 
@@ -235,3 +235,18 @@ def test_sender_rules_travel_with_the_mailbox_on_migration():
     shared, mailbox = split_sections(SHIPPED)
     assert "[[sender_rules]]" in mailbox and "[[sender_rules]]" not in shared
     assert "# Sender rules" in mailbox
+
+
+def test_default_config_path(tmp_path, monkeypatch):
+    from email_sorter import runtime
+
+    monkeypatch.setattr(runtime, "BASE_DIR", tmp_path)
+    monkeypatch.delenv("SORTROOM_CONFIG", raising=False)
+    monkeypatch.delenv("EMAIL_SORTER_CONFIG", raising=False)
+    assert runtime.default_config_path() == tmp_path / "config" / "config.toml"
+    (tmp_path / "config.toml").write_text("", encoding="utf-8")        # mounted the pre-0.6.1 way
+    assert runtime.default_config_path() == tmp_path / "config.toml"
+    monkeypatch.setenv("EMAIL_SORTER_CONFIG", "/x/old.toml")
+    assert runtime.default_config_path() == Path("/x/old.toml")
+    monkeypatch.setenv("SORTROOM_CONFIG", "/x/new.toml")
+    assert runtime.default_config_path() == Path("/x/new.toml")

@@ -12,7 +12,7 @@ from email_sorter.sorter import RunResult
 
 TOKEN = "t" * 32
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
-CFG = load_config(Path(__file__).resolve().parent.parent / "config.toml")
+CFG = load_config(Path(__file__).resolve().parent.parent / "config" / "config.toml")
 
 
 def _boxes(tmp_path, ids):

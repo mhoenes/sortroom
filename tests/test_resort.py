@@ -9,7 +9,7 @@ from email_sorter.config import Config, Credentials, load_config
 from email_sorter.jev import Decision
 from email_sorter.store import Store
 
-CFG = Config(**{**load_config(Path(__file__).resolve().parent.parent / "config.toml").__dict__, "min_age_hours": 0})
+CFG = Config(**{**load_config(Path(__file__).resolve().parent.parent / "config" / "config.toml").__dict__, "min_age_hours": 0})
 CREDS = Credentials("u", "p", "k")
 
 # subject -> (category, confidence) that the fake Jev answers

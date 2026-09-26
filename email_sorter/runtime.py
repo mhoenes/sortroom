@@ -17,6 +17,16 @@ log = logging.getLogger("email_sorter")
 LOCK_PATH = BASE_DIR / "data" / "run.lock"  # the single-mailbox location; each Mailbox has its own lock_path
 
 
+def default_config_path() -> Path:
+    """The shared config: SORTROOM_CONFIG (or the older EMAIL_SORTER_CONFIG) if set, else
+    config.toml in the base folder - where setups before 0.6.1 mount it - else config/config.toml."""
+    explicit = os.environ.get("SORTROOM_CONFIG") or os.environ.get("EMAIL_SORTER_CONFIG")
+    if explicit:
+        return Path(explicit)
+    legacy = BASE_DIR / "config.toml"
+    return legacy if legacy.exists() else BASE_DIR / "config" / "config.toml"
+
+
 def setup_logging(verbose: bool) -> None:
     (BASE_DIR / "logs").mkdir(exist_ok=True)
     fmt = logging.Formatter("%(asctime)s %(levelname)-7s %(message)s", "%Y-%m-%d %H:%M:%S")

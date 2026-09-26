@@ -171,7 +171,7 @@ def test_read_only_file(setup):
 # ---------------------------------------------------------------- trial
 
 def test_trial_descriptions_and_sample(tmp_path):
-    box = load_mailboxes(Path(__file__).resolve().parent.parent, Path(__file__).resolve().parent.parent / "config.toml")
+    box = load_mailboxes(Path(__file__).resolve().parent.parent, Path(__file__).resolve().parent.parent / "config" / "config.toml")
     cfg = next(iter(box.values())).cfg
     d = trial.with_category(cfg, "werbung", "NEU")
     assert d["werbung"] == "NEU" and d["finanzen"] == cfg.categories["finanzen"].description

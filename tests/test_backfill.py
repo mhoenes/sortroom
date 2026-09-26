@@ -13,7 +13,7 @@ from email_sorter.jev import Decision, JevError
 from email_sorter.store import Store
 
 ROOT = Path(__file__).resolve().parent.parent
-CFG = load_config(ROOT / "config.toml")
+CFG = load_config(ROOT / "config" / "config.toml")
 CREDS = Credentials("u", "p", "k")
 
 

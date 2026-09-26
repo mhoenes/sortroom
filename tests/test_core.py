@@ -10,7 +10,7 @@ from email_sorter.mailtext import clean_body, html_to_text
 from email_sorter.sorter import plan, server_folder
 
 ROOT = Path(__file__).resolve().parent.parent
-CFG = load_config(ROOT / "config.toml")
+CFG = load_config(ROOT / "config" / "config.toml")
 
 SAMPLE_RESPONSE = {
     "id": "gen-dec-1",

@@ -93,7 +93,7 @@ def test_config_error_means_no_runs():
 
 def test_scheduled_run_skips_a_busy_mailbox(tmp_path, monkeypatch):
     box = _box("privat", tmp=tmp_path)
-    box.cfg, box.workspace = load_config(BASE_DIR / "config.toml"), tmp_path
+    box.cfg, box.workspace = load_config(BASE_DIR / "config" / "config.toml"), tmp_path
     monkeypatch.setattr(scheduler, "load_credentials", lambda cfg: "creds")
     runs = []
     monkeypatch.setattr(scheduler, "run", lambda *a, **kw: runs.append(kw))
@@ -107,7 +107,7 @@ def test_scheduled_run_skips_a_busy_mailbox(tmp_path, monkeypatch):
 
 
 def test_schedule_settings_in_config():
-    raw = _read_toml(BASE_DIR / "config.toml")
+    raw = _read_toml(BASE_DIR / "config" / "config.toml")
     cfg = config_from_raw(raw, "x")
     assert cfg.schedule_enabled and cfg.schedule_minutes == 10          # on by default
     cfg = config_from_raw({**raw, "schedule": {"enabled": False, "interval_minutes": 30}}, "x")

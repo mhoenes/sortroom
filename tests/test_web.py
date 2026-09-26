@@ -11,7 +11,7 @@ from email_sorter.jev import Decision
 from email_sorter.sorter import RunResult
 from email_sorter.store import Store
 
-CFG = load_config(Path(__file__).resolve().parent.parent / "config.toml")
+CFG = load_config(Path(__file__).resolve().parent.parent / "config" / "config.toml")
 PASSWORD = "richtig-geheim"
 
 

@@ -31,7 +31,7 @@ from pydantic import BaseModel, Field
 
 from . import __version__, jobs
 from .config import ConfigError, Mailbox, load_credentials, load_mailboxes
-from .runtime import BASE_DIR, _lock_is_stale, setup_logging, single_instance
+from .runtime import BASE_DIR, _lock_is_stale, default_config_path, setup_logging, single_instance
 from .scheduler import Scheduler, enabled_by_env
 from .sorter import run, run_backfill, run_recheck_expiry
 
@@ -39,7 +39,7 @@ load_dotenv(BASE_DIR / ".env")
 setup_logging(verbose=False)
 log = logging.getLogger("email_sorter.api")
 
-CONFIG_PATH = Path(os.environ.get("EMAIL_SORTER_CONFIG", BASE_DIR / "config.toml"))
+CONFIG_PATH = default_config_path()
 
 
 def _mailboxes() -> dict[str, Mailbox]:
@@ -61,6 +61,9 @@ async def _lifespan(app: FastAPI):
         if box.lock_path.exists():
             log.info("[%s] removing run lock left over from a previous process", box.id)
             box.lock_path.unlink(missing_ok=True)
+        if box.config_file == CONFIG_PATH:
+            log.warning("[%s] single-file setup: its log is kept in %s, which the Docker setup no longer "
+                        "mounts - run --migrate-mailbox to keep it across restarts", box.id, box.workspace / "data")
     if enabled_by_env():
         app.state.scheduler.start()
     yield

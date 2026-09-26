@@ -170,7 +170,7 @@ def test_move_expired_moves_and_marks_missing(tmp_path):
     from email_sorter.config import load_config
     from pathlib import Path
 
-    cfg = load_config(Path(__file__).resolve().parent.parent / "config.toml")
+    cfg = load_config(Path(__file__).resolve().parent.parent / "config" / "config.toml")
     store = Store(tmp_path / "s.db")
     store.record(_outcome("<a@x>", expires=date(2026, 9, 23)))
     store.record(_outcome("<gone@x>", expires=date(2026, 9, 23)))
@@ -192,7 +192,7 @@ def test_move_expired_splits_long_uid_lists(tmp_path, monkeypatch):
     from pathlib import Path
 
     monkeypatch.setattr(sorter, "UID_CHUNK", 2)
-    cfg = load_config(Path(__file__).resolve().parent.parent / "config.toml")
+    cfg = load_config(Path(__file__).resolve().parent.parent / "config" / "config.toml")
     store = Store(tmp_path / "s.db")
     for i in range(5):
         store.record(_outcome(f"<k{i}@x>", expires=date(2026, 9, 1)))
@@ -207,7 +207,7 @@ def test_move_expired_does_nothing_without_expired_folder(tmp_path):
     from email_sorter.config import Config, load_config
     from pathlib import Path
 
-    cfg = load_config(Path(__file__).resolve().parent.parent / "config.toml")
+    cfg = load_config(Path(__file__).resolve().parent.parent / "config" / "config.toml")
     cfg = Config(**{**cfg.__dict__, "expired_folder": None})
     store = Store(tmp_path / "s.db")
     store.record(_outcome("<a@x>", expires=date(2026, 9, 1)))
@@ -224,7 +224,7 @@ def test_move_expired_uses_category_folder_over_default(tmp_path):
     from email_sorter.config import Config, load_config
     from pathlib import Path
 
-    cfg = load_config(Path(__file__).resolve().parent.parent / "config.toml")
+    cfg = load_config(Path(__file__).resolve().parent.parent / "config" / "config.toml")
     cats = dict(cfg.categories)
     cats["unterlagen"] = replace(cats["unterlagen"], expired_folder="INBOX/Unterlagen/Abgelaufen")
     cfg = Config(**{**cfg.__dict__, "categories": cats})

@@ -7,7 +7,7 @@ from email_sorter.jev import Decision
 from email_sorter.store import Store
 from email_sorter.web import queries
 
-CFG = load_config(Path(__file__).resolve().parent.parent / "config.toml")
+CFG = load_config(Path(__file__).resolve().parent.parent / "config" / "config.toml")
 CREDS = Credentials("u", "p", "k")
 
 

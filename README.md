@@ -93,7 +93,7 @@ auth.
 Each mailbox lives in its own folder with its own settings, log and reports:
 
 ```
-config.toml                  # shared: [jev] (gateway, model, key name, text length)
+config/config.toml           # shared: [jev] (gateway, model, key name, text length)
 mailboxes/
   privat/
     mailbox.toml             # name, [imap], [rules], [categories.*]
@@ -216,20 +216,32 @@ Docker host with a personal access token that has `read:packages`:
 
 ### Setup on the Docker host
 
-1. On the host you only need `docker-compose.yml`, `config.toml`, `.env`
-   and `data/state.db` – the code comes with the image. `docker-compose.yml` uses
-   `ghcr.io/mhoenes/sortroom:latest`; for a fork or a pinned version change
-   the `image` line or set `SORTROOM_IMAGE` in `.env`.
-2. **Move the state over:** copy `data/state.db` from the old machine into
-   `data/` on the host – otherwise the sorter doesn't know what it already
-   sorted and expiry dates are lost.
+1. On the host you only need `docker-compose.yml`, `.env` and
+   `config/config.toml` – the code comes with the image. `docker-compose.yml`
+   uses `ghcr.io/mhoenes/sortroom:latest`; for a fork or a pinned version
+   change the `image` line or set `SORTROOM_IMAGE` in `.env`.
+2. `mkdir -p config logs reports mailboxes && sudo chown -R 1000:1000 config logs reports mailboxes`
+   (the container runs as uid 1000), then put `config.toml` into `config/` –
+   start from `config/config.toml` of this repository.
 3. Create `.env` (see `.env.example`): IMAP, `OPENROUTER_API_KEY` and
    `ADMIN_PASSWORD`; `API_TOKEN` only if you want to use the HTTP API.
-4. `mkdir -p data logs reports mailboxes && sudo chown -R 1000:1000 data logs reports mailboxes`
-   (the container runs as uid 1000).
+4. Turn the mailbox sections of `config.toml` into the first mailbox:
+   `docker compose run --rm sortroom python -m email_sorter --migrate-mailbox privat --name Privat --live`.
+   Further mailboxes are added in the UI ("Postfach hinzufügen"). Coming
+   from an older installation, copy its `data/state.db` to
+   `mailboxes/privat/data/state.db` so already sorted mail isn't sorted again.
 5. `docker compose pull && docker compose up -d`, then check:
    `docker compose logs -f sortroom` and
    `docker exec sortroom python -m email_sorter --check`.
+
+**Updating from 0.6.0 or earlier:** the shared config moved into a folder and
+`data/` is no longer mounted (it only held the log of single-file setups,
+which now live in `mailboxes/<id>/data/`). On the host: `mkdir config &&
+mv config.toml config/ && sudo chown -R 1000:1000 config`; in your compose
+file replace `./config.toml:/app/config.toml:ro` with `./config:/app/config`
+and remove `./data:/app/data`; then `docker compose up -d`. Until the compose
+file is changed, the old mount keeps working. If Sortroom logs a warning
+about a single-file setup at startup, run `--migrate-mailbox` first.
 
 ### Upgrading from an n8n setup (before 0.6.0)
 
@@ -389,9 +401,12 @@ any scheduler; overlapping runs of a mailbox are skipped via its
 
 | Path | What |
 |---|---|
+| `config/config.toml` | shared settings (`[jev]`); in a single-file setup also the mailbox |
+| `mailboxes/<id>/mailbox.toml` | a mailbox's settings (IMAP, rules, categories, schedule) |
+| `mailboxes/<id>/data/state.db` | SQLite log of every processed mail (category, confidence, cost) and the run log |
+| `mailboxes/<id>/reports/dry-run-*.csv` | dry-run results incl. runner-up category |
 | `logs/sortroom.log` | every run (rotating, 5 × 1 MB) |
-| `reports/dry-run-*.csv` | dry-run results incl. runner-up category |
-| `data/state.db` | SQLite log of every processed mail (category, confidence, cost) |
+| `data/state.db`, `reports/` | the same for a single-file setup (no `mailboxes/`) |
 
 ## Tests
 

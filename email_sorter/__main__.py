@@ -10,7 +10,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from .config import ConfigError, Mailbox, load_credentials, load_mailboxes
-from .runtime import BASE_DIR, _lock_is_stale, keep_awake, setup_logging, single_instance  # noqa: F401
+from .runtime import BASE_DIR, _lock_is_stale, default_config_path, keep_awake, setup_logging, single_instance  # noqa: F401
 
 log = logging.getLogger("email_sorter")
 
@@ -57,7 +57,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--migrate-mailbox", metavar="ID",
                         help="move a single-file setup into mailboxes/ID/ (with --live); see --name")
     parser.add_argument("--name", help="display name for --migrate-mailbox")
-    parser.add_argument("--config", type=Path, default=BASE_DIR / "config.toml")
+    parser.add_argument("--config", type=Path, help="shared config (default: config.toml or config/config.toml)")
     parser.add_argument("-v", "--verbose", action="store_true")
     return parser
 
@@ -117,6 +117,7 @@ def _run_one(box: Mailbox, args) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     load_dotenv(BASE_DIR / ".env")
+    args.config = args.config or default_config_path()
     setup_logging(args.verbose)
 
     if args.migrate_mailbox:
