@@ -1,5 +1,5 @@
 {
-  "name": "E-Mail-Sorter – Backfill (manuell)",
+  "name": "Sortroom – Backfill (manuell)",
   "nodes": [
     {
       "parameters": {},
@@ -57,7 +57,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://email-sorter:8765/backfill",
+        "url": "http://sortroom:8765/backfill",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -92,7 +92,7 @@
     },
     {
       "parameters": {
-        "url": "=http://email-sorter:8765/jobs/{{ $('Backfill anstoßen').first().json.id }}",
+        "url": "=http://sortroom:8765/jobs/{{ $('Backfill anstoßen').first().json.id }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {}

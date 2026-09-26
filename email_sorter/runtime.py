@@ -21,7 +21,7 @@ def setup_logging(verbose: bool) -> None:
     (BASE_DIR / "logs").mkdir(exist_ok=True)
     fmt = logging.Formatter("%(asctime)s %(levelname)-7s %(message)s", "%Y-%m-%d %H:%M:%S")
     file_handler = RotatingFileHandler(
-        BASE_DIR / "logs" / "email-sorter.log", maxBytes=1_000_000, backupCount=5, encoding="utf-8"
+        BASE_DIR / "logs" / "sortroom.log", maxBytes=1_000_000, backupCount=5, encoding="utf-8"
     )
     file_handler.setFormatter(fmt)
     handlers: list[logging.Handler] = [file_handler]

@@ -1,4 +1,4 @@
-# email-sorter configuration
+# Sortroom configuration
 # Secrets (IMAP password, OpenRouter key) live in .env, not here.
 
 [imap]
