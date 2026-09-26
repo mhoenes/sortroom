@@ -1,7 +1,6 @@
 # Sortroom as a service next to n8n.
 #
-# n8n reaches the API over the shared Docker network at http://sortroom:8765
-# (and still at http://email-sorter:8765, the name before 0.5.0, until the alias below is removed).
+# n8n reaches the API over the shared Docker network at http://sortroom:8765.
 # The admin UI is published on the host (http://<host>:8765, login with ADMIN_PASSWORD);
 # set UI_PORT in .env to use another port, or remove `ports` to keep it internal.
 # Set N8N_NETWORK in .env to the network your n8n container uses
@@ -29,9 +28,7 @@ services:
       - ./reports:/app/reports    # dry-run CSV reports
       - ./config.toml:/app/config.toml:ro
     networks:
-      n8n:
-        aliases:
-          - email-sorter  # old name, so n8n workflows keep working until they use sortroom
+      - n8n
 
 networks:
   n8n:

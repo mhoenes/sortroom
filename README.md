@@ -24,13 +24,14 @@ The project was called *email-sorter* before 0.5.0. The Python package is still
 | image `ghcr.io/mhoenes/email-sorter` | `ghcr.io/mhoenes/sortroom` |
 | `.env`: `EMAIL_SORTER_IMAGE` (required) | `SORTROOM_IMAGE` (optional, defaults to `ghcr.io/mhoenes/sortroom:latest`) |
 | Compose service and container `email-sorter` | `sortroom` |
-| n8n URL `http://email-sorter:8765` | `http://sortroom:8765` (the old name keeps working as a network alias for now) |
+| n8n URL `http://email-sorter:8765` | `http://sortroom:8765` – switch your n8n workflows before updating |
 | `logs/email-sorter.log` | `logs/sortroom.log` |
 
 Updating a host: use the new `docker-compose.yml` (it defaults to
 `ghcr.io/mhoenes/sortroom:latest`; drop `EMAIL_SORTER_IMAGE` from `.env`), or in
-your own copy rename the service and container to `sortroom`, point `image` at
-`ghcr.io/mhoenes/sortroom:latest` and add the `email-sorter` network alias. Then
+your own copy rename the service and container to `sortroom` and point `image` at
+`ghcr.io/mhoenes/sortroom:latest`. Switch the n8n workflows to
+`http://sortroom:8765`. Then
 `docker compose pull && docker compose up -d --remove-orphans` (removes the old
 `email-sorter` container; `data/`, `mailboxes/`, `logs/` and `reports/` are kept).
 
