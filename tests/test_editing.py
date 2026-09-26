@@ -15,6 +15,7 @@ from email_sorter.jev import Decision
 from email_sorter.store import Store
 from email_sorter.web import editor
 from email_sorter.web.editing import EditError, delete_category, save_category, save_sender_rules, save_settings
+from support import example_config
 
 PASSWORD = "richtig-geheim"
 SHARED = """[jev]
@@ -35,7 +36,10 @@ min_confidence = 0.70   # darunter bleibt die Mail liegen
 action_flag_threshold = 0.80
 lookback_days = 7
 max_per_run = 200
-keep_in_inbox_from = ["scanner@brother.com"]
+
+[[sender_rules]]
+match = "scanner@brother.com"
+action = "inbox"
 
 [categories.finanzen]
 description = "Rechnungen und Kontoauszüge"
@@ -130,12 +134,11 @@ def test_save_settings(setup):
         save_settings(box, setup / "config.toml", {**form, "imap_port": "abc"})
 
 
-def test_sender_rules_replace_legacy_list(setup):
+def test_sender_rules_saved(setup):
     shared = setup / "config.toml"
     assert _box(setup).cfg.rule_for("scanner@brother.com").action == "inbox"
     save_sender_rules(_box(setup), shared, [("scanner@brother.com", "inbox"), ("@lieferando.de", "werbung"), ("", "inbox")])
     raw = _raw(setup)
-    assert "keep_in_inbox_from" not in raw["rules"]
     assert raw["sender_rules"] == [{"match": "scanner@brother.com", "action": "inbox"},
                                    {"match": "@lieferando.de", "action": "werbung"}]
     with pytest.raises(EditError, match="Unbekanntes Ziel"):
@@ -147,8 +150,7 @@ def test_sender_rules_replace_legacy_list(setup):
 def test_sender_rules_keep_comments(setup):
     path = setup / "mailboxes" / "privat" / "mailbox.toml"
     rules = '[[sender_rules]]\nmatch = "scanner@brother.com"  # Scanner\naction = "inbox"\n\n# Kategorien\n'
-    path.write_text(MAILBOX.replace('keep_in_inbox_from = ["scanner@brother.com"]\n', "").replace(
-        "[categories.finanzen]", rules + "[categories.finanzen]"), encoding="utf-8")
+    path.write_text(MAILBOX.replace('[[sender_rules]]\nmatch = "scanner@brother.com"\naction = "inbox"\n\n', rules), encoding="utf-8")
     shared = setup / "config.toml"
     save_sender_rules(_box(setup), shared, [("scanner@brother.com", "inbox"), ("@shop.de", "werbung")])
     text = path.read_text(encoding="utf-8")
@@ -171,8 +173,7 @@ def test_read_only_file(setup):
 # ---------------------------------------------------------------- trial
 
 def test_trial_descriptions_and_sample(tmp_path):
-    box = load_mailboxes(Path(__file__).resolve().parent.parent, Path(__file__).resolve().parent.parent / "config.toml")
-    cfg = next(iter(box.values())).cfg
+    cfg = example_config()
     d = trial.with_category(cfg, "werbung", "NEU")
     assert d["werbung"] == "NEU" and d["finanzen"] == cfg.categories["finanzen"].description
     assert trial.with_category(cfg, "vereine", "Vereine")["vereine"] == "Vereine"

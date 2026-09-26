@@ -1,25 +1,14 @@
-# Sortroom configuration
-# Secrets (IMAP password, OpenRouter key) live in .env, not here.
+# Example mailbox: "Postfach hinzufügen" starts from these categories and rules when no
+# mailbox exists yet (and offers them as "Standard-Kategorien" later). The wizard sets
+# name and [imap]; everything can be changed in the UI afterwards.
+# Secrets (IMAP login) live in .env, never here.
+
+name = "Postfach"
 
 [imap]
 host = "imap.strato.de"
 port = 993
 source_folder = "INBOX"
-
-[jev]
-# OpenRouter (decisions API, alpha)
-endpoint = "https://openrouter.ai/api/alpha/decisions"
-model = "typesafe/jev-1.13"
-api_key_env = "OPENROUTER_API_KEY"   # name of the .env variable holding the key
-# Vercel AI Gateway alternative:
-# endpoint = "https://ai-gateway.vercel.sh/typesafe/v1/systemone"
-# model = "typesafe-ai/jev"
-# api_key_env = "AI_GATEWAY_API_KEY"
-max_body_chars = 3000     # body text sent to Jev is cut to this length
-timeout_seconds = 20
-min_interval_seconds = 0    # pause between requests; OpenRouter needs none.
-                            # For Vercel use 2.0: it rate-limits per minute, shorter gaps
-                            # trigger 40-60 s forced waits and end up slower
 
 [rules]
 min_confidence = 0.70         # below this, mail stays in the inbox untouched
@@ -37,9 +26,13 @@ max_per_run = 200             # safety cap on mails classified per run
 #   action  "inbox" (leave it in the inbox, untouched) or a category key below
 # ---------------------------------------------------------------------------
 
-[[sender_rules]]
-match = "frombrotherdevice@brother.com"  # scan-to-mail from the Brother scanner
-action = "inbox"
+# [[sender_rules]]
+# match = "scanner@example.de"   # e.g. scan-to-mail from a scanner: leave it in the inbox
+# action = "inbox"
+
+[schedule]
+enabled = true
+interval_minutes = 10         # a normal run every N minutes
 
 # ---------------------------------------------------------------------------
 # Categories

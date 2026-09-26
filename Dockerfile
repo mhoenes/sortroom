@@ -11,11 +11,11 @@ COPY requirements.txt requirements-api.txt ./
 RUN pip install -r requirements-api.txt
 
 COPY email_sorter ./email_sorter
-COPY config.toml ./
+COPY config ./config
 
 # unprivileged user; mailboxes/, data/, logs/ and reports/ are mounted as volumes
 RUN useradd --system --uid 1000 --home /app sorter \
-    && mkdir -p data logs reports mailboxes \
+    && mkdir -p logs mailboxes \
     && chown -R sorter:sorter /app
 USER sorter
 

@@ -6,12 +6,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from email_sorter import api, web
-from email_sorter.config import Mailbox, load_config
+from email_sorter.config import Mailbox
 from email_sorter.jev import Decision
 from email_sorter.sorter import RunResult
 from email_sorter.store import Store
+from support import example_config
 
-CFG = load_config(Path(__file__).resolve().parent.parent / "config.toml")
+CFG = example_config()
 PASSWORD = "richtig-geheim"
 
 

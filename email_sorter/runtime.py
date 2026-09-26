@@ -14,7 +14,11 @@ STALE_LOCK_SECONDS = 3600
 
 log = logging.getLogger("email_sorter")
 
-LOCK_PATH = BASE_DIR / "data" / "run.lock"  # the single-mailbox location; each Mailbox has its own lock_path
+
+
+def default_config_path() -> Path:
+    """The shared config: SORTROOM_CONFIG if set, else config/config.toml."""
+    return Path(os.environ.get("SORTROOM_CONFIG") or BASE_DIR / "config" / "config.toml")
 
 
 def setup_logging(verbose: bool) -> None:

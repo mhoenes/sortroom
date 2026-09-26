@@ -20,8 +20,8 @@
     <section class="card stack">
       <h2>Postfach</h2>
       <div class="grid cols-3">
-        <label class="f"><span class="lt">Anzeigename {{ help('Name des Postfachs in der Oberfläche.' ~ (' Bei einer einzelnen config.toml fest „Postfach“.' if single_file else '')) }}</span>
-          <input type="text" name="name" value="{{ form.name }}" maxlength="60" {% if single_file %}disabled{% endif %}>
+        <label class="f"><span class="lt">Anzeigename {{ help('Name des Postfachs in der Oberfläche.') }}</span>
+          <input type="text" name="name" value="{{ form.name }}" maxlength="60" required>
         </label>
         <label class="f"><span class="lt">IMAP-Server {{ help('Hostname des Mailservers, z. B. imap.strato.de. Die Verbindung ist immer verschlüsselt (SSL).') }}</span>
           <input type="text" name="imap_host" value="{{ form.imap_host }}" required>

@@ -31,7 +31,7 @@ from pydantic import BaseModel, Field
 
 from . import __version__, jobs
 from .config import ConfigError, Mailbox, load_credentials, load_mailboxes
-from .runtime import BASE_DIR, _lock_is_stale, setup_logging, single_instance
+from .runtime import BASE_DIR, _lock_is_stale, default_config_path, setup_logging, single_instance
 from .scheduler import Scheduler, enabled_by_env
 from .sorter import run, run_backfill, run_recheck_expiry
 
@@ -39,7 +39,7 @@ load_dotenv(BASE_DIR / ".env")
 setup_logging(verbose=False)
 log = logging.getLogger("email_sorter.api")
 
-CONFIG_PATH = Path(os.environ.get("EMAIL_SORTER_CONFIG", BASE_DIR / "config.toml"))
+CONFIG_PATH = default_config_path()
 
 
 def _mailboxes() -> dict[str, Mailbox]:
@@ -88,6 +88,8 @@ def _pick(boxes: dict[str, Mailbox], box_id: str | None) -> Mailbox:
         if box_id not in boxes:
             raise HTTPException(404, f"unknown mailbox {box_id!r}")
         return boxes[box_id]
+    if not boxes:
+        raise HTTPException(404, "no mailbox configured yet - add one in the admin UI")
     if len(boxes) == 1:
         return next(iter(boxes.values()))
     raise HTTPException(422, f"several mailboxes configured, name one: {', '.join(boxes)}")

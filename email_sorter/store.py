@@ -51,15 +51,6 @@ CREATE INDEX IF NOT EXISTS runs_started ON runs (started);
 """
 RUN_RETENTION_DAYS = 180
 
-# columns added after the first release: name -> definition for ALTER TABLE
-_MIGRATIONS = {
-    "expires": "TEXT",
-    "expiry_checked": "INTEGER NOT NULL DEFAULT 0",  # existing rows still need a check
-    "expired_tagged": "INTEGER NOT NULL DEFAULT 0",
-    "source": "TEXT NOT NULL DEFAULT 'jev'",
-    "gone": "INTEGER NOT NULL DEFAULT 0",
-}
-
 MOVED, GONE = 1, 2
 
 
@@ -68,12 +59,6 @@ class Store:
         path.parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(path)
         self.db.executescript(_SCHEMA)
-        existing = {row[1] for row in self.db.execute("PRAGMA table_info(processed)")}
-        for column, definition in _MIGRATIONS.items():
-            if column not in existing:
-                self.db.execute(f"ALTER TABLE processed ADD COLUMN {column} {definition}")
-        # the inbox is stored as NULL; re-sorts of the inbox before 1.3.1 wrote "INBOX"
-        self.db.execute("UPDATE processed SET moved_to = NULL WHERE UPPER(moved_to) = 'INBOX'")
         self.db.commit()
 
     def is_processed(self, key: str) -> bool:

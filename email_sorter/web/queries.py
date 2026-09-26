@@ -20,19 +20,6 @@ def connect(workspace: Path) -> sqlite3.Connection | None:
     return db
 
 
-def _has_table(db: sqlite3.Connection, name: str) -> bool:
-    return db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone() is not None
-
-
-def _has_column(db: sqlite3.Connection, table: str, column: str) -> bool:
-    return any(r[1] == column for r in db.execute(f"PRAGMA table_info({table})"))
-
-
-def _present(db: sqlite3.Connection) -> str:
-    """SQL condition for mails still in the mailbox (logs before 1.3 have no `gone` column)."""
-    return " AND gone = 0" if _has_column(db, "processed", "gone") else ""
-
-
 def _iso(dt: datetime) -> str:
     return dt.isoformat(timespec="seconds")
 
@@ -61,21 +48,18 @@ def stats(db: sqlite3.Connection | None, min_confidence: float, now: datetime | 
     month = _iso(datetime.combine(now.date().replace(day=1), datetime.min.time()))
     s.sorted_today = db.execute("SELECT COUNT(*) FROM processed WHERE processed_at >= ?", (today,)).fetchone()[0]
     s.uncertain = db.execute(
-        "SELECT COUNT(*) FROM processed WHERE moved_to IS NULL AND confidence < ? AND processed_at >= ?"
-        + _present(db),
+        "SELECT COUNT(*) FROM processed WHERE moved_to IS NULL AND confidence < ? AND processed_at >= ? AND gone = 0",
         (min_confidence, _iso(now - timedelta(days=30)))).fetchone()[0]
     s.flagged_7d = db.execute("SELECT COUNT(*) FROM processed WHERE flagged = 1 AND processed_at >= ?",
                               (_iso(now - timedelta(days=7)),)).fetchone()[0]
-    jev_only = " AND source = 'jev'" if _has_column(db, "processed", "source") else ""  # DBs before 1.2
     cost, n = db.execute(
-        f"SELECT COALESCE(SUM(cost_usd), 0), COUNT(*) FROM processed WHERE processed_at >= ?{jev_only}",
+        "SELECT COALESCE(SUM(cost_usd), 0), COUNT(*) FROM processed WHERE processed_at >= ? AND source = 'jev'",
         (month,)).fetchone()
     s.cost_month, s.jev_mails_month = cost, n
-    if _has_table(db, "runs"):
-        row = db.execute("SELECT * FROM runs WHERE kind = 'run' ORDER BY started DESC, id DESC LIMIT 1").fetchone()
-        s.last_run = dict(row) if row else None
-        s.errors_today = db.execute("SELECT COUNT(*) FROM runs WHERE exit_code != 0 AND started >= ?",
-                                    (today,)).fetchone()[0]
+    row = db.execute("SELECT * FROM runs WHERE kind = 'run' ORDER BY started DESC, id DESC LIMIT 1").fetchone()
+    s.last_run = dict(row) if row else None
+    s.errors_today = db.execute("SELECT COUNT(*) FROM runs WHERE exit_code != 0 AND started >= ?",
+                                (today,)).fetchone()[0]
     return s
 
 
@@ -100,7 +84,7 @@ def category_counts(db: sqlite3.Connection | None, days: int = 30, now: datetime
 
 
 def expired_moved(db: sqlite3.Connection | None, days: int = 7, now: datetime | None = None) -> int:
-    if db is None or not _has_table(db, "runs"):
+    if db is None:
         return 0
     since = _iso((now or datetime.now()) - timedelta(days=days))
     return db.execute("SELECT COALESCE(SUM(expired_moved), 0) FROM runs WHERE started >= ? AND live = 1",
@@ -109,7 +93,7 @@ def expired_moved(db: sqlite3.Connection | None, days: int = 7, now: datetime | 
 
 def recent_runs(db: sqlite3.Connection | None, limit: int = 8, skip_empty: bool = True) -> list[dict]:
     """Latest runs; normal runs that found nothing are left out unless they failed."""
-    if db is None or not _has_table(db, "runs"):
+    if db is None:
         return []
     where = "WHERE NOT (kind = 'run' AND classified = 0 AND exit_code = 0)" if skip_empty else ""
     return [dict(r) for r in db.execute(f"SELECT * FROM runs {where} ORDER BY started DESC, id DESC LIMIT ?",
@@ -120,7 +104,7 @@ def uncertain_mails(db: sqlite3.Connection | None, min_confidence: float, limit:
     if db is None:
         return []
     return [dict(r) for r in db.execute(
-        f"SELECT * FROM processed WHERE moved_to IS NULL AND confidence < ?{_present(db)} "
+        "SELECT * FROM processed WHERE moved_to IS NULL AND confidence < ? AND gone = 0 "
         "ORDER BY processed_at DESC LIMIT ?",
         (min_confidence, limit))]
 
@@ -164,7 +148,7 @@ def mails(db: sqlite3.Connection | None, f: MailFilter, min_confidence: float,
         args.append(min_confidence)
     if f.flagged:
         where.append("flagged = 1")
-    if not f.show_gone and _present(db):
+    if not f.show_gone:
         where.append("gone = 0")
     sql_where = ("WHERE " + " AND ".join(where)) if where else ""
     total = db.execute(f"SELECT COUNT(*) FROM processed {sql_where}", args).fetchone()[0]

@@ -7,6 +7,7 @@ import pytest
 from email_sorter.expiry import find_deadline, resolve_expiry, window_deadline
 from email_sorter.jev import Decision, build_request, parse_response
 from email_sorter.store import GONE, MOVED, Store
+from support import example_config
 
 SENT = date(2026, 9, 23)  # a Wednesday
 
@@ -103,29 +104,6 @@ def test_store_due_and_tagging(tmp_path):
     store.close()
 
 
-def test_store_migrates_old_database(tmp_path):
-    path = tmp_path / "old.db"
-    db = sqlite3.connect(path)
-    db.execute("""CREATE TABLE processed (message_key TEXT PRIMARY KEY, processed_at TEXT NOT NULL,
-                  received TEXT, sender TEXT, subject TEXT, category TEXT NOT NULL, confidence REAL NOT NULL,
-                  needs_action REAL NOT NULL, moved_to TEXT, flagged INTEGER NOT NULL, cost_usd REAL NOT NULL)""")
-    db.execute("INSERT INTO processed VALUES ('k1','t','2026-09-20T10:00+02:00','s','x','newsletter',1,0,"
-               "'INBOX/Newsletter',0,0)")
-    db.execute("INSERT INTO processed VALUES ('k2','t',NULL,'s','x','finanzen',1,0,'INBOX/Finanzen',0,0)")
-    db.commit()
-    db.close()
-
-    store = Store(path)
-    assert store.unchecked_expiry(["newsletter"]) == [("k1", "INBOX/Newsletter", "2026-09-20T10:00+02:00")]
-    store.set_expiry("k1", date(2026, 9, 21))
-    assert store.unchecked_expiry(["newsletter"]) == []
-    assert [k for k, _, _ in store.due_expired(date(2026, 9, 23))] == ["k1"]
-    # new records count as checked
-    store.record(_outcome("k3"))
-    assert store.unchecked_expiry(["newsletter"]) == []
-    store.close()
-
-
 class _Head:
     def __init__(self, uid, key):
         self.uid, self.headers = uid, {"message-id": (key,)}
@@ -167,10 +145,9 @@ class _FakeMailBox:
 
 def test_move_expired_moves_and_marks_missing(tmp_path):
     from email_sorter import sorter
-    from email_sorter.config import load_config
     from pathlib import Path
 
-    cfg = load_config(Path(__file__).resolve().parent.parent / "config.toml")
+    cfg = example_config()
     store = Store(tmp_path / "s.db")
     store.record(_outcome("<a@x>", expires=date(2026, 9, 23)))
     store.record(_outcome("<gone@x>", expires=date(2026, 9, 23)))
@@ -188,11 +165,10 @@ def test_move_expired_moves_and_marks_missing(tmp_path):
 
 def test_move_expired_splits_long_uid_lists(tmp_path, monkeypatch):
     from email_sorter import sorter
-    from email_sorter.config import load_config
     from pathlib import Path
 
     monkeypatch.setattr(sorter, "UID_CHUNK", 2)
-    cfg = load_config(Path(__file__).resolve().parent.parent / "config.toml")
+    cfg = example_config()
     store = Store(tmp_path / "s.db")
     for i in range(5):
         store.record(_outcome(f"<k{i}@x>", expires=date(2026, 9, 1)))
@@ -204,10 +180,10 @@ def test_move_expired_splits_long_uid_lists(tmp_path, monkeypatch):
 
 def test_move_expired_does_nothing_without_expired_folder(tmp_path):
     from email_sorter import sorter
-    from email_sorter.config import Config, load_config
+    from email_sorter.config import Config
     from pathlib import Path
 
-    cfg = load_config(Path(__file__).resolve().parent.parent / "config.toml")
+    cfg = example_config()
     cfg = Config(**{**cfg.__dict__, "expired_folder": None})
     store = Store(tmp_path / "s.db")
     store.record(_outcome("<a@x>", expires=date(2026, 9, 1)))
@@ -221,10 +197,10 @@ def test_move_expired_does_nothing_without_expired_folder(tmp_path):
 def test_move_expired_uses_category_folder_over_default(tmp_path):
     from dataclasses import replace
     from email_sorter import sorter
-    from email_sorter.config import Config, load_config
+    from email_sorter.config import Config
     from pathlib import Path
 
-    cfg = load_config(Path(__file__).resolve().parent.parent / "config.toml")
+    cfg = example_config()
     cats = dict(cfg.categories)
     cats["unterlagen"] = replace(cats["unterlagen"], expired_folder="INBOX/Unterlagen/Abgelaufen")
     cfg = Config(**{**cfg.__dict__, "categories": cats})

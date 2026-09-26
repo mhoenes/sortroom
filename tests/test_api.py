@@ -7,12 +7,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from email_sorter import api
-from email_sorter.config import Credentials, Mailbox, load_config
+from email_sorter.config import Credentials, Mailbox
 from email_sorter.sorter import RunResult
+from support import example_config
 
 TOKEN = "t" * 32
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
-CFG = load_config(Path(__file__).resolve().parent.parent / "config.toml")
+CFG = example_config()
 
 
 def _boxes(tmp_path, ids):

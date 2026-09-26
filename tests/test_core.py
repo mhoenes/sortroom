@@ -4,13 +4,13 @@ import pytest
 import requests
 
 from email_sorter import jev as jev_mod
-from email_sorter.config import load_config
 from email_sorter.jev import Decision, JevAuthError, JevClient, JevError, build_request, parse_response
 from email_sorter.mailtext import clean_body, html_to_text
 from email_sorter.sorter import plan, server_folder
+from support import example_config
 
 ROOT = Path(__file__).resolve().parent.parent
-CFG = load_config(ROOT / "config.toml")
+CFG = example_config()
 
 SAMPLE_RESPONSE = {
     "id": "gen-dec-1",

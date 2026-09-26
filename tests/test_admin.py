@@ -12,8 +12,7 @@ from email_sorter.jev import Decision
 from email_sorter.sorter import RunResult
 from email_sorter.store import Store
 from email_sorter.web import admin
-from email_sorter.web.editing import (EditError, can_add_mailbox, rename_category_key, rename_folder_refs,
-                                      save_sender_rules)
+from email_sorter.web.editing import (EditError, rename_category_key, rename_folder_refs, save_sender_rules)
 
 from test_editing import MAILBOX, PASSWORD, SHARED
 
@@ -109,12 +108,6 @@ def test_rename_category_key_updates_rules(setup):
         rename_category_key(_box(setup), shared, "angebote", "finanzen")
 
 
-def test_legacy_setup_cannot_add_mailbox(tmp_path):
-    (tmp_path / "config.toml").write_text(SHARED + MAILBOX.replace('name = "Privat"\n', ""), encoding="utf-8")
-    boxes = load_mailboxes(tmp_path, tmp_path / "config.toml")
-    assert "migrate-mailbox" in can_add_mailbox(boxes, tmp_path)
-
-
 # ---------------------------------------------------------------- pages
 
 @pytest.fixture
@@ -188,7 +181,6 @@ def test_add_mailbox(client, setup):
     assert r.status_code == 303 and r.headers["location"] == "/ui/m/gmail/maintenance"
     raw = tomllib.loads((setup / "mailboxes" / "gmail" / "mailbox.toml").read_text(encoding="utf-8"))
     assert raw["imap"]["user_env"] == "GMAIL_USER" and set(raw["categories"]) == {"finanzen", "werbung"}
-    assert "keep_in_inbox_from" not in raw["rules"]
     html = client.get(r.headers["location"]).text
     assert "Postfach angelegt" in html and "fehlt in .env" in html
     r = client.post("/ui/mailboxes/new", data=form)
@@ -238,3 +230,18 @@ def test_add_gmail_mailbox_uses_top_level_labels(client, setup):
     assert raw["categories"]["finanzen"]["folder"] == "Finanzen"
     privat = tomllib.loads((setup / "mailboxes" / "privat" / "mailbox.toml").read_text(encoding="utf-8"))
     assert privat["categories"]["werbung"]["folder"] == "INBOX/Werbung"  # the template is untouched
+
+
+def test_first_mailbox_from_the_example(client, setup):
+    import shutil
+
+    shutil.rmtree(setup / "mailboxes")
+    assert "Noch kein Postfach" in client.get("/ui").text
+    html = client.get("/ui/mailboxes/new").text
+    assert 'value="_example" selected' in html and "Standard-Kategorien" in html
+    form = {"csrf": _csrf(html), "name": "Privat", "id": "privat", "imap_host": "imap.strato.de", "imap_port": "993",
+            "source_folder": "INBOX", "user_env": "IMAP_USER", "password_env": "IMAP_PASSWORD", "template": "_example"}
+    assert client.post("/ui/mailboxes/new", data=form, follow_redirects=False).status_code == 303
+    box = _box(setup)
+    assert box.name == "Privat" and "werbung" in box.cfg.categories and box.cfg.schedule_enabled
+    assert box.cfg.sender_rules == ()

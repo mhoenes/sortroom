@@ -13,28 +13,6 @@ For every new mail it asks Jev two questions in one request:
 
 Cost is roughly $0.00002 per mail (input tokens only; output is free).
 
-## Renamed from email-sorter (0.5.0)
-
-The project was called *email-sorter* before 0.5.0. The Python package is still
-`email_sorter` (`python -m email_sorter …` is unchanged). What changed:
-
-| before | since 0.5.0 |
-|---|---|
-| repository `mhoenes/email-sorter` | `mhoenes/sortroom` (GitHub redirects the old URL) |
-| image `ghcr.io/mhoenes/email-sorter` | `ghcr.io/mhoenes/sortroom` |
-| `.env`: `EMAIL_SORTER_IMAGE` (required) | `SORTROOM_IMAGE` (optional, defaults to `ghcr.io/mhoenes/sortroom:latest`) |
-| Compose service and container `email-sorter` | `sortroom` |
-| n8n URL `http://email-sorter:8765` | `http://sortroom:8765` – switch your n8n workflows before updating |
-| `logs/email-sorter.log` | `logs/sortroom.log` |
-
-Updating a host: use the new `docker-compose.yml` (it defaults to
-`ghcr.io/mhoenes/sortroom:latest`; drop `EMAIL_SORTER_IMAGE` from `.env`), or in
-your own copy rename the service and container to `sortroom` and point `image` at
-`ghcr.io/mhoenes/sortroom:latest`. Switch the n8n workflows to
-`http://sortroom:8765`. Then
-`docker compose pull && docker compose up -d --remove-orphans` (removes the old
-`email-sorter` container; `data/`, `mailboxes/`, `logs/` and `reports/` are kept).
-
 ## Admin UI
 
 The container serves a browser UI next to the API: `http://<docker-host>:8765`
@@ -61,9 +39,8 @@ logins are slowed down. Behind an HTTPS reverse proxy set `UI_SECURE_COOKIES=1`.
 Edits are written to the mailbox's `mailbox.toml` (comments are kept), checked
 exactly like the sorter loads them, and the previous version is kept as
 `mailbox.toml.bak`. They apply from the next run. A file the container can't
-write (e.g. a single-file `config.toml` mounted `:ro`) is shown read-only – run
-`--migrate-mailbox` to get an editable `mailboxes/<id>/mailbox.toml`, and make
-sure `./mailboxes` is writable for uid 1000. Forms carry a CSRF token.
+write is shown read-only – `./mailboxes` and `./config` must be writable for
+uid 1000. Forms carry a CSRF token.
 
 - **Wartung** – start a run, backfill, re-sort a folder, move a category into
   its new folder, rename a folder (server, log and settings) or a category key,
@@ -76,13 +53,13 @@ sure `./mailboxes` is writable for uid 1000. Forms carry a CSRF token.
 - **Mails** detail – accept Jev's suggestion for an uncertain mail, move a mail
   to another category (logged as "von Hand"), or create a sender rule from it
 - **Postfach hinzufügen** – creates `mailboxes/<id>/mailbox.toml` with the
-  categories of an existing mailbox; credentials go into `.env` under the
-  variable names you choose (restart the container afterwards). Not available
-  while a single-file `config.toml` is used – migrate first. For Gmail (`imap.gmail.com`) the
+  categories, thresholds and schedule of an existing mailbox or the built-in
+  standard categories (`email_sorter/example_mailbox.toml`); credentials go
+  into `.env` under the variable names you choose (restart the container
+  afterwards). This is also how the first mailbox is created. For Gmail (`imap.gmail.com`) the
   copied folders lose their `INBOX/` prefix: Gmail only has top-level labels
   (`Werbung`, not `INBOX/Werbung`); Outlook still shows them under the inbox
-- **Gemeinsam** – the shared `[jev]` settings in `config.toml` (read-only when
-  it is mounted `:ro`)
+- **Gemeinsam** – the shared `[jev]` settings in `config/config.toml`
 
 Jobs are kept in memory until the container restarts; backfills started via
 `POST /backfill` show up there too. The API endpoints keep their bearer-token
@@ -93,10 +70,10 @@ auth.
 Each mailbox lives in its own folder with its own settings, log and reports:
 
 ```
-config.toml                  # shared: [jev] (gateway, model, key name, text length)
+config/config.toml           # shared: [jev] (gateway, model, key name, text length)
 mailboxes/
   privat/
-    mailbox.toml             # name, [imap], [rules], [categories.*]
+    mailbox.toml             # name, [imap], [rules], [schedule], [[sender_rules]], [categories.*]
     data/state.db, data/run.lock
     reports/
   gmail/
@@ -107,27 +84,6 @@ mailboxes/
 `mailbox.toml` starts with `name = "Privat"`; in `[imap]`, `user_env` and
 `password_env` name the `.env` variables with that mailbox's login (default
 `IMAP_USER` / `IMAP_PASSWORD`), e.g. `GMAIL_USER` / `GMAIL_PASSWORD`.
-
-Without a `mailboxes/` folder, a `config.toml` that still holds `[imap]`,
-`[rules]` and `[categories]` is the single mailbox `default`, exactly as
-before. To switch an existing setup (dry run first, then `--live`):
-
-```powershell
-.venv\Scripts\python -m email_sorter --migrate-mailbox privat --name Privat
-```
-
-In Docker (stop the service first; `./mailboxes` must be writable for uid 1000):
-
-```bash
-docker compose stop sortroom
-mkdir -p mailboxes && sudo chown -R 1000:1000 mailboxes
-docker compose run --rm sortroom python -m email_sorter --migrate-mailbox privat --name Privat --live
-docker compose up -d
-```
-
-It writes `mailboxes/privat/mailbox.toml` from those sections and moves
-`data/state.db` and the reports there. `config.toml` is not touched; its
-mailbox sections are ignored from then on and can be deleted.
 
 Normal runs and `--check` cover every mailbox; `--mailbox privat` limits to
 one. Maintenance commands (`--since`, `--resort-folder`, `--rename-*`,
@@ -141,9 +97,13 @@ take `"mailbox"`; `GET /mailboxes` lists them.
 ```powershell
 cd C:\Projekte\sortroom
 py -3.13 -m venv .venv
-.venv\Scripts\python -m pip install -r requirements.txt
-copy .env.example .env      # then fill in IMAP_USER, IMAP_PASSWORD, OPENROUTER_API_KEY
+.venv\Scripts\python -m pip install -r requirements-api.txt
+copy .env.example .env      # then fill in IMAP_USER, IMAP_PASSWORD, OPENROUTER_API_KEY, ADMIN_PASSWORD
+.venv\Scripts\python -m uvicorn email_sorter.api:app --port 8765
 ```
+
+Open `http://localhost:8765`, log in and create the first mailbox under
+"Postfach hinzufügen". The CLI below works on the same `mailboxes/`.
 
 ## Usage
 
@@ -161,8 +121,8 @@ Fresh mail waits `min_age_hours` in the inbox before it is sorted. With
 einsortieren"), mail you have already read is sorted at the next run anyway.
 
 **Recommended rollout:** run dry runs for a few days, open the CSV reports
-(they open directly in German Excel), sharpen category descriptions in
-`config.toml` where Jev got it wrong, then go live.
+(they open directly in German Excel), sharpen category descriptions on the
+Kategorien page where Jev got it wrong, then go live.
 
 Dry runs don't record anything, so each one re-classifies the same mails
 (a fraction of a cent) – that's intended, so you can compare after tweaking.
@@ -216,30 +176,18 @@ Docker host with a personal access token that has `read:packages`:
 
 ### Setup on the Docker host
 
-1. On the host you only need `docker-compose.yml`, `config.toml`, `.env`
-   and `data/state.db` – the code comes with the image. `docker-compose.yml` uses
-   `ghcr.io/mhoenes/sortroom:latest`; for a fork or a pinned version change
-   the `image` line or set `SORTROOM_IMAGE` in `.env`.
-2. **Move the state over:** copy `data/state.db` from the old machine into
-   `data/` on the host – otherwise the sorter doesn't know what it already
-   sorted and expiry dates are lost.
+1. On the host you only need `docker-compose.yml`, `.env` and
+   `config/config.toml` – the code comes with the image. `docker-compose.yml`
+   uses `ghcr.io/mhoenes/sortroom:latest`; for a fork or a pinned version
+   change the `image` line or set `SORTROOM_IMAGE` in `.env`.
+2. `mkdir -p config logs mailboxes && sudo chown -R 1000:1000 config logs mailboxes`
+   (the container runs as uid 1000), then copy `config/config.toml` of this
+   repository into `config/`.
 3. Create `.env` (see `.env.example`): IMAP, `OPENROUTER_API_KEY` and
    `ADMIN_PASSWORD`; `API_TOKEN` only if you want to use the HTTP API.
-4. `mkdir -p data logs reports mailboxes && sudo chown -R 1000:1000 data logs reports mailboxes`
-   (the container runs as uid 1000).
-5. `docker compose pull && docker compose up -d`, then check:
-   `docker compose logs -f sortroom` and
-   `docker exec sortroom python -m email_sorter --check`.
-
-### Upgrading from an n8n setup (before 0.6.0)
-
-Runs used to be started by an n8n workflow. Since 0.6.0 Sortroom starts them
-itself, every 10 minutes per mailbox by default. After updating:
-
-1. Check Einstellungen → Zeitplan for each mailbox (on, 10 minutes).
-2. Deactivate the n8n workflow. Until then nothing runs twice – a run that
-   finds the mailbox busy is skipped – but there are more runs than needed.
-3. In your own `docker-compose.yml`, the `networks:` entries for n8n can go.
+4. `docker compose pull && docker compose up -d`, open the UI and create the
+   first mailbox under "Postfach hinzufügen". Check it with Wartung →
+   "Verbindung prüfen", or `docker compose logs -f sortroom`.
 
 **Don't run two sorters on the same mailbox** (e.g. the container and a local
 copy): each installation has its own `state.db` and they would not know about
@@ -248,7 +196,7 @@ each other's work.
 ## How it decides
 
 1. Looks at mails in `INBOX` from the last `lookback_days` (default 7) that
-   aren't in `data/state.db` yet and arrived at least `min_age_hours` ago
+   aren't in the mailbox's `data/state.db` yet and arrived at least `min_age_hours` ago
    (default 24, by the server's arrival time) – newer mail stays in the
    inbox for a day and is picked up by a later run.
 2. Sends sender, recipient, subject, attachment names, whether it's a mailing
@@ -264,7 +212,9 @@ Folders are created automatically on the first live run
 
 ## Renaming categories or folders
 
-Change `config.toml`, then bring the log (and the server) in line – otherwise
+Easiest on the Wartung page ("Ordner umbenennen", "Kategorie-Schlüssel
+umbenennen"), which also updates the settings. On the command line, change
+`mailbox.toml`, then bring the log (and the server) in line – otherwise
 the sorter creates a new empty folder and old mail stays under the old name.
 Stop any running sorter first, run without `--live` to preview:
 
@@ -295,8 +245,8 @@ action = "werbung"                        # any category key
 `inbox` leaves the mail untouched; a category moves it to that category's
 folder without a Jev request (no cost, no flag, no expiry date). Rule-sorted
 mail is logged with source `rule`. Applies to normal runs, backfills and
-re-sorts; the 24-hour wait still applies. The older
-`rules.keep_in_inbox_from = [...]` list still works and counts as `inbox` rules.
+re-sorts; the 24-hour wait still applies. The rules can be edited under
+Einstellungen or created from a mail on the Mails page.
 
 ## Run log
 
@@ -342,7 +292,7 @@ Mails sorted before this feature existed can be checked once:
 ```
 
 
-## Categories (`config.toml`)
+## Standard categories (`email_sorter/example_mailbox.toml`)
 
 | Key | Folder | Notes |
 |---|---|---|
@@ -389,9 +339,11 @@ any scheduler; overlapping runs of a mailbox are skipped via its
 
 | Path | What |
 |---|---|
+| `config/config.toml` | shared settings (`[jev]`) |
+| `mailboxes/<id>/mailbox.toml` | a mailbox's settings (IMAP, rules, categories, schedule) |
+| `mailboxes/<id>/data/state.db` | SQLite log of every processed mail (category, confidence, cost) and the run log |
+| `mailboxes/<id>/reports/dry-run-*.csv` | dry-run results incl. runner-up category |
 | `logs/sortroom.log` | every run (rotating, 5 × 1 MB) |
-| `reports/dry-run-*.csv` | dry-run results incl. runner-up category |
-| `data/state.db` | SQLite log of every processed mail (category, confidence, cost) |
 
 ## Tests
 
