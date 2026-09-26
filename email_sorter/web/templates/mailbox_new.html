@@ -55,6 +55,7 @@
     <label class="f" style="max-width:360px">Übernehmen von
       <select name="template">{% for id, b in boxes.items() %}<option value="{{ id }}" {% if form.template == id %}selected{% endif %}>{{ b.name }} ({{ b.cfg.categories|length }} Kategorien)</option>{% endfor %}</select>
     </label>
+    <p class="muted hint">Bei Gmail (imap.gmail.com) werden die Zielordner als Labels auf oberster Ebene angelegt, also „Werbung“ statt „INBOX/Werbung“. Outlook zeigt sie trotzdem unter dem Posteingang an.</p>
   </section>
 
   <div class="actions"><button class="btn primary" type="submit">Postfach anlegen</button>

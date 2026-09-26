@@ -225,3 +225,16 @@ def test_set_expiry_by_hand(client, setup):
     r = client.post("/ui/m/privat/mails/action", data={"csrf": token, "key": "<m1@x>", "action": "expiry",
                                                        "expires": "kein-datum"})
     assert "gültiges Datum" in r.text
+
+
+def test_add_gmail_mailbox_uses_top_level_labels(client, setup):
+    html = client.get("/ui/mailboxes/new").text
+    form = {"csrf": _csrf(html), "name": "Gmail", "id": "gmail", "imap_host": "imap.gmail.com", "imap_port": "993",
+            "source_folder": "INBOX", "user_env": "GMAIL_USER", "password_env": "GMAIL_PASSWORD", "template": "privat"}
+    assert client.post("/ui/mailboxes/new", data=form, follow_redirects=False).status_code == 303
+    raw = tomllib.loads((setup / "mailboxes" / "gmail" / "mailbox.toml").read_text(encoding="utf-8"))
+    assert raw["categories"]["werbung"]["folder"] == "Werbung"
+    assert raw["categories"]["werbung"]["expired_folder"] == "Werbung/Alt"
+    assert raw["categories"]["finanzen"]["folder"] == "Finanzen"
+    privat = tomllib.loads((setup / "mailboxes" / "privat" / "mailbox.toml").read_text(encoding="utf-8"))
+    assert privat["categories"]["werbung"]["folder"] == "INBOX/Werbung"  # the template is untouched
