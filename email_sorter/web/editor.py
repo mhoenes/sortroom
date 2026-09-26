@@ -1,4 +1,4 @@
-"""Pages that change a mailbox's settings: categories (with a Jev trial) and mailbox settings.
+"""Pages that change a mailbox's settings: categories (with a model trial) and mailbox settings.
 
 Writes go through .editing (validated, atomic, with .bak). Every form carries a CSRF token kept in
 the session. A mailbox whose file isn't writable (e.g. a config.toml mounted read-only) is shown
@@ -17,7 +17,7 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from ..config import INBOX_ACTION, ConfigError, Mailbox, load_credentials
-from ..jev import JevAuthError
+from ..classifier import ClassifierAuthError
 from ..trial import OTHER_SAMPLE, OWN_SAMPLE, run_trial
 from . import _box, _sidebar, queries, require_login, router, templates
 from .editing import (EditError, delete_category, save_category, save_sender_rules,
@@ -133,7 +133,7 @@ async def categories_save(request: Request, box_id: str):
     return RedirectResponse(f"/ui/m/{box.id}/categories?cat={quote(key)}", status_code=303)
 
 
-# ---------------------------------------------------------------- Jev trial
+# ---------------------------------------------------------------- model trial
 
 @router.post("/ui/m/{box_id}/categories/test", dependencies=[Depends(require_login)])
 async def categories_test(request: Request, box_id: str):
@@ -168,8 +168,8 @@ async def categories_test(request: Request, box_id: str):
         try:
             rows, cost = run_trial(box.cfg, creds, box.workspace / "data" / "state.db", key, description, progress)
             job.update(status="done", rows=rows, cost=cost)
-        except JevAuthError as e:
-            job.update(status="failed", error=f"Jev lehnt den API-Schlüssel ab: {e}")
+        except ClassifierAuthError as e:
+            job.update(status="failed", error=f"Der Endpunkt lehnt den API-Schlüssel ab: {e}")
         except Exception as e:
             log.exception("[%s] category trial failed", box.id)
             job.update(status="failed", error=str(e))

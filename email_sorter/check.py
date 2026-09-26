@@ -1,4 +1,4 @@
-"""--check: verify IMAP and Jev API access without touching any mail."""
+"""--check: verify IMAP and classifier API access without touching any mail."""
 from __future__ import annotations
 
 from typing import Callable
@@ -6,7 +6,7 @@ from typing import Callable
 from imap_tools import MailBox
 
 from .config import Config, Credentials
-from .jev import JevError
+from .classifier import ClassifierError
 from .sorter import IMAP_TIMEOUT, _delimiter, server_folder
 
 SAMPLE_STATE = {
@@ -42,13 +42,13 @@ def check(cfg: Config, creds: Credentials, out: Callable[[str], None] = print) -
         ok = False
         out(f"  FAILED: {e}")
 
-    out(f"\nJev   {cfg.jev_model} via {cfg.jev_endpoint}")
+    out(f"\nModel {cfg.classifier_model} via {cfg.classifier_endpoint}")
     try:
-        jev = cfg.jev_client(creds.jev_api_key)
-        d = jev.decide(SAMPLE_STATE, cfg.descriptions)
+        classifier = cfg.classifier_client(creds.classifier_api_key)
+        d = classifier.decide(SAMPLE_STATE, cfg.descriptions)
         out(f"  OK - sample electricity bill -> {d.category} (confidence {d.confidence:.2f}, "
               f"needs_action {d.needs_action:.2f}, cost ${d.cost:.6f})")
-    except JevError as e:
+    except ClassifierError as e:
         ok = False
         out(f"  FAILED: {e}")
 

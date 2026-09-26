@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from email_sorter import api, jobs, manual, web
 from email_sorter.config import load_mailboxes
-from email_sorter.jev import Decision
+from email_sorter.classifier import Decision
 from email_sorter.sorter import RunResult
 from email_sorter.store import Store
 from email_sorter.web import admin
@@ -16,7 +16,7 @@ from email_sorter.web.editing import (EditError, rename_category_key, rename_fol
 
 from test_editing import MAILBOX, PASSWORD, SHARED
 
-ENV = {"IMAP_USER": "u", "IMAP_PASSWORD": "p", "OPENROUTER_API_KEY": "k"}
+ENV = {"IMAP_USER": "u", "IMAP_PASSWORD": "p", "CLASSIFIER_API_KEY": "k"}
 
 
 @pytest.fixture
@@ -31,7 +31,7 @@ def setup(tmp_path, monkeypatch):
     store = Store(box_dir / "data" / "state.db")
     store.record(SimpleNamespace(key="<m1@x>", received="2026-09-20T10:00+02:00", sender="Shop@Example.de",
                                  subject="Unsicher", decision=Decision("werbung", 0.4, {"werbung": 0.4}, 0.1, 0.0001),
-                                 folder=None, flag=False, expires=None, source="jev"))
+                                 folder=None, flag=False, expires=None, source="classifier"))
     store.close()
     return tmp_path
 
@@ -224,14 +224,14 @@ def test_add_mailbox(client, setup):
 
 def test_shared_settings(client, setup):
     html = client.get("/ui/settings").text
-    assert "typesafe/jev-1.13" in html
-    form = {"csrf": _csrf(html), "endpoint": "https://example.invalid/decisions", "model": "typesafe/jev-2",
-            "api_key_env": "OPENROUTER_API_KEY", "max_body_chars": "4000", "timeout_seconds": "30",
+    assert "example/model-1" in html and "CLASSIFIER_API_KEY" in html
+    form = {"csrf": _csrf(html), "endpoint": "https://example.invalid/decisions", "model": "example/model-2",
+            "max_body_chars": "4000", "timeout_seconds": "30",
             "min_interval_seconds": "0,5"}
     r = client.post("/ui/settings", data=form, follow_redirects=False)
     assert r.status_code == 303
     cfg = _box(setup).cfg
-    assert cfg.jev_model == "typesafe/jev-2" and cfg.max_body_chars == 4000 and cfg.min_interval_seconds == 0.5
+    assert cfg.classifier_model == "example/model-2" and cfg.max_body_chars == 4000 and cfg.min_interval_seconds == 0.5
     r = client.post("/ui/settings", data={**form, "endpoint": "http://unsicher"})
     assert r.status_code == 422 and "https" in r.text
 

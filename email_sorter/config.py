@@ -30,9 +30,14 @@ INBOX_ACTION = "inbox"  # sender rule action: leave the mail in the inbox, untou
 
 @dataclass(frozen=True)
 class SenderRule:
-    """Mail whose sender address contains `match` goes straight to `action`, without Jev."""
+    """Mail whose sender address contains `match` goes straight to `action`, without the classifier."""
     match: str   # lowercase
     action: str  # INBOX_ACTION or a category key
+
+
+# The API key of the classification endpoint (any service speaking the TypeSafe API,
+# https://docs.typesafe.ai/api) always comes from this .env variable.
+CLASSIFIER_KEY_ENV = "CLASSIFIER_API_KEY"
 
 
 @dataclass(frozen=True)
@@ -40,9 +45,8 @@ class Config:
     imap_host: str
     imap_port: int
     source_folder: str
-    jev_endpoint: str
-    jev_model: str
-    jev_api_key_env: str
+    classifier_endpoint: str
+    classifier_model: str
     max_body_chars: int
     timeout_seconds: float
     min_interval_seconds: float
@@ -70,18 +74,18 @@ class Config:
     def descriptions(self) -> dict[str, str]:
         return {key: cat.description for key, cat in self.categories.items()}
 
-    def jev_client(self, api_key: str):
-        from .jev import JevClient
+    def classifier_client(self, api_key: str):
+        from .classifier import ClassifierClient
 
-        return JevClient(api_key, self.jev_endpoint, self.jev_model,
-                         timeout=self.timeout_seconds, min_interval=self.min_interval_seconds)
+        return ClassifierClient(api_key, self.classifier_endpoint, self.classifier_model,
+                                timeout=self.timeout_seconds, min_interval=self.min_interval_seconds)
 
 
 @dataclass(frozen=True)
 class Credentials:
     imap_user: str
     imap_password: str
-    jev_api_key: str
+    classifier_api_key: str
 
 
 def default_label(key: str) -> str:
@@ -103,9 +107,9 @@ def _read_toml(path: Path) -> dict:
 
 
 def config_from_raw(raw: dict, where: str) -> Config:
-    """Build a Config from parsed TOML holding [jev], [imap], [rules] and [categories.*]."""
+    """Build a Config from parsed TOML holding [classifier], [imap], [rules] and [categories.*]."""
     try:
-        imap, jev, rules = raw["imap"], raw["jev"], raw["rules"]
+        imap, classifier, rules = raw["imap"], raw["classifier"], raw["rules"]
         categories = {}
         for key, c in raw["categories"].items():
             if not _KEY_RE.match(key):
@@ -126,12 +130,11 @@ def config_from_raw(raw: dict, where: str) -> Config:
             imap_host=imap["host"],
             imap_port=int(imap.get("port", 993)),
             source_folder=imap.get("source_folder", "INBOX"),
-            jev_endpoint=jev["endpoint"],
-            jev_model=jev["model"],
-            jev_api_key_env=jev.get("api_key_env", "AI_GATEWAY_API_KEY"),
-            max_body_chars=int(jev.get("max_body_chars", 3000)),
-            timeout_seconds=float(jev.get("timeout_seconds", 20)),
-            min_interval_seconds=float(jev.get("min_interval_seconds", 0.0)),
+            classifier_endpoint=classifier["endpoint"],
+            classifier_model=classifier["model"],
+            max_body_chars=int(classifier.get("max_body_chars", 3000)),
+            timeout_seconds=float(classifier.get("timeout_seconds", 20)),
+            min_interval_seconds=float(classifier.get("min_interval_seconds", 0.0)),
             min_confidence=float(rules["min_confidence"]),
             action_flag_threshold=float(rules["action_flag_threshold"]),
             expiry_threshold=float(rules.get("expiry_threshold", 0.7)),
@@ -201,12 +204,11 @@ class Mailbox:
 def load_mailboxes(base_dir: Path, config_path: Path) -> dict[str, Mailbox]:
     """All configured mailboxes, by id (empty until the first one is added).
 
-    config.toml holds what all mailboxes share ([jev]); each mailboxes/<id>/mailbox.toml holds a
-    mailbox's name, [imap], [rules], [schedule] and [categories.*].
+    config.toml holds what all mailboxes share ([classifier]); each mailboxes/<id>/mailbox.toml
+    holds a mailbox's name, [imap], [rules], [schedule] and [categories.*].
     """
     shared = _read_toml(config_path)
-    if "jev" not in shared:
-        raise ConfigError(f"{config_path}: missing [jev]")
+    check_shared(shared, config_path)
     boxes: dict[str, Mailbox] = {}
     root = base_dir / "mailboxes"
     for file in sorted(root.glob("*/mailbox.toml")) if root.is_dir() else []:
@@ -214,15 +216,27 @@ def load_mailboxes(base_dir: Path, config_path: Path) -> dict[str, Mailbox]:
         if not _MAILBOX_ID_RE.match(box_id):
             raise ConfigError(f"mailbox folder {box_id!r}: use lowercase letters, digits, _ or -")
         raw = _read_toml(file)
-        if "jev" in raw:
-            raise ConfigError(f"{file}: [jev] belongs in {config_path.name}, it is shared by all mailboxes")
-        cfg = config_from_raw({**raw, "jev": shared["jev"]}, str(file))
+        if "classifier" in raw:
+            raise ConfigError(f"{file}: [classifier] belongs in {config_path.name}, it is shared by all mailboxes")
+        cfg = config_from_raw({**raw, "classifier": shared["classifier"]}, str(file))
         boxes[box_id] = Mailbox(box_id, str(raw.get("name") or box_id), file.parent, cfg, file)
     return boxes
 
 
+def check_shared(shared: dict, config_path: Path) -> None:
+    """config.toml must have [classifier]; the old [jev] section gets a hint instead of a KeyError."""
+    if "jev" in shared:
+        raise ConfigError(f"{config_path}: [jev] is now called [classifier] - rename the section, drop its "
+                          f"api_key_env line and put the key into {CLASSIFIER_KEY_ENV} in .env")
+    if "classifier" not in shared:
+        raise ConfigError(f"{config_path}: missing [classifier]")
+    if "api_key_env" in shared["classifier"]:
+        raise ConfigError(f"{config_path}: [classifier] has no api_key_env any more - "
+                          f"the key always comes from {CLASSIFIER_KEY_ENV} in .env")
+
+
 def load_credentials(cfg: Config) -> Credentials:
-    names = (cfg.imap_user_env, cfg.imap_password_env, cfg.jev_api_key_env)
+    names = (cfg.imap_user_env, cfg.imap_password_env, CLASSIFIER_KEY_ENV)
     missing = [n for n in names if not os.environ.get(n)]
     if missing:
         raise ConfigError(f"missing in .env / environment: {', '.join(missing)}")

@@ -40,13 +40,13 @@ class MailboxStats:
     uncertain: int = 0
     flagged_7d: int = 0
     cost_month: float = 0.0
-    jev_mails_month: int = 0
+    classified_mails_month: int = 0
     last_run: dict | None = None
     errors_today: int = 0
 
     @property
     def cost_per_mail(self) -> float:
-        return self.cost_month / self.jev_mails_month if self.jev_mails_month else 0.0
+        return self.cost_month / self.classified_mails_month if self.classified_mails_month else 0.0
 
 
 def stats(db: sqlite3.Connection | None, min_confidence: float, now: datetime | None = None) -> MailboxStats:
@@ -64,9 +64,9 @@ def stats(db: sqlite3.Connection | None, min_confidence: float, now: datetime | 
     s.flagged_7d = db.execute(f"SELECT COUNT(*) FROM processed WHERE flagged = 1 AND {RECEIVED} >= julianday(?)",
                               (_received_since(now, timedelta(days=7)),)).fetchone()[0]
     cost, n = db.execute(
-        "SELECT COALESCE(SUM(cost_usd), 0), COUNT(*) FROM processed WHERE processed_at >= ? AND source = 'jev'",
+        "SELECT COALESCE(SUM(cost_usd), 0), COUNT(*) FROM processed WHERE processed_at >= ? AND source NOT IN ('rule', 'manual')",
         (month,)).fetchone()
-    s.cost_month, s.jev_mails_month = cost, n
+    s.cost_month, s.classified_mails_month = cost, n
     row = db.execute("SELECT * FROM runs WHERE kind = 'run' ORDER BY started DESC, id DESC LIMIT 1").fetchone()
     s.last_run = dict(row) if row else None
     s.errors_today = db.execute("SELECT COUNT(*) FROM runs WHERE exit_code != 0 AND started >= ?",

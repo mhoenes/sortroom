@@ -1,7 +1,7 @@
 """Web UI: server-rendered pages (Jinja2), session login with ADMIN_PASSWORD.
 
 Mounted by email_sorter.api. Pages read each mailbox's state.db read-only; nothing here talks to
-IMAP or Jev, so pages load fast and never change mail.
+IMAP or the classifier, so pages load fast and never change mail.
 """
 from __future__ import annotations
 

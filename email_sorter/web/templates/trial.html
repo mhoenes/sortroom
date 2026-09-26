@@ -5,7 +5,7 @@
 <div class="head">
   <div class="title">
     <h1>Test: {{ cat_label }}{% if job.new %} (neu){% endif %}</h1>
-    <div class="sub">Jev ordnet bereits sortierte Mails mit der neuen Beschreibung ein · nichts wird verschoben oder gespeichert</div>
+    <div class="sub">Das Modell ordnet bereits sortierte Mails mit der neuen Beschreibung ein · nichts wird verschoben oder gespeichert</div>
   </div>
   <a class="btn" href="/ui/m/{{ box.id }}/categories?{{ 'new=1' if job.new else 'cat=' ~ job.key }}">Zurück</a>
 </div>

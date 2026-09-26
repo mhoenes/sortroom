@@ -1,4 +1,4 @@
-"""Single-mail actions from the web UI: accept Jev's suggestion or put a mail into another category.
+"""Single-mail actions from the web UI: accept the model's suggestion or put a mail into another category.
 
 The mail is found by its message key in the folder the log says it is in, moved on the server and
 the log is updated (source 'manual', confidence 1.0).

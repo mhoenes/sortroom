@@ -5,7 +5,7 @@
 <div class="head">
   <div class="title">
     <h1>Kategorien · {{ box.name }}</h1>
-    <div class="sub">Jev ordnet jede Mail allein anhand dieser Beschreibungen ein · {{ box.cfg.categories|length }} Kategorien</div>
+    <div class="sub">Das Modell ordnet jede Mail allein anhand dieser Beschreibungen ein · {{ box.cfg.categories|length }} Kategorien</div>
   </div>
   {% if editable %}<a class="btn" href="/ui/m/{{ box.id }}/categories?new=1">Neue Kategorie</a>{% endif %}
 </div>
@@ -39,7 +39,7 @@
       {% if new %}<input type="hidden" name="new" value="1">{% endif %}
       <fieldset {% if not editable %}disabled{% endif %} class="stack">
         <div class="cols-2 grid">
-          <label class="f"><span class="lt">Schlüssel {{ help('Interner Name, unter dem Jev und das Protokoll die Kategorie führen. Nur Kleinbuchstaben, Ziffern und _. Lässt sich später nur über „Wartung“ umbenennen.') }}</span>
+          <label class="f"><span class="lt">Schlüssel {{ help('Interner Name, unter dem das Modell und das Protokoll die Kategorie führen. Nur Kleinbuchstaben, Ziffern und _. Lässt sich später nur über „Wartung“ umbenennen.') }}</span>
             {% if new %}<input type="text" name="key" value="{{ form.key }}" required pattern="[a-z0-9_]{1,40}" placeholder="z. B. vereine">
             {% else %}<input type="text" value="{{ form.key }}" readonly class="mono"><input type="hidden" name="key" value="{{ form.key }}">{% endif %}
           </label>
@@ -47,7 +47,7 @@
             <input type="text" name="label" value="{{ form.label }}" maxlength="60">
           </label>
         </div>
-        <label class="f"><span class="lt">Beschreibung für Jev {{ help('Jev sieht nur diesen Text, um zu entscheiden, ob eine Mail hierher gehört. Konkret beschreiben, was dazugehört und was nicht – Beispiele für Absender und Anlässe helfen.') }}</span>
+        <label class="f"><span class="lt">Beschreibung für das Modell {{ help('Das Modell sieht nur diesen Text, um zu entscheiden, ob eine Mail hierher gehört. Konkret beschreiben, was dazugehört und was nicht – Beispiele für Absender und Anlässe helfen.') }}</span>
           <textarea name="description" rows="6" required maxlength="4000">{{ form.description }}</textarea>
         </label>
         <label class="f"><span class="lt">Zielordner {{ help('IMAP-Ordner, in den sichere Mails dieser Kategorie verschoben werden, z. B. INBOX/Finanzen. Leer: Die Mail bleibt im Posteingang.') }}</span>
@@ -57,9 +57,9 @@
           <label class="check"><input type="checkbox" name="flag" {% if form.flag %}checked{% endif %}>Immer mit Stern
             {{ help('Jede Mail dieser Kategorie bekommt einen Stern (z. B. Sicherheit).') }}</label>
           <label class="check"><input type="checkbox" name="flag_on_action" {% if form.flag_on_action %}checked{% endif %}>Stern bei Handlungsbedarf
-            {{ help('Stern nur, wenn Jev meint, dass du etwas tun musst (Schwelle in den Einstellungen). Für Werbung und Benachrichtigungen meist aus.') }}</label>
+            {{ help('Stern nur, wenn das Modell meint, dass du etwas tun musst (Schwelle in den Einstellungen). Für Werbung und Benachrichtigungen meist aus.') }}</label>
           <label class="check"><input type="checkbox" name="track_expiry" id="track_expiry" {% if form.track_expiry %}checked{% endif %}>Ablaufdatum verfolgen
-            {{ help('Jev erkennt befristete Angebote. Nach dem letzten gültigen Tag wird die Mail in den Ordner für Abgelaufenes verschoben.') }}</label>
+            {{ help('Das Modell erkennt befristete Angebote. Nach dem letzten gültigen Tag wird die Mail in den Ordner für Abgelaufenes verschoben.') }}</label>
         </div>
         <label class="f expiry-folder"><span class="lt">Zielordner für Abgelaufenes {{ help('Nur für diese Kategorie. Leer: der Standard-Ordner aus den Einstellungen' ~ (' (' ~ box.cfg.expired_folder ~ ')' if box.cfg.expired_folder else '') ~ '.') }}</span>
           <input type="text" name="expired_folder" value="{{ form.expired_folder }}" placeholder="{{ box.cfg.expired_folder or 'INBOX/…/Abgelaufen' }}">
@@ -67,7 +67,7 @@
         {% if editable %}
         <div class="actions">
           <button class="btn primary" type="submit">{{ 'Anlegen' if new else 'Speichern' }}</button>
-          <button class="btn" type="submit" formaction="/ui/m/{{ box.id }}/categories/test">Mit Jev testen</button>
+          <button class="btn" type="submit" formaction="/ui/m/{{ box.id }}/categories/test">Mit dem Modell testen</button>
           {% if not new %}
             {% if form.key in rules_using %}
               <span class="muted" style="margin-left:auto;font-size:13px">Von Absender-Regeln benutzt – nicht löschbar</span>
@@ -77,7 +77,7 @@
             {% endif %}
           {% endif %}
         </div>
-        <p class="muted hint">„Mit Jev testen“ ordnet die letzten {{ sample[0] }} Mails dieser Kategorie und {{ sample[1] }} andere mit der Beschreibung aus dem Feld neu ein – ohne etwas zu verschieben oder zu speichern (ca. {{ '%.3f'|format((sample[0] + sample[1]) * 0.0001) }} $).</p>
+        <p class="muted hint">„Mit dem Modell testen“ ordnet die letzten {{ sample[0] }} Mails dieser Kategorie und {{ sample[1] }} andere mit der Beschreibung aus dem Feld neu ein – ohne etwas zu verschieben oder zu speichern (ca. {{ '%.3f'|format((sample[0] + sample[1]) * 0.0001) }} $).</p>
         {% endif %}
       </fieldset>
     </form>

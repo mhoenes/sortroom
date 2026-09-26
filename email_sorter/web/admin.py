@@ -13,7 +13,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from .. import jobs
 from ..check import check
-from ..config import EXAMPLE_MAILBOX, INBOX_ACTION, ConfigError, Mailbox, _read_toml, load_credentials
+from ..config import (CLASSIFIER_KEY_ENV, EXAMPLE_MAILBOX, INBOX_ACTION, ConfigError, Mailbox, _read_toml,
+                      load_credentials)
 from ..maintenance import relocate_category, rename_category, rename_folder
 from ..manual import ManualError, move_mail
 from ..reconcile import run_reconcile
@@ -46,7 +47,7 @@ RISKY_TASKS = {"rename_folder", "rename_category"}  # change the server and the 
 
 def _env_status(box: Mailbox) -> list[tuple[str, bool]]:
     cfg = box.cfg
-    return [(name, bool(os.environ.get(name))) for name in (cfg.imap_user_env, cfg.imap_password_env, cfg.jev_api_key_env)]
+    return [(name, bool(os.environ.get(name))) for name in (cfg.imap_user_env, cfg.imap_password_env, CLASSIFIER_KEY_ENV)]
 
 
 # ---------------------------------------------------------------- maintenance
@@ -318,15 +319,15 @@ def _shared_page(request: Request, form: dict | None = None, error: str | None =
     boxes = _boxes(request)
     path = _shared_path(request)
     if form is None:
-        jev = _read_toml(path)["jev"]
-        form = {"endpoint": jev.get("endpoint", ""), "model": jev.get("model", ""),
-                "api_key_env": jev.get("api_key_env", "AI_GATEWAY_API_KEY"),
-                "max_body_chars": jev.get("max_body_chars", 3000),
-                "timeout_seconds": form_number(float(jev.get("timeout_seconds", 20))),
-                "min_interval_seconds": form_number(float(jev.get("min_interval_seconds", 0)))}
+        classifier = _read_toml(path)["classifier"]
+        form = {"endpoint": classifier.get("endpoint", ""), "model": classifier.get("model", ""),
+                "max_body_chars": classifier.get("max_body_chars", 3000),
+                "timeout_seconds": form_number(float(classifier.get("timeout_seconds", 20))),
+                "min_interval_seconds": form_number(float(classifier.get("min_interval_seconds", 0)))}
     return _page(request, "shared.html", {
         **_sidebar(request, boxes, None, "shared"), "form": form, "error": error, "editable": shared_writable(path),
-        "config_name": path.name, "key_set": bool(os.environ.get(str(form.get("api_key_env") or "")))}, status)
+        "config_name": path.name, "key_env": CLASSIFIER_KEY_ENV,
+        "key_set": bool(os.environ.get(CLASSIFIER_KEY_ENV))}, status)
 
 
 @router.get("/ui/settings", response_class=HTMLResponse, dependencies=[Depends(require_login)])

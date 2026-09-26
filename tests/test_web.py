@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from email_sorter import __version__, api, web
 from email_sorter.web import queries
 from email_sorter.config import Mailbox
-from email_sorter.jev import Decision
+from email_sorter.classifier import Decision
 from email_sorter.sorter import RunResult
 from email_sorter.store import Store
 from support import example_config
@@ -19,7 +19,7 @@ PASSWORD = "richtig-geheim"
 
 
 def _mail(store, key, category, conf, moved_to, subject, sender="shop@example.de", flagged=False,
-          source="jev", expires=None):
+          source="classifier", expires=None):
     store.record(SimpleNamespace(
         key=key, received=(datetime.now().astimezone() - timedelta(days=2)).isoformat(timespec="minutes"),
         sender=sender, subject=subject,
@@ -152,7 +152,7 @@ def test_mails_sorted_and_filtered_by_received(tmp_path):
     for key, value in received.items():
         store.record(SimpleNamespace(key=key, received=value, sender="s", subject=key,
                                      decision=Decision("werbung", 0.5, {"werbung": 0.5}, 0.1, 0.0001),
-                                     folder=None, flag=False, expires=None, source="jev"))
+                                     folder=None, flag=False, expires=None, source="classifier"))
     store.close()
     db = queries.connect(tmp_path)
     try:

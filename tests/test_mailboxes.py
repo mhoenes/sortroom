@@ -9,10 +9,9 @@ from email_sorter.config import EXAMPLE_MAILBOX, ConfigError, load_credentials, 
 ROOT = Path(__file__).resolve().parent.parent
 
 SHARED = """
-[jev]
-endpoint = "https://openrouter.ai/api/alpha/decisions"
-model = "typesafe/jev-1.13"
-api_key_env = "OPENROUTER_API_KEY"
+[classifier]
+endpoint = "https://example.invalid/decisions"
+model = "example/model-1"
 """
 
 MAILBOX = """
@@ -45,14 +44,14 @@ def _box(root: Path, box_id: str, **kw):
     (d / "mailbox.toml").write_text(MAILBOX.format(**{**vals, **kw}), encoding="utf-8")
 
 
-def test_mailbox_folders_share_jev_and_have_own_settings(tmp_path):
+def test_mailbox_folders_share_classifier_and_have_own_settings(tmp_path):
     (tmp_path / "config.toml").write_text(SHARED, encoding="utf-8")
     _box(tmp_path, "privat", name="Privat", host="imap.strato.de")
     _box(tmp_path, "gmail", name="Gmail", host="imap.gmail.com", user_env="GMAIL_USER", pw_env="GMAIL_PASSWORD")
     boxes = load_mailboxes(tmp_path, tmp_path / "config.toml")
     assert list(boxes) == ["gmail", "privat"]
     assert boxes["gmail"].name == "Gmail" and boxes["gmail"].cfg.imap_host == "imap.gmail.com"
-    assert boxes["privat"].cfg.jev_model == boxes["gmail"].cfg.jev_model == "typesafe/jev-1.13"
+    assert boxes["privat"].cfg.classifier_model == boxes["gmail"].cfg.classifier_model == "example/model-1"
     assert boxes["gmail"].workspace == tmp_path / "mailboxes" / "gmail"
     assert boxes["gmail"].lock_path != boxes["privat"].lock_path
 
@@ -70,12 +69,12 @@ def test_each_mailbox_reads_its_own_login(tmp_path, monkeypatch):
     _box(tmp_path, "gmail", user_env="GMAIL_USER", pw_env="GMAIL_PASSWORD")
     monkeypatch.setenv("GMAIL_USER", "me@gmail.com")
     monkeypatch.setenv("GMAIL_PASSWORD", "app-pw")
-    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    monkeypatch.setenv("CLASSIFIER_API_KEY", "k")
     creds = load_credentials(load_mailboxes(tmp_path, tmp_path / "config.toml")["gmail"].cfg)
     assert (creds.imap_user, creds.imap_password) == ("me@gmail.com", "app-pw")
 
 
-def test_jev_in_a_mailbox_file_is_rejected(tmp_path):
+def test_classifier_in_a_mailbox_file_is_rejected(tmp_path):
     (tmp_path / "config.toml").write_text(SHARED, encoding="utf-8")
     _box(tmp_path, "privat")
     f = tmp_path / "mailboxes" / "privat" / "mailbox.toml"
@@ -96,11 +95,20 @@ def test_no_mailbox_yet(tmp_path):
     assert load_mailboxes(tmp_path, tmp_path / "config.toml") == {}
 
 
+def test_old_config_section_gets_a_clear_message(tmp_path):
+    (tmp_path / "config.toml").write_text(SHARED.replace("[classifier]", "[jev]"), encoding="utf-8")
+    with pytest.raises(ConfigError, match=r"\[jev\] is now called \[classifier\].*CLASSIFIER_API_KEY"):
+        load_mailboxes(tmp_path, tmp_path / "config.toml")
+    (tmp_path / "config.toml").write_text(SHARED + 'api_key_env = "OPENROUTER_API_KEY"\n', encoding="utf-8")
+    with pytest.raises(ConfigError, match="no api_key_env any more"):
+        load_mailboxes(tmp_path, tmp_path / "config.toml")
+
+
 def test_shipped_files():
     shared = tomllib.loads((ROOT / "config" / "config.toml").read_text(encoding="utf-8"))
-    assert list(shared) == ["jev"]
+    assert list(shared) == ["classifier"] and "api_key_env" not in shared["classifier"]
     example = tomllib.loads(EXAMPLE_MAILBOX.read_text(encoding="utf-8"))
-    assert {"imap", "rules", "schedule", "categories"} <= set(example) and "jev" not in example
+    assert {"imap", "rules", "schedule", "categories"} <= set(example) and "classifier" not in example
     assert "werbung" in example["categories"]
 
 

@@ -1,3 +1,3 @@
-"""Sort an IMAP mailbox into folders using the Jev decision model via OpenRouter or Vercel AI Gateway."""
+"""Sort an IMAP mailbox into folders using a classification model behind the TypeSafe API."""
 
 __version__ = "0.7.10"

@@ -11,17 +11,16 @@ from fastapi.testclient import TestClient
 
 from email_sorter import api, trial, web
 from email_sorter.config import load_mailboxes
-from email_sorter.jev import Decision
+from email_sorter.classifier import Decision
 from email_sorter.store import Store
 from email_sorter.web import editor
 from email_sorter.web.editing import EditError, delete_category, save_category, save_sender_rules, save_settings
 from support import example_config
 
 PASSWORD = "richtig-geheim"
-SHARED = """[jev]
+SHARED = """[classifier]
 endpoint = "https://example.invalid/decisions"
-model = "typesafe/jev-1.13"
-api_key_env = "OPENROUTER_API_KEY"
+model = "example/model-1"
 """
 MAILBOX = """# Privates Postfach
 name = "Privat"
@@ -181,7 +180,7 @@ def test_trial_descriptions_and_sample(tmp_path):
     for i, cat in enumerate(["werbung", "werbung", "finanzen", "werbung"]):
         store.record(SimpleNamespace(key=f"<{i}@x>", received=None, sender="a@b", subject=f"s{i}",
                                      decision=Decision(cat, 0.9, {cat: 0.9}, 0.1, 0.0001),
-                                     folder="INBOX/X", flag=False, expires=None, source="jev"))
+                                     folder="INBOX/X", flag=False, expires=None, source="classifier"))
     store.close()
     rows = trial.sample(tmp_path / "state.db", "werbung", own=2, other=5)
     assert [r[5] for r in rows] == ["werbung", "werbung", "finanzen"]
@@ -208,7 +207,7 @@ def _csrf(html):
 
 def test_categories_page_and_save(client, setup):
     html = client.get("/ui/m/privat/categories").text
-    assert "Kategorien · Privat" in html and "Rechnungen und Kontoauszüge" in html and "Mit Jev testen" in html
+    assert "Kategorien · Privat" in html and "Rechnungen und Kontoauszüge" in html and "Mit dem Modell testen" in html
     r = client.post("/ui/m/privat/categories", data={"csrf": _csrf(html), "key": "finanzen", "description": "Geld",
                                                      "folder": "INBOX/Geld"}, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/ui/m/privat/categories?cat=finanzen"
@@ -256,7 +255,7 @@ def test_read_only_mailbox_page(client, setup):
 def test_trial_job_page(client, monkeypatch):
     monkeypatch.setenv("IMAP_USER", "u")
     monkeypatch.setenv("IMAP_PASSWORD", "p")
-    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    monkeypatch.setenv("CLASSIFIER_API_KEY", "k")
     rows = [trial.TrialRow(None, "a@b", "Rabatt", "werbung", "werbung", 0.9),
             trial.TrialRow(None, "c@d", "Rechnung", "finanzen", "werbung", 0.6),
             trial.TrialRow(None, "e@f", "Weg", "werbung", error="nicht mehr im Ordner")]

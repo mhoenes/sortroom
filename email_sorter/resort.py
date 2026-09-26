@@ -1,6 +1,6 @@
 """Re-sort one folder after categories changed:  python -m email_sorter --resort-folder INBOX/Reisen [--live]
 
-Every mail in the folder is classified again. A mail is moved only when Jev puts it
+Every mail in the folder is classified again. A mail is moved only when the model puts it
 confidently into a category with a *different* folder; uncertain mails and mails whose
 category has no folder (they would belong in the inbox) stay where they are.
 Flags are not touched. The log gets the new category, folder and expiry date.
@@ -16,7 +16,7 @@ from pathlib import Path
 from imap_tools import AND, MailBox
 
 from .config import Config, Credentials
-from .jev import JevAuthError, JevClient, JevError
+from .classifier import ClassifierAuthError, ClassifierClient, ClassifierError
 from .mailtext import build_state, message_key
 from datetime import datetime
 
@@ -29,7 +29,7 @@ from .store import Store
 log = logging.getLogger(__name__)
 
 
-def resort_outcomes(mb: MailBox, cfg: Config, jev: JevClient, folder: str, limit: int | None,
+def resort_outcomes(mb: MailBox, cfg: Config, classifier: ClassifierClient, folder: str, limit: int | None,
                     on_outcome=None, min_age_hours: float = 0) -> tuple[list[Outcome], list[str], list[Outcome]]:
     """Classify the mails of the selected `folder` (config notation).
 
@@ -57,7 +57,7 @@ def resort_outcomes(mb: MailBox, cfg: Config, jev: JevClient, folder: str, limit
                 kept += 1
                 continue
             key = message_key(msg)
-            if rule:  # sender rule: its category's folder, no Jev request
+            if rule:  # sender rule: its category's folder, no model request
                 target = cfg.categories[rule.action].folder
                 outcome = rule_outcome(cfg, rule, msg.uid, key, msg,
                                        where=target if target and target != folder else folder)
@@ -68,10 +68,10 @@ def resort_outcomes(mb: MailBox, cfg: Config, jev: JevClient, folder: str, limit
                     on_outcome(outcome)
                 continue
             try:
-                decision = jev.decide(build_state(msg, cfg.max_body_chars), cfg.descriptions)
-            except JevAuthError:
+                decision = classifier.decide(build_state(msg, cfg.max_body_chars), cfg.descriptions)
+            except ClassifierAuthError:
                 raise
-            except JevError as e:
+            except ClassifierError as e:
                 failed.append(key)
                 log.warning("could not classify %r: %s", msg.subject, e)
                 continue
@@ -105,7 +105,7 @@ def resort_outcomes(mb: MailBox, cfg: Config, jev: JevClient, folder: str, limit
 def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, live: bool,
                limit: int | None) -> RunResult:
     store = Store(base_dir / "data" / "state.db")
-    jev = cfg.jev_client(creds.jev_api_key)
+    classifier = cfg.classifier_client(creds.classifier_api_key)
     report = None if live else ReportWriter(base_dir / "reports")
     started = datetime.now()
     try:
@@ -125,10 +125,10 @@ def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, liv
             mb.folder.set(srv)
             try:
                 min_age = cfg.min_age_hours if folder == cfg.source_folder.strip("/") else 0
-                outcomes, failed, moving = resort_outcomes(mb, cfg, jev, folder, limit,
+                outcomes, failed, moving = resort_outcomes(mb, cfg, classifier, folder, limit,
                                                            on_outcome=report.write if report else None,
                                                            min_age_hours=min_age)
-            except JevAuthError as e:
+            except ClassifierAuthError as e:
                 return _finish(store, "resort", folder, started, _auth_failed(cfg, e))
 
             move_failures: set[str] = set()

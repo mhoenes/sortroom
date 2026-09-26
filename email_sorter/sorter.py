@@ -1,4 +1,4 @@
-"""One sorting run: find new mails, ask Jev, then move/flag (live) or report (dry run)."""
+"""One sorting run: find new mails, ask the classifier, then move/flag (live) or report (dry run)."""
 from __future__ import annotations
 
 import csv
@@ -12,9 +12,9 @@ from typing import Callable, Iterable
 
 from imap_tools import AND, MailBox, MailMessage, MailMessageFlags
 
-from .config import INBOX_ACTION, Config, Credentials, SenderRule
+from .config import CLASSIFIER_KEY_ENV, INBOX_ACTION, Config, Credentials, SenderRule
 from .expiry import resolve_expiry
-from .jev import Decision, JevAuthError, JevClient, JevError
+from .classifier import Decision, ClassifierAuthError, ClassifierClient, ClassifierError
 from .mailtext import build_state, full_text, message_key, sent_date
 from .store import GONE, MOVED, Store
 
@@ -43,12 +43,12 @@ class Outcome:
     flag: bool
     note: str = ""
     expires: date | None = None  # last valid day of a time-limited offer
-    source: str = "jev"          # "jev" or "rule" (sender rule, no Jev request)
+    source: str = "classifier"   # "classifier" or "rule" (sender rule, no model request)
 
 
 def rule_outcome(cfg: Config, rule: SenderRule, uid: str, key: str, msg: MailMessage,
                  where: str | None = None) -> Outcome:
-    """A mail placed by a sender rule: its category's folder (or `where`), no flag, no Jev cost."""
+    """A mail placed by a sender rule: its category's folder (or `where`), no flag, no model cost."""
     decision = Decision(rule.action, 1.0, {rule.action: 1.0}, 0.0, 0.0)
     folder = cfg.categories[rule.action].folder if where is None else where
     return Outcome(key=key, uid=uid,
@@ -195,7 +195,7 @@ def move_uids(mb: MailBox, uids: list[str], folder: str) -> None:
 def classify_new(
     mb: MailBox,
     cfg: Config,
-    jev: JevClient,
+    classifier: ClassifierClient,
     store: Store,
     limit: int,
     since: date,
@@ -229,7 +229,7 @@ def classify_new(
     if cfg.min_age_hours > 0 and pending:
         pending = {u: pending[u] for u in ready_to_sort(mb, list(pending), cfg, cfg.min_age_hours)}
 
-    # sender rules need no Jev request, so they don't count against the limit
+    # sender rules need no model request, so they don't count against the limit
     ruled = sorted((u for u in pending if u in by_rule), key=int, reverse=True)
     uids = sorted((u for u in pending if u not in by_rule), key=int, reverse=True)[:limit]  # newest first
     span = f"{since} to {before - timedelta(days=1)}" if before else f"since {since}"
@@ -261,10 +261,10 @@ def classify_new(
         done.add(pending[uid])
         msg_uid = uid
         try:
-            decision = jev.decide(build_state(msg, cfg.max_body_chars), descriptions)
-        except JevAuthError:
+            decision = classifier.decide(build_state(msg, cfg.max_body_chars), descriptions)
+        except ClassifierAuthError:
             raise
-        except JevError as e:
+        except ClassifierError as e:
             failed.append(pending[msg_uid])
             log.warning("could not classify %r: %s", msg.subject, e)
             continue
@@ -440,7 +440,7 @@ def move_expired(mb: MailBox, cfg: Config, store: Store, today: date | None = No
     return moved
 
 
-def recheck_expiry(mb: MailBox, cfg: Config, jev: JevClient, store: Store) -> int:
+def recheck_expiry(mb: MailBox, cfg: Config, classifier: ClassifierClient, store: Store) -> int:
     """One-off: work out expiry dates for mails sorted before expiry tracking existed."""
     tracked = [k for k, c in cfg.categories.items() if c.track_expiry]
     todo = store.unchecked_expiry(tracked)
@@ -461,10 +461,10 @@ def recheck_expiry(mb: MailBox, cfg: Config, jev: JevClient, store: Store) -> in
                 if msg.uid not in key_by_uid:
                     continue  # unsolicited FETCH from the server
                 try:
-                    decision = jev.decide(build_state(msg, cfg.max_body_chars), cfg.descriptions)
-                except JevAuthError:
+                    decision = classifier.decide(build_state(msg, cfg.max_body_chars), cfg.descriptions)
+                except ClassifierAuthError:
                     raise
-                except JevError as e:
+                except ClassifierError as e:
                     log.warning("could not check %r: %s", msg.subject, e)
                     continue  # stays unchecked, retried next time
                 # the category was decided earlier; only the expiry answers matter here
@@ -538,14 +538,14 @@ def _finish(store: Store, kind: str, detail: str | None, started: datetime, resu
 
 
 def _auth_failed(cfg: Config, e: Exception) -> RunResult:
-    log.error("%s - check %s in .env and your gateway credits", e, cfg.jev_api_key_env)
+    log.error("%s - check %s in .env and your credit with the provider", e, CLASSIFIER_KEY_ENV)
     return RunResult(exit_code=2, error=str(e))
 
 
 def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int | None) -> RunResult:
     """Normal run: classify new mail from the last lookback_days."""
     store = Store(base_dir / "data" / "state.db")
-    jev = cfg.jev_client(creds.jev_api_key)
+    classifier = cfg.classifier_client(creds.classifier_api_key)
     limit = min(limit or cfg.max_per_run, cfg.max_per_run)
     report = None if live else ReportWriter(base_dir / "reports")
     started = datetime.now()
@@ -555,9 +555,9 @@ def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int 
         ) as mb:
             since = date.today() - timedelta(days=cfg.lookback_days)
             try:
-                outcomes, failed, _ = classify_new(mb, cfg, jev, store, limit, since,
+                outcomes, failed, _ = classify_new(mb, cfg, classifier, store, limit, since,
                                                    on_outcome=report.write if report else None)
-            except JevAuthError as e:
+            except ClassifierAuthError as e:
                 return _finish(store, "run", None, started, _auth_failed(cfg, e))
             failures = tagged = 0
             if live:
@@ -598,7 +598,7 @@ def run_backfill(cfg: Config, creds: Credentials, base_dir: Path, live: bool,
     resumes where it stopped.
     """
     store = Store(base_dir / "data" / "state.db")
-    jev = cfg.jev_client(creds.jev_api_key)
+    classifier = cfg.classifier_client(creds.classifier_api_key)
     report = None if live else ReportWriter(base_dir / "reports")
     remaining = limit
     all_outcomes: list[Outcome] = []
@@ -615,10 +615,10 @@ def run_backfill(cfg: Config, creds: Credentials, base_dir: Path, live: bool,
                     batch = min(cfg.max_per_run, remaining) if remaining is not None else cfg.max_per_run
                     try:
                         outcomes, failed, attempted = classify_new(
-                            mb, cfg, jev, store, batch, start, before=end, exclude=seen,
+                            mb, cfg, classifier, store, batch, start, before=end, exclude=seen,
                             on_outcome=report.write if report else None,
                         )
-                    except JevAuthError as e:
+                    except ClassifierAuthError as e:
                         return _finish(store, "backfill", detail, started, _auth_failed(cfg, e))
                     if not attempted:
                         break  # month done
@@ -655,15 +655,15 @@ def run_backfill(cfg: Config, creds: Credentials, base_dir: Path, live: bool,
 def run_recheck_expiry(cfg: Config, creds: Credentials, base_dir: Path, live: bool) -> RunResult:
     """--recheck-expiry: find expiry dates for already sorted mail, then move expired ones (live only)."""
     store = Store(base_dir / "data" / "state.db")
-    jev = cfg.jev_client(creds.jev_api_key)
+    classifier = cfg.classifier_client(creds.classifier_api_key)
     started = datetime.now()
     try:
         with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(
             creds.imap_user, creds.imap_password, initial_folder=cfg.source_folder
         ) as mb:
             try:
-                found = recheck_expiry(mb, cfg, jev, store)
-            except JevAuthError as e:
+                found = recheck_expiry(mb, cfg, classifier, store)
+            except ClassifierAuthError as e:
                 return _finish(store, "recheck", None, started, _auth_failed(cfg, e))
             tagged = 0
             if live:
