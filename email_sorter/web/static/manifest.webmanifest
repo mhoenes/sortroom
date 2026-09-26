@@ -1,6 +1,6 @@
 {
-  "name": "E-Mail-Sorter",
-  "short_name": "Sorter",
+  "name": "Sortroom",
+  "short_name": "Sortroom",
   "start_url": "/ui",
   "display": "standalone",
   "background_color": "#F4F3EF",

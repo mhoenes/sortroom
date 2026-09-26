@@ -1,5 +1,5 @@
 {
-  "name": "E-Mail-Sorter – alle 10 Minuten",
+  "name": "Sortroom – alle 10 Minuten",
   "nodes": [
     {
       "parameters": {
@@ -21,7 +21,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://email-sorter:8765/run",
+        "url": "http://sortroom:8765/run",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -85,7 +85,7 @@
             {
               "id": "5b0e8f0a-1c2d-4e3f-9a10-0000000000a1",
               "name": "betreff",
-              "value": "=E-Mail-Sorter: Lauf fehlgeschlagen (HTTP {{ $json.statusCode }})",
+              "value": "=Sortroom: Lauf fehlgeschlagen (HTTP {{ $json.statusCode }})",
               "type": "string"
             },
             {

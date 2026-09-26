@@ -1,4 +1,4 @@
-# email-sorter
+# Sortroom
 
 Sorts a Strato IMAP inbox into folders using **Jev** (TypeSafe's "System One"
 decision model) through **OpenRouter** (or Vercel AI Gateway). Jev doesn't generate text – it picks one
@@ -12,6 +12,25 @@ For every new mail it asks Jev two questions in one request:
 | Does it need action from me? | `noul` (yes/no probability) | flagging the mail |
 
 Cost is roughly $0.00002 per mail (input tokens only; output is free).
+
+## Renamed from email-sorter (0.5.0)
+
+The project was called *email-sorter* before 0.5.0. The Python package is still
+`email_sorter` (`python -m email_sorter …` is unchanged). What changed:
+
+| before | since 0.5.0 |
+|---|---|
+| repository `mhoenes/email-sorter` | `mhoenes/sortroom` (GitHub redirects the old URL) |
+| image `ghcr.io/mhoenes/email-sorter` | `ghcr.io/mhoenes/sortroom` |
+| `.env`: `EMAIL_SORTER_IMAGE` | `SORTROOM_IMAGE` |
+| Compose service and container `email-sorter` | `sortroom` |
+| n8n URL `http://email-sorter:8765` | `http://sortroom:8765` (the old name keeps working as a network alias for now) |
+| `logs/email-sorter.log` | `logs/sortroom.log` |
+
+Updating a host: copy the new `docker-compose.yml`, set
+`SORTROOM_IMAGE=ghcr.io/mhoenes/sortroom:latest` in `.env`, then
+`docker compose pull && docker compose up -d --remove-orphans` (removes the old
+`email-sorter` container; `data/`, `mailboxes/`, `logs/` and `reports/` are kept).
 
 ## Admin UI
 
@@ -97,9 +116,9 @@ before. To switch an existing setup (dry run first, then `--live`):
 In Docker (stop the service first; `./mailboxes` must be writable for uid 1000):
 
 ```bash
-docker compose stop email-sorter
+docker compose stop sortroom
 mkdir -p mailboxes && sudo chown -R 1000:1000 mailboxes
-docker compose run --rm email-sorter python -m email_sorter --migrate-mailbox privat --name Privat --live
+docker compose run --rm sortroom python -m email_sorter --migrate-mailbox privat --name Privat --live
 docker compose up -d
 ```
 
@@ -117,7 +136,7 @@ take `"mailbox"`; `GET /mailboxes` lists them.
 ## Setup
 
 ```powershell
-cd C:\Projekte\email-sorter
+cd C:\Projekte\sortroom
 py -3.13 -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 copy .env.example .env      # then fill in IMAP_USER, IMAP_PASSWORD, OPENROUTER_API_KEY
@@ -148,8 +167,8 @@ Dry runs don't record anything, so each one re-classifies the same mails
 ## Sorting older mail (manual backfill)
 
 Normal and scheduled runs only look at the last `lookback_days`. Older mail is
-sorted only when you start it yourself – the scheduled task never passes
-`--since`:
+sorted only when you start it yourself (CLI, Wartung page or `POST /backfill`) –
+the scheduled n8n run never does:
 
 ```powershell
 .venv\Scripts\python -m email_sorter --since 2026-01-01 --limit 100   # dry run, report only
@@ -166,7 +185,7 @@ to `Werbung/Abgelaufen`.
 
 The sorter can run as its own container with a small HTTP API that n8n calls.
 The container publishes no port; only containers on the n8n Docker network
-reach it at `http://email-sorter:8765`.
+reach it at `http://sortroom:8765`.
 
 | Endpoint | What |
 |---|---|
@@ -184,9 +203,9 @@ Runs share one lock: while a backfill runs, `/run` answers 409.
 GitHub Actions (`.github/workflows/docker.yml`) runs the tests on every push
 and publishes the image to GitHub Container Registry for amd64 and arm64:
 
-- `ghcr.io/<owner>/email-sorter:latest` – latest `main`
-- `ghcr.io/<owner>/email-sorter:1.2.3` / `:1.2` – version tags `v1.2.3`
-- `ghcr.io/<owner>/email-sorter:sha-abc1234` – every published commit
+- `ghcr.io/<owner>/sortroom:latest` – latest `main`
+- `ghcr.io/<owner>/sortroom:0.5.0` / `:0.5` – version tags `v0.5.0`
+- `ghcr.io/<owner>/sortroom:sha-abc1234` – every published commit
 
 If the repository is private, the package is private too; log in once on the
 Docker host with a personal access token that has `read:packages`:
@@ -196,7 +215,7 @@ Docker host with a personal access token that has `read:packages`:
 
 1. On the host you only need `docker-compose.yml`, `config.toml`, `.env`
    and `data/state.db` – the code comes with the image. Set
-   `EMAIL_SORTER_IMAGE=ghcr.io/<owner>/email-sorter:latest` in `.env`.
+   `SORTROOM_IMAGE=ghcr.io/<owner>/sortroom:latest` in `.env`.
 2. **Move the state over:** copy `data/state.db` from the old machine into
    `data/` on the host – otherwise the sorter doesn't know what it already
    sorted and expiry dates are lost.
@@ -206,27 +225,26 @@ Docker host with a personal access token that has `read:packages`:
 4. `mkdir -p data logs reports && sudo chown -R 1000:1000 data logs reports`
    (the container runs as uid 1000).
 5. `docker compose pull && docker compose up -d`, then check:
-   `docker compose logs -f email-sorter` and
-   `docker exec email-sorter python -m email_sorter --check`.
+   `docker compose logs -f sortroom` and
+   `docker exec sortroom python -m email_sorter --check`.
 
 ### n8n
 
 Import the workflows from `n8n/` (Workflows → Import from File):
 
-- **`email-sorter-laufend.json`** – every 10 minutes `POST /run`; a failed run
+- **`sortroom-laufend.json`** – every 10 minutes `POST /run`; a failed run
   goes to "Fehlermeldung bauen", where you attach your notification node
   (e-mail, Telegram, ntfy …).
-- **`email-sorter-backfill.json`** – manual only: set `since`/`live`/`limit`
+- **`sortroom-backfill.json`** – manual only: set `since`/`live`/`limit`
   in "Parameter", start it, it polls the job every minute until done.
 
 In both, create one credential of type **Header Auth**: name
 `Authorization`, value `Bearer <API_TOKEN>`, and select it in the HTTP nodes.
 Then activate the 10-minute workflow.
 
-**Don't run two sorters on the same mailbox.** Once the container is live,
-remove the Windows scheduled task (`uninstall-task.ps1`) if you installed it –
-each installation has its own `state.db` and they would not know about each
-other's work.
+**Don't run two sorters on the same mailbox** (e.g. the container and a local
+copy): each installation has its own `state.db` and they would not know about
+each other's work.
 
 ## How it decides
 
@@ -258,7 +276,7 @@ Stop any running sorter first, run without `--live` to preview:
 
 `--rename-folder` renames the folder on the IMAP server including subfolders
 and mail, moves the subscriptions and updates the log. In Docker:
-`docker compose run --rm email-sorter python -m email_sorter --rename-folder …`.
+`docker compose run --rm sortroom python -m email_sorter --rename-folder …`.
 
 ## Sender rules
 
@@ -302,7 +320,7 @@ are moved; uncertain mails and mails of inbox categories (e.g. sicherheit)
 stay. Flags are not changed. `--limit N` re-sorts only the newest N mails.
 The expired-offers folder is refused. Re-sorting `INBOX` leaves mail
 younger than `min_age_hours` alone, like normal runs. In Docker:
-`docker compose run --rm email-sorter python -m email_sorter --resort-folder INBOX/Reisen --live`.
+`docker compose run --rm sortroom python -m email_sorter --resort-folder INBOX/Reisen --live`.
 
 ## Expired offers
 
@@ -347,21 +365,16 @@ reads, so write it like you'd explain the folder to a person.
 
 ## Running automatically
 
-After the dry-run phase, register a Windows scheduled task (every 10 minutes
-while you're logged in, live mode):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install-task.ps1 -IntervalMinutes 10
-powershell -ExecutionPolicy Bypass -File .\uninstall-task.ps1   # to remove it
-```
-
-Overlapping runs are skipped via `data/run.lock`.
+In Docker, n8n starts the runs (see *Running in Docker next to n8n*). Any
+other scheduler works too: call `POST /run`, or run
+`python -m email_sorter --live` periodically. Overlapping runs of a mailbox
+are skipped via its `data/run.lock`.
 
 ## Files
 
 | Path | What |
 |---|---|
-| `logs/email-sorter.log` | every run (rotating, 5 × 1 MB) |
+| `logs/sortroom.log` | every run (rotating, 5 × 1 MB) |
 | `reports/dry-run-*.csv` | dry-run results incl. runner-up category |
 | `data/state.db` | SQLite log of every processed mail (category, confidence, cost) |
 

@@ -60,7 +60,7 @@ async def _lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="email-sorter", version=__version__, lifespan=_lifespan)
+app = FastAPI(title="Sortroom", version=__version__, lifespan=_lifespan)
 
 
 def _require_token(authorization: str = Header(default="")) -> None:
