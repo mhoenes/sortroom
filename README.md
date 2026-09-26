@@ -171,7 +171,7 @@ Dry runs don't record anything, so each one re-classifies the same mails
 
 Normal and scheduled runs only look at the last `lookback_days`. Older mail is
 sorted only when you start it yourself (CLI, Wartung page or `POST /backfill`) –
-the scheduled n8n run never does:
+the built-in schedule never does:
 
 ```powershell
 .venv\Scripts\python -m email_sorter --since 2026-01-01 --limit 100   # dry run, report only
@@ -184,11 +184,14 @@ again later – it continues where it left off. While it runs, scheduled runs
 are skipped (shared lock). Old offers whose deadline has passed go straight
 to `Werbung/Abgelaufen`.
 
-## Running in Docker next to n8n
+## Running in Docker
 
-The sorter can run as its own container with a small HTTP API that n8n calls.
-The container publishes no port; only containers on the n8n Docker network
-reach it at `http://sortroom:8765`.
+The container serves the admin UI on port 8765 and runs every mailbox on its
+own schedule (see *Running automatically*); nothing else is needed.
+
+It also has a small HTTP API to trigger runs from outside. All endpoints except
+`/health` need `Authorization: Bearer <API_TOKEN>`; runs share the mailbox lock,
+so while one runs, `/run` answers 409.
 
 | Endpoint | What |
 |---|---|
@@ -197,9 +200,6 @@ reach it at `http://sortroom:8765`.
 | `GET /jobs/{id}` | status and summary of a backfill job |
 | `POST /recheck-expiry` `{"live": true}` | find expiry dates of already sorted offers |
 | `GET /health` | liveness, no auth |
-
-All endpoints except `/health` need `Authorization: Bearer <API_TOKEN>`.
-Runs share one lock: while a backfill runs, `/run` answers 409.
 
 ### Docker image
 
@@ -223,28 +223,23 @@ Docker host with a personal access token that has `read:packages`:
 2. **Move the state over:** copy `data/state.db` from the old machine into
    `data/` on the host – otherwise the sorter doesn't know what it already
    sorted and expiry dates are lost.
-3. Create `.env` (see `.env.example`): IMAP, `OPENROUTER_API_KEY`, a new
-   `API_TOKEN` and `N8N_NETWORK` (the Docker network of your n8n container:
-   `docker inspect <n8n> --format '{{json .NetworkSettings.Networks}}'`).
-4. `mkdir -p data logs reports && sudo chown -R 1000:1000 data logs reports`
+3. Create `.env` (see `.env.example`): IMAP, `OPENROUTER_API_KEY` and
+   `ADMIN_PASSWORD`; `API_TOKEN` only if you want to use the HTTP API.
+4. `mkdir -p data logs reports mailboxes && sudo chown -R 1000:1000 data logs reports mailboxes`
    (the container runs as uid 1000).
 5. `docker compose pull && docker compose up -d`, then check:
    `docker compose logs -f sortroom` and
    `docker exec sortroom python -m email_sorter --check`.
 
-### n8n
+### Upgrading from an n8n setup (before 0.6.0)
 
-Import the workflows from `n8n/` (Workflows → Import from File):
+Runs used to be started by an n8n workflow. Since 0.6.0 Sortroom starts them
+itself, every 10 minutes per mailbox by default. After updating:
 
-- **`sortroom-laufend.json`** – every 10 minutes `POST /run`; a failed run
-  goes to "Fehlermeldung bauen", where you attach your notification node
-  (e-mail, Telegram, ntfy …).
-- **`sortroom-backfill.json`** – manual only: set `since`/`live`/`limit`
-  in "Parameter", start it, it polls the job every minute until done.
-
-In both, create one credential of type **Header Auth**: name
-`Authorization`, value `Bearer <API_TOKEN>`, and select it in the HTTP nodes.
-Then activate the 10-minute workflow.
+1. Check Einstellungen → Zeitplan for each mailbox (on, 10 minutes).
+2. Deactivate the n8n workflow. Until then nothing runs twice – a run that
+   finds the mailbox busy is skipped – but there are more runs than needed.
+3. In your own `docker-compose.yml`, the `networks:` entries for n8n can go.
 
 **Don't run two sorters on the same mailbox** (e.g. the container and a local
 copy): each installation has its own `state.db` and they would not know about
@@ -369,10 +364,26 @@ reads, so write it like you'd explain the folder to a person.
 
 ## Running automatically
 
-In Docker, n8n starts the runs (see *Running in Docker next to n8n*). Any
-other scheduler works too: call `POST /run`, or run
-`python -m email_sorter --live` periodically. Overlapping runs of a mailbox
-are skipped via its `data/run.lock`.
+Sortroom starts the runs itself: every mailbox has a schedule under
+Einstellungen → Zeitplan (`[schedule]` in `mailbox.toml`, on by default,
+every 10 minutes):
+
+```toml
+[schedule]
+enabled = true
+interval_minutes = 10
+```
+
+The first run comes a minute after the container starts. A run that finds
+the mailbox busy (manual run, backfill, maintenance job) is skipped and comes
+again at the next slot. The overview shows when the next run is due; changes
+apply without a restart. `SORTROOM_SCHEDULER=off` in the environment switches
+the schedule off for the whole process, e.g. for a second container that
+should only serve the UI.
+
+Without the container, run `python -m email_sorter --live` periodically with
+any scheduler; overlapping runs of a mailbox are skipped via its
+`data/run.lock`.
 
 ## Files
 

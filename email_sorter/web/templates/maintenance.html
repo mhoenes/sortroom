@@ -50,7 +50,7 @@
 
 <div class="grid cols-2">
   <form class="card stack" method="post" action="/ui/m/{{ box.id }}/maintenance/run">{{ hidden() }}
-    <h2>Lauf jetzt starten {{ help('Derselbe Lauf wie der geplante aus n8n: neue Mails der letzten ' ~ box.cfg.lookback_days ~ ' Tage, die älter als die Wartezeit sind.') }}</h2>
+    <h2>Lauf jetzt starten {{ help('Derselbe Lauf wie der geplante: neue Mails der letzten ' ~ box.cfg.lookback_days ~ ' Tage, die älter als die Wartezeit sind.') }}</h2>
     <label class="f">Höchstens so viele Mails <input type="text" name="limit" inputmode="numeric" placeholder="{{ box.cfg.max_per_run }}"></label>
     <div class="actions">{{ live_toggle('run') }}<button class="btn primary" type="submit">Starten</button></div>
   </form>

@@ -5,7 +5,6 @@ data/
 logs/
 reports/
 tests/
-n8n/
 __pycache__/
 .pytest_cache/
 *.bak*
