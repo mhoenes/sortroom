@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from email_sorter import api, web
+from email_sorter import __version__, api, web
 from email_sorter.web import queries
 from email_sorter.config import Mailbox
 from email_sorter.jev import Decision
@@ -190,7 +190,9 @@ def test_static_css_and_icons_served(client):
 
 def test_source_link_for_agpl(client):
     assert "github.com/mhoenes/sortroom" in client.get("/login").text
-    assert "Quellcode · AGPL-3.0" in _login(client).get("/ui").text
+    html = _login(client).get("/ui").text
+    assert f"v{__version__} · Quellcode · AGPL-3.0" in html  # the version lives in the footer only
+    assert f"v{__version__}<" not in html                    # not under the brand any more
 
 
 def test_formatters():

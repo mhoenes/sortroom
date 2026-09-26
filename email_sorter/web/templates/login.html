@@ -17,7 +17,7 @@
     <img src="/ui/static/icon.svg?v={{ version }}" alt="" width="48" height="48">
     <div style="display:flex;flex-direction:column;gap:4px">
       <h1>Sortroom</h1>
-      <span class="muted">Administration · v{{ version }}</span>
+      <span class="muted">Administration</span>
     </div>
     {% if not configured %}
       <p class="error" role="alert">Die Anmeldung ist gesperrt: In der <code>.env</code> fehlt <code>ADMIN_PASSWORD</code> (mindestens 8 Zeichen). Danach den Container neu starten.</p>
@@ -30,7 +30,7 @@
       <button class="btn primary" type="submit">Anmelden</button>
     {% endif %}
   </form>
-  <a class="source-login" href="{{ source_url }}" target="_blank" rel="noopener">Sortroom ist freie Software (AGPL-3.0) · Quellcode</a>
+  <a class="source-login" href="{{ source_url }}" target="_blank" rel="noopener">Sortroom v{{ version }} ist freie Software (AGPL-3.0) · Quellcode</a>
 </div>
 </body>
 </html>
