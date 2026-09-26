@@ -2,7 +2,7 @@
 :root {
   --ground: #F4F3EF; --surface: #FFFFFF; --line: #E2DFD7; --line-soft: #F0EEE8; --line-strong: #CFCBC0;
   --ink: #1B1A17; --muted: #5F5B52; --faint: #8C877B;
-  --accent: #24539C; --accent-ink: #1A3F78; --accent-soft: #E8EEF8; --accent-line: #B9CAE6;
+  --accent: #0E766E; --accent-ink: #0A5A54; --accent-soft: #E2F1EF; --accent-line: #A8D4CF;
   --side: #1B1A17; --side-2: #26241F; --side-3: #34312B; --side-ink: #EDEBE4; --side-muted: #A8A396; --side-link: #CFCBC0;
   --ok-bg: #E6F1EA; --ok: #235238; --ok-dot: #5FB585;
   --warn-bg: #FBEEDC; --warn: #6E3503; --warn-bar: #B45309;
@@ -49,7 +49,7 @@ h1, h2 { margin: 0; }
   color: var(--side-ink); text-decoration: none; }
 .switcher .menu a:hover, .switcher .menu a[aria-current="true"] { background: var(--side-3); }
 .dot { width: 8px; height: 8px; border-radius: 4px; flex-shrink: 0; background: var(--ok-dot); }
-.dot.err { background: #E0735F; } .dot.busy { background: #6FA0E0; }
+.dot.err { background: #E0735F; } .dot.busy { background: #5DB8AE; }
 .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
 .side-foot form button { width: 100%; min-height: 40px; border-radius: 8px; border: 1px solid #3F3C34; background: transparent;
   color: var(--side-link); font: inherit; cursor: pointer; }
@@ -83,7 +83,7 @@ a.source-login:hover { color: var(--ink); text-decoration: underline; }
 .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-weight: 500; font-size: 12px; white-space: nowrap;
   background: var(--neutral-bg); color: var(--ink); }
 .pill.ok { background: var(--ok-bg); color: var(--ok); } .pill.warn { background: var(--warn-bg); color: var(--warn); }
-.pill.err { background: var(--err-bg); color: var(--err); } .pill.info { background: var(--accent-soft); color: #1F4785; }
+.pill.err { background: var(--err-bg); color: var(--err); } .pill.info { background: var(--accent-soft); color: var(--accent-ink); }
 .banner { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-radius: 10px; background: var(--warn-bg); color: var(--warn); }
 .banner.hiding { opacity: 0; transition: opacity .3s; }
 .banner.err { background: var(--err-bg); color: var(--err); }
