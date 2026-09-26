@@ -1,6 +1,9 @@
-"""HTTP API so n8n (or anything else) can trigger runs.
+"""Admin web UI, built-in schedule and an HTTP API for triggering runs from outside.
 
     uvicorn email_sorter.api:app --host 0.0.0.0 --port 8765
+
+The schedule (email_sorter.scheduler) starts with the app and runs each mailbox every
+[schedule] interval_minutes; SORTROOM_SCHEDULER=off disables it for the process.
 
 Every endpoint except /health needs `Authorization: Bearer <API_TOKEN>`.
 Each mailbox has its own lock, shared with the CLI; a run on a busy mailbox is skipped (409 when
@@ -29,6 +32,7 @@ from pydantic import BaseModel, Field
 from . import __version__, jobs
 from .config import ConfigError, Mailbox, load_credentials, load_mailboxes
 from .runtime import BASE_DIR, _lock_is_stale, setup_logging, single_instance
+from .scheduler import Scheduler, enabled_by_env
 from .sorter import run, run_backfill, run_recheck_expiry
 
 load_dotenv(BASE_DIR / ".env")
@@ -57,7 +61,10 @@ async def _lifespan(app: FastAPI):
         if box.lock_path.exists():
             log.info("[%s] removing run lock left over from a previous process", box.id)
             box.lock_path.unlink(missing_ok=True)
+    if enabled_by_env():
+        app.state.scheduler.start()
     yield
+    app.state.scheduler.stop()
 
 
 app = FastAPI(title="Sortroom", version=__version__, lifespan=_lifespan)
@@ -204,6 +211,7 @@ app.state.load_mailboxes = lambda: load_mailboxes(BASE_DIR, CONFIG_PATH)
 app.state.is_busy = _busy
 app.state.config_path = CONFIG_PATH
 app.state.base_dir = BASE_DIR
+app.state.scheduler = Scheduler(lambda: app.state.load_mailboxes())
 app.add_middleware(SessionMiddleware, secret_key=web.session_secret(), session_cookie="email_sorter_session",
                    max_age=web.SESSION_DAYS * 86400, same_site="lax",
                    https_only=os.environ.get("UI_SECURE_COOKIES") == "1")

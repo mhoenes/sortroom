@@ -219,12 +219,14 @@ def _settings_page(request: Request, box_id: str, form: dict | None = None, erro
                 "action_flag_threshold": de_plain(cfg.action_flag_threshold),
                 "expiry_threshold": de_plain(cfg.expiry_threshold), "min_age_hours": de_plain(cfg.min_age_hours),
                 "sort_read_at_once": cfg.sort_read_at_once,
+                "schedule_enabled": cfg.schedule_enabled, "schedule_minutes": cfg.schedule_minutes,
                 "lookback_days": cfg.lookback_days, "max_per_run": cfg.max_per_run,
                 "expired_folder": cfg.expired_folder or ""}
     if rules is None:
         rules = [(r.match, r.action) for r in cfg.sender_rules]
     return _page(request, "settings.html", {
         **_sidebar(request, boxes, box, "settings"), "box": box, "cfg": cfg, "form": form, "error": error,
+        "schedule": request.app.state.scheduler.status(box),
         "rules": rules + [("", INBOX_ACTION)] * 3, "editable": writable(box), "single_file": is_single_file(box),
         "config_name": box.config_file.name if box.config_file else "–"}, status)
 

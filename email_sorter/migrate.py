@@ -19,7 +19,7 @@ from .sorter import RunResult
 
 log = logging.getLogger(__name__)
 
-MAILBOX_SECTIONS = ("imap", "rules", "categories", "sender_rules")
+MAILBOX_SECTIONS = ("imap", "rules", "categories", "sender_rules", "schedule")
 _HEADER = re.compile(r"^\s*\[\[?\s*([A-Za-z0-9_.-]+)\s*\]\]?\s*(#.*)?$")  # [table] and [[array]]
 
 
