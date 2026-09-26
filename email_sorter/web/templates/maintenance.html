@@ -17,13 +17,13 @@
 <div class="grid split">
   <section class="card stack">
     <h2>Zugang</h2>
-    <table>
+    <div class="scroll-x"><table>
       <tbody>
       {% for name, ok in env %}
         <tr><td class="mono">{{ name }}</td><td>{% if ok %}<span class="pill ok">gesetzt</span>{% else %}<span class="pill err">fehlt in .env</span>{% endif %}</td></tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     <p class="muted hint">Zugangsdaten stehen nur in der .env. Nach einer Änderung dort den Container neu starten.</p>
     <form method="post" action="/ui/m/{{ box.id }}/maintenance/check">{{ hidden() }}
       <button class="btn" type="submit">Verbindung prüfen</button>
@@ -34,7 +34,7 @@
   <section class="card stack">
     <h2>Letzte Jobs</h2>
     {% if jobs %}
-    <table>
+    <div class="scroll-x"><table>
       <thead><tr><th scope="col">Start</th><th scope="col">Aufgabe</th><th scope="col">Status</th></tr></thead>
       <tbody>
       {% for j in jobs %}
@@ -43,7 +43,7 @@
           <td>{% include "_job_status.html" %}</td></tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     {% else %}<div class="empty">Seit dem letzten Neustart wurde kein Job gestartet.</div>{% endif %}
   </section>
 </div>

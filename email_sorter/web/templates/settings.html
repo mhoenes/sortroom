@@ -97,7 +97,7 @@
         <h2>Absender-Regeln {{ help('Mails dieser Absender entscheidet nicht Jev: Sie bleiben im Posteingang oder gehen direkt in eine Kategorie. Treffer, wenn der Text in der Absenderadresse vorkommt, z. B. „@brother.com“. Die erste passende Regel gilt.') }}</h2>
         <p class="muted hint">Leere Zeilen werden ignoriert. Für eine weitere Regel eine freie Zeile ausfüllen und speichern.</p>
       </div>
-      <table class="rules">
+      <div class="scroll-x"><table class="rules">
         <thead><tr><th scope="col">Absender enthält</th><th scope="col">Ziel</th><th scope="col">Entfernen</th></tr></thead>
         <tbody>
         {% for match, action in rules %}
@@ -111,7 +111,7 @@
           </tr>
         {% endfor %}
         </tbody>
-      </table>
+      </table></div>
       {% if editable %}<div class="actions"><button class="btn primary" type="submit">Regeln speichern</button></div>{% endif %}
     </section>
   </fieldset>

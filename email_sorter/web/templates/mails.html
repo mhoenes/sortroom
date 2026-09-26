@@ -9,56 +9,58 @@
 </div>
 
 <form class="filters" method="get" action="/ui/m/{{ box.id }}/mails">
-  <label class="f" style="flex-grow:1;min-width:220px">Suche
-    <input type="search" name="q" value="{{ f.q }}" placeholder="Absender oder Betreff">
-  </label>
-  <label class="f" style="width:190px">Kategorie
+  <div class="f search"><label for="q">Suche</label>
+    <span><input type="search" id="q" name="q" value="{{ f.q }}" placeholder="Absender oder Betreff"><button class="btn" type="submit">Suchen</button></span>
+  </div>
+  <label class="f sel">Kategorie
     <select name="category" onchange="this.form.submit()">
       <option value="">Alle</option>
       {% for key, c in box.cfg.categories.items() %}<option value="{{ key }}" {% if f.category == key %}selected{% endif %}>{{ c.label }}</option>{% endfor %}
     </select>
   </label>
-  <label class="f" style="width:210px">Ort
+  <label class="f sel">Ort
     <select name="folder" onchange="this.form.submit()">
       <option value="">Alle</option>
       <option value="inbox" {% if f.folder == 'inbox' %}selected{% endif %}>Posteingang</option>
       {% for p in folders %}<option value="{{ p }}" {% if f.folder == p %}selected{% endif %}>{{ p|folder_label }}</option>{% endfor %}
     </select>
   </label>
-  <label class="f" style="width:160px">Zeitraum
+  <label class="f sel">Zeitraum
     <select name="period" onchange="this.form.submit()">
       {% for p, label in [('24h', 'Letzte 24 h'), ('7d', '7 Tage'), ('30d', '30 Tage'), ('all', 'Alle')] %}
       <option value="{{ p }}" {% if f.period == p %}selected{% endif %}>{{ label }}</option>{% endfor %}
     </select>
   </label>
-  <label class="check"><input type="checkbox" name="uncertain" value="1" {% if f.uncertain %}checked{% endif %} onchange="this.form.submit()">Nur unsichere</label>
-  <label class="check"><input type="checkbox" name="flagged" value="1" {% if f.flagged %}checked{% endif %} onchange="this.form.submit()">Mit Stern</label>
-  <label class="check"><input type="checkbox" name="gone" value="1" {% if f.show_gone %}checked{% endif %} onchange="this.form.submit()">Gelöschte anzeigen</label>
-  <button class="btn" type="submit">Suchen</button>
+  <div class="toggles">
+    <label class="check small"><input type="checkbox" name="uncertain" value="1" {% if f.uncertain %}checked{% endif %} onchange="this.form.submit()">Nur unsichere</label>
+    <label class="check small"><input type="checkbox" name="flagged" value="1" {% if f.flagged %}checked{% endif %} onchange="this.form.submit()">Mit Stern</label>
+    <label class="check small"><input type="checkbox" name="gone" value="1" {% if f.show_gone %}checked{% endif %} onchange="this.form.submit()">Gelöschte anzeigen</label>
+  </div>
 </form>
 
-<div class="grid mails">
+{% set list_href = '/ui/m/' ~ box.id ~ '/mails?' ~ query ~ ('&' if query else '') ~ 'page=' ~ f.page %}
+<div class="grid mails {% if selected %}has-detail{% endif %}">
   <section class="card" style="padding:6px 12px">
     {% if rows %}
-    <table>
-      <thead><tr><th scope="col" class="star-col"><span class="sr-only">Stern</span></th><th scope="col">Eingang</th><th scope="col">Absender</th><th scope="col">Betreff</th><th scope="col">Kategorie</th><th scope="col">Konfidenz</th><th scope="col">Gültig bis</th><th scope="col">Ort</th></tr></thead>
+    <div class="scroll-x"><table class="maillist">
+      <thead><tr><th scope="col" class="star-col"><span class="sr-only">Stern</span></th><th scope="col" class="date">Eingang</th><th scope="col">Mail</th><th scope="col">Kategorie</th><th scope="col" class="conf">Konfidenz</th><th scope="col" class="where">Ort</th></tr></thead>
       <tbody>
       {% for m in rows %}
-        {% set href = '/ui/m/' ~ box.id ~ '/mails?' ~ query ~ ('&' if query else '') ~ 'page=' ~ f.page ~ '&key=' ~ link_key(m.message_key) %}
+        {% set href = list_href ~ '&key=' ~ link_key(m.message_key) %}
         {% set low = m.confidence < min_conf %}
         <tr class="link {% if selected and selected.message_key == m.message_key %}sel{% endif %}">
           <td class="star-col">{% if m.flagged %}<svg class="star" viewBox="0 0 24 24" role="img" aria-label="mit Stern"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z"/></svg>{% endif %}</td>
-          <td class="mono" style="white-space:nowrap"><a class="rowlink" href="{{ href }}">{{ m.received|de_dt }}</a></td>
-          <td class="clip" style="width:20%"><a class="rowlink" href="{{ href }}">{{ m.sender }}</a></td>
-          <td class="clip" style="width:36%"><a class="rowlink" href="{{ href }}">{{ m.subject or '(ohne Betreff)' }}</a></td>
+          <td class="mono date"><a class="rowlink" href="{{ href }}">{{ m.received|de_dt }}</a></td>
+          <td class="clip mail"><a class="rowlink" href="{{ href }}">
+            <span class="subj">{{ m.subject or '(ohne Betreff)' }}</span>
+            <span class="meta"><span class="mono date-inline">{{ m.received|de_dt }} · </span>{{ m.sender }}{% if m.expires %} · <span class="{{ 'expired' if m.expires < today }}" {% if m.expires < today %}title="abgelaufen"{% endif %}>gültig bis {{ m.expires|de_date }}</span>{% endif %}</span></a></td>
           <td><span class="pill {% if m.category == 'verdaechtig' %}err{% endif %}">{{ label(m.category) }}</span></td>
-          <td>{% if m.source == 'rule' %}<span class="muted">Regel</span>{% elif m.source == 'manual' %}<span class="muted">von Hand</span>{% else %}<span class="meter"><span class="track"><span class="fill {% if low %}low{% endif %}" style="width:{{ (m.confidence * 100)|round|int }}%"></span></span><span class="mono">{{ m.confidence|de_conf }}</span></span>{% endif %}</td>
-          <td class="mono" style="white-space:nowrap">{% if m.expires %}<span class="{{ 'expired' if m.expires < today }}" {% if m.expires < today %}title="abgelaufen"{% endif %}>{{ m.expires|de_date }}</span>{% endif %}</td>
-          <td style="white-space:nowrap">{% if m.gone %}<span class="pill">gelöscht</span>{% else %}{{ m.moved_to|folder_label }}{% endif %}{% if low and not m.moved_to and not m.gone %} <span class="pill warn">unsicher</span>{% endif %}</td>
+          <td class="conf">{% if m.source == 'rule' %}<span class="muted">Regel</span>{% elif m.source == 'manual' %}<span class="muted">von Hand</span>{% else %}<span class="meter" {% if low %}title="unter der Mindest-Konfidenz {{ min_conf|de_conf }}"{% endif %}><span class="track"><span class="fill {% if low %}low{% endif %}" style="width:{{ (m.confidence * 100)|round|int }}%"></span></span><span class="mono">{{ m.confidence|de_conf }}</span></span>{% endif %}</td>
+          <td class="where">{% if m.gone %}<span class="pill">gelöscht</span>{% elif m.moved_to %}{{ m.moved_to|folder_label }}{% else %}<span class="muted">Posteingang</span>{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     <div class="pager">
       Seite {{ f.page }} von {{ pages }}
       {% if f.page > 1 %}<a class="btn small" href="/ui/m/{{ box.id }}/mails?{{ query }}{{ '&' if query }}page={{ f.page - 1 }}">Zurück</a>{% endif %}
@@ -67,11 +69,14 @@
     {% else %}<div class="empty">Keine Mails für diese Filter.</div>{% endif %}
   </section>
 
+  {% if selected %}
   <aside class="card detail" aria-label="Details">
-    {% if selected %}
       {% set m = selected %}
       <div style="display:flex;flex-direction:column;gap:4px">
-        <div class="mono muted" style="font-size:12px">{{ m.received|de_dt(true) }} · {{ m.sender }}</div>
+        <div class="row" style="align-items:flex-start">
+          <div class="mono muted grow" style="font-size:12px;overflow-wrap:anywhere">{{ m.received|de_dt(true) }} · {{ m.sender }}</div>
+          <a class="close" href="{{ list_href }}" aria-label="Details schließen" title="Schließen"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></a>
+        </div>
         <h2>{{ m.subject or '(ohne Betreff)' }}</h2>
         <div>
           {% if m.gone %}<span class="pill">Nicht mehr im Postfach</span>
@@ -144,9 +149,22 @@
         </form>
       </details>
       {% endif %}
-    {% else %}
-      <div class="empty">Eine Mail in der Liste anklicken, um Details zu sehen.</div>
-    {% endif %}
   </aside>
+  {% endif %}
 </div>
+<script>
+  // Opening a mail reloads the page: keep the list where it was, or on narrow
+  // screens (detail above the list) jump straight to the detail.
+  (() => {
+    const key = 'mails-scroll:' + location.pathname;
+    document.querySelectorAll('.maillist a.rowlink, .detail a.close').forEach(a => a.addEventListener('click', () => {
+      try { sessionStorage.setItem(key, String(scrollY)); } catch (e) {}
+    }));
+    let y = null;
+    try { y = sessionStorage.getItem(key); sessionStorage.removeItem(key); } catch (e) {}
+    const detail = document.querySelector('.detail');
+    if (detail && matchMedia('(max-width: 1100px)').matches) detail.scrollIntoView();
+    else if (y !== null) scrollTo(0, Number(y));
+  })();
+</script>
 {% endblock %}

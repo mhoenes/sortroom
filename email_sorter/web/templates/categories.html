@@ -16,7 +16,7 @@
 
 <div class="grid catgrid">
   <section class="card" style="padding:6px 12px" aria-label="Alle Kategorien">
-    <table>
+    <div class="scroll-x"><table>
       <thead><tr><th scope="col">Kategorie</th><th scope="col">Ordner</th><th scope="col" class="num">30 Tage</th></tr></thead>
       <tbody>
       {% for key, c in box.cfg.categories.items() %}
@@ -28,7 +28,7 @@
         </tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
   </section>
 
   <section class="card editor" aria-label="{{ 'Neue Kategorie' if new else 'Kategorie bearbeiten' }}">
