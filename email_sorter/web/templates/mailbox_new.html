@@ -32,7 +32,7 @@
       <label class="f"><span class="lt">Server {{ help('z. B. imap.gmail.com oder imap.strato.de') }}</span>
         <input type="text" name="imap_host" value="{{ form.imap_host }}" required></label>
       <label class="f"><span class="lt">Port {{ help('Meist 993 (IMAP über SSL).') }}</span>
-        <input type="text" name="imap_port" value="{{ form.imap_port }}" inputmode="numeric" required></label>
+        <input type="number" name="imap_port" min="1" max="65535" step="1" value="{{ form.imap_port }}" required></label>
       <label class="f"><span class="lt">Posteingang {{ help('Ordner, aus dem einsortiert wird. Meist INBOX.') }}</span>
         <input type="text" name="source_folder" value="{{ form.source_folder }}"></label>
     </div>

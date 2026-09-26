@@ -27,7 +27,7 @@
           <input type="text" name="imap_host" value="{{ form.imap_host }}" required>
         </label>
         <label class="f"><span class="lt">Port {{ help('Meist 993 für IMAP über SSL.') }}</span>
-          <input type="text" name="imap_port" value="{{ form.imap_port }}" inputmode="numeric" required>
+          <input type="number" name="imap_port" min="1" max="65535" step="1" value="{{ form.imap_port }}" required>
         </label>
         <label class="f"><span class="lt">Posteingang {{ help('Ordner, aus dem neue Mails einsortiert werden. Meist INBOX.') }}</span>
           <input type="text" name="source_folder" value="{{ form.source_folder }}">
@@ -42,24 +42,24 @@
       <h2>Einsortieren</h2>
       <div class="grid cols-3">
         <label class="f"><span class="lt">Mindest-Konfidenz {{ help('Nur wenn Jev mindestens so sicher ist (0 bis 1), wird verschoben. Unsichere Mails bleiben im Posteingang und erscheinen unter „Zur Prüfung“.') }}</span>
-          <input type="text" name="min_confidence" value="{{ form.min_confidence }}" inputmode="decimal" required>
+          <input type="number" name="min_confidence" min="0" max="1" step="0.01" value="{{ form.min_confidence }}" required>
         </label>
         <label class="f"><span class="lt">Stern bei Handlungsbedarf ab {{ help('Ab dieser Wahrscheinlichkeit für „du musst etwas tun“ bekommt eine Mail einen Stern – in Kategorien, in denen das eingeschaltet ist.') }}</span>
-          <input type="text" name="action_flag_threshold" value="{{ form.action_flag_threshold }}" inputmode="decimal" required>
+          <input type="number" name="action_flag_threshold" min="0" max="1" step="0.01" value="{{ form.action_flag_threshold }}" required>
         </label>
         <label class="f"><span class="lt">Befristetes Angebot ab {{ help('Ab dieser Wahrscheinlichkeit gilt eine Mail als befristet, ihr Ablaufdatum wird verfolgt.') }}</span>
-          <input type="text" name="expiry_threshold" value="{{ form.expiry_threshold }}" inputmode="decimal" required>
+          <input type="number" name="expiry_threshold" min="0" max="1" step="0.01" value="{{ form.expiry_threshold }}" required>
         </label>
         <label class="f"><span class="lt">Wartezeit in Stunden {{ help('Neue Mails bleiben so lange im Posteingang, bevor sie einsortiert werden – damit du sie zuerst dort siehst. 0 = sofort.') }}</span>
-          <input type="text" name="min_age_hours" value="{{ form.min_age_hours }}" inputmode="decimal" required>
+          <input type="number" name="min_age_hours" min="0" max="336" step="any" value="{{ form.min_age_hours }}" required>
           <label class="check small"><input type="checkbox" name="sort_read_at_once" value="1" {% if form.sort_read_at_once in (true, 'on', '1') %}checked{% endif %}>Gelesene sofort einsortieren
             {{ help('Mails, die du schon gelesen hast, warten die Wartezeit nicht ab, sondern werden beim nächsten Lauf einsortiert. Ungelesene warten weiter.') }}</label>
         </label>
         <label class="f"><span class="lt">Rückblick in Tagen {{ help('Ein normaler Lauf schaut nur auf Mails der letzten so vielen Tage. Ältere holt ein Backfill.') }}</span>
-          <input type="text" name="lookback_days" value="{{ form.lookback_days }}" inputmode="numeric" required>
+          <input type="number" name="lookback_days" min="1" max="365" step="1" value="{{ form.lookback_days }}" required>
         </label>
         <label class="f"><span class="lt">Max. Mails pro Lauf {{ help('Obergrenze für Jev-Anfragen je Lauf; begrenzt die Kosten, falls plötzlich sehr viele Mails ankommen. Absender-Regeln zählen nicht mit.') }}</span>
-          <input type="text" name="max_per_run" value="{{ form.max_per_run }}" inputmode="numeric" required>
+          <input type="number" name="max_per_run" min="1" max="5000" step="1" value="{{ form.max_per_run }}" required>
         </label>
         <label class="f" style="grid-column:span 2"><span class="lt">Standard-Ordner für Abgelaufenes {{ help('Hierhin wandern befristete Angebote nach ihrem letzten gültigen Tag – außer eine Kategorie hat einen eigenen Ordner. Leer: nichts wird verschoben.') }}</span>
           <input type="text" name="expired_folder" value="{{ form.expired_folder }}" placeholder="INBOX/Werbung/Abgelaufen">
@@ -73,7 +73,7 @@
           <label class="check"><input type="checkbox" name="schedule_enabled" value="1" {% if form.schedule_enabled in (true, 'on', '1') %}checked{% endif %}>Zeitplan an</label>
         </div>
         <label class="f"><span class="lt">Abstand in Minuten {{ help('Zeit zwischen zwei Läufen. Läuft gerade etwas für das Postfach, wird der Lauf übersprungen und zum nächsten Termin nachgeholt.') }}</span>
-          <input type="text" name="schedule_minutes" value="{{ form.schedule_minutes }}" inputmode="numeric" required>
+          <input type="number" name="schedule_minutes" min="1" max="1440" step="1" value="{{ form.schedule_minutes }}" required>
         </label>
         <div class="f"><span class="lt">Status</span>
           <span class="static">{% if not schedule.active %}Zeitplan in diesem Prozess abgeschaltet (SORTROOM_SCHEDULER)

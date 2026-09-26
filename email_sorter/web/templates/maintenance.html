@@ -61,14 +61,14 @@
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/run">{{ hidden() }}
       <div class="about"><h3>Lauf jetzt starten</h3>
         <p>Derselbe Lauf wie der geplante: neue Mails der letzten {{ box.cfg.lookback_days }} Tage, die älter als die Wartezeit sind.</p></div>
-      <div class="fields"><label class="f">Max. Mails <input type="text" name="limit" inputmode="numeric" placeholder="{{ box.cfg.max_per_run }}"></label></div>
+      <div class="fields"><label class="f">Max. Mails <input type="number" name="limit" min="1" max="100000" step="1" placeholder="{{ box.cfg.max_per_run }}"></label></div>
       {{ go(primary=true) }}
     </form>
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/backfill">{{ hidden() }}
       <div class="about"><h3>Backfill</h3>
         <p>Sortiert ältere Mails im Posteingang ab einem Datum, Monat für Monat. Bereits verarbeitete werden übersprungen.</p></div>
       <div class="fields"><label class="f">Ab Datum <input type="date" name="since" max="{{ today }}" required></label>
-        <label class="f">Max. Mails <input type="text" name="limit" inputmode="numeric" placeholder="alle"></label></div>
+        <label class="f">Max. Mails <input type="number" name="limit" min="1" max="100000" step="1" placeholder="alle"></label></div>
       {{ go() }}
     </form>
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/resort">{{ hidden() }}
@@ -79,7 +79,7 @@
             <option value="{{ box.cfg.source_folder }}">Posteingang</option>
             {% for f in folders %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
           </select></label>
-        <label class="f">Max. Mails <input type="text" name="limit" inputmode="numeric" placeholder="alle"></label></div>
+        <label class="f">Max. Mails <input type="number" name="limit" min="1" max="100000" step="1" placeholder="alle"></label></div>
       {{ go() }}
     </form>
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/recheck">{{ hidden() }}
