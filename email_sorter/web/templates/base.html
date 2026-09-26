@@ -5,12 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}E-Mail-Sorter{% endblock %} · E-Mail-Sorter</title>
 <link rel="stylesheet" href="/ui/static/app.css?v={{ version }}">
+<link rel="icon" href="/ui/static/icon.svg?v={{ version }}" type="image/svg+xml">
+<link rel="icon" href="/ui/static/icon-32.png?v={{ version }}" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/ui/static/apple-touch-icon.png?v={{ version }}">
+<link rel="manifest" href="/ui/static/manifest.webmanifest">
+<meta name="theme-color" content="#1B1A17">
 {% block head %}{% endblock %}
 </head>
 <body>
 <div class="shell">
 <nav class="side" aria-label="Hauptnavigation">
-  <div class="brand"><b>E-Mail-Sorter</b><span>v{{ version }}</span></div>
+  <div class="brand"><img src="/ui/static/icon.svg?v={{ version }}" alt="" width="32" height="32"><div><b>E-Mail-Sorter</b><span>v{{ version }}</span></div></div>
 
   <div class="nav">
     <a href="/ui" {% if active == 'all' %}aria-current="page"{% endif %}>
