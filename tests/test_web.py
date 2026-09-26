@@ -108,6 +108,7 @@ def test_all_mailboxes_page(client):
     html = _login(client).get("/ui").text
     assert "Alle Postfächer" in html and "Privat" in html and "Gmail" in html
     assert "Noch kein Lauf" in html  # gmail has no log yet
+    assert 'href="/ui/settings" >' in html and "Globale Einstellungen</a>" in html  # sidebar footer, not current
 
 
 def test_overview_page(client):
