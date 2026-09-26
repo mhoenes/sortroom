@@ -41,6 +41,7 @@ TASKS = {
     "reconcile": "Protokoll mit Postfach abgleichen",
     "check": "Verbindung prüfen",
 }
+RISKY_TASKS = {"rename_folder", "rename_category"}  # change the server and the settings
 
 
 def _env_status(box: Mailbox) -> list[tuple[str, bool]]:
@@ -179,7 +180,21 @@ def job_page(request: Request, box_id: str, job_id: str):
     job = jobs.get(job_id)
     if not job or job["mailbox"] != box.id:
         raise HTTPException(404, "Unbekannter Job (Jobs werden nur bis zum Neustart aufbewahrt)")
-    return _page(request, "job.html", {**_sidebar(request, boxes, box, "maintenance"), "box": box, "job": job})
+    return _page(request, "job.html", {**_sidebar(request, boxes, box, "maintenance"), "box": box, "job": job,
+                                       "rerun": _live_rerun(job), "risky": job["kind"] in RISKY_TASKS,
+                                       "editable": writable(box)})
+
+
+def _live_rerun(job: dict) -> dict | None:
+    """The form fields that start a successful dry run again for real, or None.
+
+    They go through maintenance_start like the maintenance page's own forms, so everything is
+    checked again; the dry run's settings (date, folder, limit …) carry over unchanged."""
+    result = job.get("result")
+    if (job["kind"] not in TASKS or job["status"] != "done" or not isinstance(result, dict)
+            or result.get("live") is not False or result.get("ok") is not True):
+        return None
+    return {k: "" if v is None else str(v) for k, v in (job.get("request") or {}).items() if k != "live"}
 
 
 # ---------------------------------------------------------------- single mails
