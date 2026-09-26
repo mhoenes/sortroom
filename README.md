@@ -1,10 +1,11 @@
 # Sortroom
 
-Sorts a Strato IMAP inbox into folders using **Jev** (TypeSafe's "System One"
-decision model) through **OpenRouter** (or Vercel AI Gateway). Jev doesn't generate text – it picks one
-of your categories and returns probabilities, so it can never invent a folder.
+Sorts a Strato IMAP inbox into folders using a classification model behind the
+[TypeSafe API](https://docs.typesafe.ai/api) – TypeSafe itself, OpenRouter's decisions API
+or any other service that speaks it. The model doesn't generate text – it picks one of your
+categories and returns probabilities, so it can never invent a folder.
 
-For every new mail it asks Jev two questions in one request:
+For every new mail it asks the model these questions in one request:
 
 | Question | Type | Used for |
 |---|---|---|
@@ -29,7 +30,7 @@ logins are slowed down. Behind an HTTPS reverse proxy set `UI_SECURE_COOKIES=1`.
 
 - **Kategorien** – edit name, description, folder, star/expiry switches and a
   per-category folder for expired offers; add or delete categories.
-  **Mit Jev testen** classifies the category's last 10 mails and 15 others with
+  **Mit dem Modell testen** classifies the category's last 10 mails and 15 others with
   the draft description (read-only, nothing is moved; about $0.002) and shows
   what would change
 - **Einstellungen** – display name, IMAP server/port/inbox, thresholds, waiting
@@ -50,7 +51,7 @@ uid 1000. Forms carry a CSRF token.
   count), check the connection. Each job runs in the background
   under the mailbox lock ("Probelauf" is a dry run, "Ausführen" the real thing) and shows
   its log; also shows whether the mailbox's .env variables are set
-- **Mails** detail – accept Jev's suggestion for an uncertain mail, move a mail
+- **Mails** detail – accept the model's suggestion for an uncertain mail, move a mail
   to another category (logged as "von Hand"), or create a sender rule from it
 - **Postfach hinzufügen** – creates `mailboxes/<id>/mailbox.toml` with the
   categories, thresholds and schedule of an existing mailbox or the built-in
@@ -59,7 +60,7 @@ uid 1000. Forms carry a CSRF token.
   afterwards). This is also how the first mailbox is created. For Gmail (`imap.gmail.com`) the
   copied folders lose their `INBOX/` prefix: Gmail only has top-level labels
   (`Werbung`, not `INBOX/Werbung`); Outlook still shows them under the inbox
-- **Globale Einstellungen** (bottom of the sidebar) – the shared `[jev]` settings in `config/config.toml`
+- **Globale Einstellungen** (bottom of the sidebar) – the shared `[classifier]` settings (endpoint, model, text length) in `config/config.toml`
 
 Jobs are kept in memory until the container restarts; backfills started via
 `POST /backfill` show up there too. The API endpoints keep their bearer-token
@@ -70,7 +71,7 @@ auth.
 Each mailbox lives in its own folder with its own settings, log and reports:
 
 ```
-config/config.toml           # shared: [jev] (gateway, model, key name, text length)
+config/config.toml           # shared: [classifier] (endpoint, model, text length)
 mailboxes/
   privat/
     mailbox.toml             # name, [imap], [rules], [schedule], [[sender_rules]], [categories.*]
@@ -98,7 +99,7 @@ take `"mailbox"`; `GET /mailboxes` lists them.
 cd C:\Projekte\sortroom
 py -3.13 -m venv .venv
 .venv\Scripts\python -m pip install -r requirements-api.txt
-copy .env.example .env      # then fill in IMAP_USER, IMAP_PASSWORD, OPENROUTER_API_KEY, ADMIN_PASSWORD
+copy .env.example .env      # then fill in IMAP_USER, IMAP_PASSWORD, CLASSIFIER_API_KEY, ADMIN_PASSWORD
 .venv\Scripts\python -m uvicorn email_sorter.api:app --port 8765
 ```
 
@@ -108,7 +109,7 @@ Open `http://localhost:8765`, log in and create the first mailbox under
 ## Usage
 
 ```powershell
-.venv\Scripts\python -m email_sorter --check      # test login + Jev, list target folders
+.venv\Scripts\python -m email_sorter --check      # test login + model, list target folders
 .venv\Scripts\python -m email_sorter              # DRY RUN: classify, write reports\dry-run-*.csv, change nothing
 .venv\Scripts\python -m email_sorter --live       # move + flag for real
 ```
@@ -122,7 +123,7 @@ einsortieren"), mail you have already read is sorted at the next run anyway.
 
 **Recommended rollout:** run dry runs for a few days, open the CSV reports
 (they open directly in German Excel), sharpen category descriptions on the
-Kategorien page where Jev got it wrong, then go live.
+Kategorien page where the model got it wrong, then go live.
 
 Dry runs don't record anything, so each one re-classifies the same mails
 (a fraction of a cent) – that's intended, so you can compare after tweaking.
@@ -183,7 +184,7 @@ Docker host with a personal access token that has `read:packages`:
 2. `mkdir -p config logs mailboxes && sudo chown -R 1000:1000 config logs mailboxes`
    (the container runs as uid 1000), then copy `config/config.toml` of this
    repository into `config/`.
-3. Create `.env` (see `.env.example`): IMAP, `OPENROUTER_API_KEY` and
+3. Create `.env` (see `.env.example`): IMAP, `CLASSIFIER_API_KEY` and
    `ADMIN_PASSWORD`; `API_TOKEN` only if you want to use the HTTP API.
 4. `docker compose pull && docker compose up -d`, open the UI and create the
    first mailbox under "Postfach hinzufügen". Check it with Wartung →
@@ -229,7 +230,7 @@ and mail, moves the subscriptions and updates the log. In Docker:
 
 ## Sender rules
 
-`[[sender_rules]]` entries are checked before Jev, in order; the first whose
+`[[sender_rules]]` entries are checked before the model, in order; the first whose
 `match` is part of the sender address (case-insensitive) decides:
 
 ```toml
@@ -243,7 +244,7 @@ action = "werbung"                        # any category key
 ```
 
 `inbox` leaves the mail untouched; a category moves it to that category's
-folder without a Jev request (no cost, no flag, no expiry date). Rule-sorted
+folder without a model request (no cost, no flag, no expiry date). Rule-sorted
 mail is logged with source `rule`. Applies to normal runs, backfills and
 re-sorts; the 24-hour wait still applies. The rules can be edited under
 Einstellungen or created from a mail on the Mails page.
@@ -264,7 +265,7 @@ To sort one folder again with the current categories:
 .venv\Scripts\python -m email_sorter --resort-folder INBOX/Reisen --live     # move
 ```
 
-Only mails Jev assigns confidently to a category with a *different* folder
+Only mails the model assigns confidently to a category with a *different* folder
 are moved; uncertain mails and mails of inbox categories (e.g. sicherheit)
 stay. Flags are not changed. `--limit N` re-sorts only the newest N mails.
 The expired-offers folder is refused. Re-sorting `INBOX` leaves mail
@@ -273,7 +274,7 @@ younger than `min_age_hours` alone, like normal runs. In Docker:
 
 ## Expired offers
 
-For categories with `track_expiry = true` (Werbung), Jev also answers
+For categories with `track_expiry = true` (Werbung), the model also answers
 whether the mail is a time-limited offer and roughly when it ends (same day,
 1–2 days, a week, a month). An explicit deadline in the text ("gültig bis
 30.09.", "endet am 1. Oktober", "ends October 3rd") takes precedence.
@@ -309,7 +310,7 @@ Mails sorted before this feature existed can be checked once:
 | verdaechtig | INBOX/Verdächtig | phishing/scams, never flagged |
 | sonstiges | – (inbox) | |
 
-Add, rename or remove categories freely – the `description` is what Jev
+Add, rename or remove categories freely – the `description` is what the model
 reads, so write it like you'd explain the folder to a person.
 
 ## Running automatically
@@ -339,7 +340,7 @@ any scheduler; overlapping runs of a mailbox are skipped via its
 
 | Path | What |
 |---|---|
-| `config/config.toml` | shared settings (`[jev]`) |
+| `config/config.toml` | shared settings (`[classifier]`) |
 | `mailboxes/<id>/mailbox.toml` | a mailbox's settings (IMAP, rules, categories, schedule) |
 | `mailboxes/<id>/data/state.db` | SQLite log of every processed mail (category, confidence, cost) and the run log |
 | `mailboxes/<id>/reports/dry-run-*.csv` | dry-run results incl. runner-up category |
@@ -354,13 +355,24 @@ any scheduler; overlapping runs of a mailbox are skipped via its
 
 ## Caveats
 
-- Jev is in beta. If the API shape changes, only `build_request()` / `parse_response()` in
-  `email_sorter/jev.py` need updating.
-- Mail content (first 3000 chars) is sent to the gateway (OpenRouter/Vercel) and TypeSafe.
-- Switching gateway (OpenRouter ↔ Vercel) only needs `endpoint`, `model`
-  and `api_key_env` in `config.toml` – see the commented alternative there.
+- The wire format is the TypeSafe API. If it changes, only `build_request()` /
+  `parse_response()` in `email_sorter/classifier.py` need updating.
+- Mail content (first 3000 chars) is sent to the configured endpoint and whoever runs the
+  model behind it.
+- Switching provider only needs `endpoint` and `model` in `config.toml` (or under Globale
+  Einstellungen) and its key in `CLASSIFIER_API_KEY`. The cost per mail is shown when the
+  provider reports it in `usage.cost` (OpenRouter does); otherwise it stays at 0.
 - Exit codes: `0` ok, `1` some mails failed (retried next run), `2` config or
   API-key/credit problem.
+
+## Upgrading from 0.7.x
+
+The model settings are no longer named after one model, and there is only one key:
+
+1. In `config/config.toml` rename `[jev]` to `[classifier]` and delete its `api_key_env` line.
+2. In `.env` rename the key variable (e.g. `OPENROUTER_API_KEY`) to `CLASSIFIER_API_KEY`.
+3. Restart the container. Until step 1 is done it refuses to start with a message saying
+   exactly this. The mail log in `state.db` is updated by itself.
 
 ## License
 

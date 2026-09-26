@@ -9,7 +9,7 @@ from imap_tools import MailMessage
 from email_sorter import __main__ as cli
 from email_sorter import sorter
 from email_sorter.config import Config, Credentials
-from email_sorter.jev import Decision, JevError
+from email_sorter.classifier import Decision, ClassifierError
 from email_sorter.store import Store
 from support import example_config
 
@@ -78,14 +78,14 @@ class FakeMailBox:
         pass
 
 
-class FakeJev:
+class FakeClassifier:
     def __init__(self, fail_subjects=()):
         self.calls, self.fail = 0, set(fail_subjects)
 
     def decide(self, state, categories):
         self.calls += 1
         if state["subject"] in self.fail:
-            raise JevError("boom")
+            raise ClassifierError("boom")
         return Decision("werbung", 1.0, {"werbung": 1.0}, 0.0, 0.0)
 
 
@@ -98,16 +98,16 @@ def env(tmp_path, monkeypatch):
     return SimpleNamespace(cfg=small, tmp=tmp_path, monkeypatch=monkeypatch)
 
 
-def _use_jev(env, jev):
-    env.monkeypatch.setattr(Config, "jev_client", lambda self, key: jev)
+def _use_classifier(env, classifier):
+    env.monkeypatch.setattr(Config, "classifier_client", lambda self, key: classifier)
 
 
 def test_backfill_live_processes_everything_in_batches(env):
-    jev = FakeJev()
-    _use_jev(env, jev)
+    classifier = FakeClassifier()
+    _use_classifier(env, classifier)
     code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None).exit_code
     mb = FakeMailBox.instances[0]
-    assert code == 0 and jev.calls == 7
+    assert code == 0 and classifier.calls == 7
     assert [len(uids) for uids, _ in mb.moves] == [3, 3, 1]  # batches of max_per_run, newest first
     assert mb.moves[0][0] == ["5", "6", "7"]
     store = Store(env.tmp / "data" / "state.db")
@@ -116,28 +116,28 @@ def test_backfill_live_processes_everything_in_batches(env):
 
 
 def test_backfill_dry_run_terminates_and_classifies_each_mail_once(env):
-    jev = FakeJev()
-    _use_jev(env, jev)
+    classifier = FakeClassifier()
+    _use_classifier(env, classifier)
     code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=False, since=date(2026, 1, 1), limit=None).exit_code
-    assert code == 0 and jev.calls == 7
+    assert code == 0 and classifier.calls == 7
     assert FakeMailBox.instances[0].moves == []
     report = next((env.tmp / "reports").glob("dry-run-*.csv"))
     assert len(report.read_text(encoding="utf-8-sig").splitlines()) == 8  # header + 7
 
 
 def test_backfill_respects_limit(env):
-    jev = FakeJev()
-    _use_jev(env, jev)
+    classifier = FakeClassifier()
+    _use_classifier(env, classifier)
     sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=4)
-    assert jev.calls == 4
+    assert classifier.calls == 4
     assert sum(len(u) for u, _ in FakeMailBox.instances[0].moves) == 4
 
 
 def test_backfill_skips_failed_mail_instead_of_looping(env):
-    jev = FakeJev(fail_subjects={"Angebot 6"})
-    _use_jev(env, jev)
+    classifier = FakeClassifier(fail_subjects={"Angebot 6"})
+    _use_classifier(env, classifier)
     code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None).exit_code
-    assert code == 1 and jev.calls == 7  # failure reported, nothing classified twice
+    assert code == 1 and classifier.calls == 7  # failure reported, nothing classified twice
     store = Store(env.tmp / "data" / "state.db")
     assert not store.is_processed("<m6@x>")  # retried by the next backfill
     store.close()
@@ -167,8 +167,8 @@ def test_lock_of_dead_process_is_stale(tmp_path):
 
 
 def test_unsolicited_fetch_response_is_ignored(env):
-    jev = FakeJev()
-    _use_jev(env, jev)
+    classifier = FakeClassifier()
+    _use_classifier(env, classifier)
     orig_fetch = FakeMailBox.fetch
 
     def fetch_with_noise(self, criteria, **kw):
@@ -180,13 +180,13 @@ def test_unsolicited_fetch_response_is_ignored(env):
 
     env.monkeypatch.setattr(FakeMailBox, "fetch", fetch_with_noise)
     code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None).exit_code
-    assert code == 0 and jev.calls == 7
+    assert code == 0 and classifier.calls == 7
 
 
 def test_backfill_keeps_going_when_a_batch_comes_back_short(env):
     """Regression: a batch returning fewer mails than requested used to end the month early."""
-    jev = FakeJev()
-    _use_jev(env, jev)
+    classifier = FakeClassifier()
+    _use_classifier(env, classifier)
     orig_fetch = FakeMailBox.fetch
     calls = {"n": 0}
 
@@ -201,12 +201,12 @@ def test_backfill_keeps_going_when_a_batch_comes_back_short(env):
     env.monkeypatch.setattr(FakeMailBox, "fetch", fetch_dropping_one)
     code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None).exit_code
     assert code == 1  # the dropped mail is reported
-    assert jev.calls == 6  # but all other 6 mails were still processed in this run
+    assert classifier.calls == 6  # but all other 6 mails were still processed in this run
 
 
 def test_mail_without_uid_is_matched_by_message_key(env):
-    jev = FakeJev()
-    _use_jev(env, jev)
+    classifier = FakeClassifier()
+    _use_classifier(env, classifier)
     orig_fetch = FakeMailBox.fetch
 
     def fetch_losing_uid(self, criteria, **kw):
@@ -220,26 +220,26 @@ def test_mail_without_uid_is_matched_by_message_key(env):
 
     env.monkeypatch.setattr(FakeMailBox, "fetch", fetch_losing_uid)
     code = sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None).exit_code
-    assert code == 0 and jev.calls == 7
+    assert code == 0 and classifier.calls == 7
     assert sum(len(u) for u, _ in FakeMailBox.instances[0].moves) == 7
 
 
 def test_inbox_rule_senders_are_skipped_in_normal_sorting(env):
     from email_sorter.config import SenderRule
-    jev = FakeJev()
-    _use_jev(env, jev)
+    classifier = FakeClassifier()
+    _use_classifier(env, classifier)
     cfg = Config(**{**env.cfg.__dict__, "sender_rules": (SenderRule("news@shop.de", "inbox"),)})  # all fake mails
     code = sorter.run_backfill(cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None).exit_code
-    assert code == 0 and jev.calls == 0 and FakeMailBox.instances[0].moves == []
+    assert code == 0 and classifier.calls == 0 and FakeMailBox.instances[0].moves == []
 
 
-def test_category_rule_moves_without_jev_and_ignores_the_limit(env):
+def test_category_rule_moves_without_classifier_and_ignores_the_limit(env):
     from email_sorter.config import SenderRule
-    jev = FakeJev()
-    _use_jev(env, jev)
+    classifier = FakeClassifier()
+    _use_classifier(env, classifier)
     cfg = Config(**{**env.cfg.__dict__, "sender_rules": (SenderRule("@shop.de", "finanzen"),)})
     result = sorter.run_backfill(cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None)
-    assert result.exit_code == 0 and jev.calls == 0 and result.cost_usd == 0
+    assert result.exit_code == 0 and classifier.calls == 0 and result.cost_usd == 0
     moves = FakeMailBox.instances[0].moves
     assert sum(len(u) for u, _ in moves) == 7 and {f for _, f in moves} == {"INBOX.Finanzen"}
     store = Store(env.tmp / "data" / "state.db")
@@ -249,8 +249,8 @@ def test_category_rule_moves_without_jev_and_ignores_the_limit(env):
 
 
 def test_runs_are_logged(env):
-    jev = FakeJev()
-    _use_jev(env, jev)
+    classifier = FakeClassifier()
+    _use_classifier(env, classifier)
     sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None)
     store = Store(env.tmp / "data" / "state.db")
     [entry] = store.recent_runs()
@@ -261,8 +261,8 @@ def test_runs_are_logged(env):
 
 
 def test_crashed_run_is_logged_with_error(env, monkeypatch):
-    jev = FakeJev()
-    _use_jev(env, jev)
+    classifier = FakeClassifier()
+    _use_classifier(env, classifier)
     monkeypatch.setattr(sorter, "classify_new", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("boom")))
     with pytest.raises(RuntimeError):
         sorter.run_backfill(env.cfg, CREDS, env.tmp, live=True, since=date(2026, 1, 1), limit=None)

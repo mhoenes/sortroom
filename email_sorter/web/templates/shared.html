@@ -16,20 +16,20 @@
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <fieldset {% if not editable %}disabled{% endif %} class="stack">
     <section class="card stack">
-      <h2>Jev</h2>
+      <div><h2>Modell</h2>
+        <p class="muted hint">Jeder Dienst, der die <a href="https://docs.typesafe.ai/api" target="_blank" rel="noopener">TypeSafe-API</a> anbietet.</p></div>
       <div class="grid cols-3">
-        <label class="f" style="grid-column:span 2"><span class="lt">Endpunkt {{ help('Adresse der Decisions-API, z. B. https://openrouter.ai/api/alpha/decisions') }}</span>
+        <label class="f" style="grid-column:span 2"><span class="lt">Endpunkt {{ help('Adresse, an die jede Mail zur Einordnung geschickt wird, z. B. https://openrouter.ai/api/alpha/decisions') }}</span>
           <input type="text" name="endpoint" value="{{ form.endpoint }}" required class="mono"></label>
-        <label class="f"><span class="lt">Modell {{ help('z. B. typesafe/jev-1.13 bei OpenRouter') }}</span>
+        <label class="f"><span class="lt">Modell {{ help('Name des Modells, wie ihn der Anbieter des Endpunkts erwartet.') }}</span>
           <input type="text" name="model" value="{{ form.model }}" required class="mono"></label>
-        <div class="f"><span class="lt">Variable für den API-Schlüssel {{ help('Der Schlüssel selbst steht nur in der .env.') }}</span>
-          <input type="text" name="api_key_env" value="{{ form.api_key_env }}" required class="mono" aria-label="Variable für den API-Schlüssel">
-          <span class="muted" style="font-weight:400">{% if key_set %}<span class="pill ok">in .env gesetzt</span>{% else %}<span class="pill err">fehlt in .env</span>{% endif %}</span></div>
-        <label class="f"><span class="lt">Mailtext-Länge {{ help('So viele Zeichen des Mailtextes bekommt Jev. Mehr Text kann genauer sein, kostet aber etwas mehr.') }}</span>
+        <div class="f"><span class="lt">API-Schlüssel {{ help('Steht aus Sicherheitsgründen nur in der .env-Datei. Nach einer Änderung dort den Container neu starten.') }}</span>
+          <span class="static"><span class="mono">{{ key_env }}</span>&nbsp;{% if key_set %}<span class="pill ok">in .env gesetzt</span>{% else %}<span class="pill err">fehlt in .env</span>{% endif %}</span></div>
+        <label class="f"><span class="lt">Mailtext-Länge {{ help('So viele Zeichen des Mailtextes bekommt das Modell. Mehr Text kann genauer sein, kostet aber etwas mehr.') }}</span>
           <input type="number" name="max_body_chars" min="200" max="20000" step="1" value="{{ form.max_body_chars }}" required></label>
-        <label class="f"><span class="lt">Zeitlimit in Sekunden {{ help('So lange wird auf eine Antwort von Jev gewartet.') }}</span>
+        <label class="f"><span class="lt">Zeitlimit in Sekunden {{ help('So lange wird auf eine Antwort des Endpunkts gewartet.') }}</span>
           <input type="number" name="timeout_seconds" min="1" max="300" step="any" value="{{ form.timeout_seconds }}" required></label>
-        <label class="f"><span class="lt">Mindestabstand in Sekunden {{ help('Pause zwischen zwei Anfragen. Bei OpenRouter 0; über das Vercel-Gateway etwa 2.') }}</span>
+        <label class="f"><span class="lt">Mindestabstand in Sekunden {{ help('Pause zwischen zwei Anfragen, falls der Anbieter die Anfragen pro Minute begrenzt. Meist 0.') }}</span>
           <input type="number" name="min_interval_seconds" min="0" max="60" step="any" value="{{ form.min_interval_seconds }}" required></label>
       </div>
     </section>

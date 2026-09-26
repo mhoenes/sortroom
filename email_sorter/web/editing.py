@@ -38,7 +38,8 @@ def _doc(box: Mailbox) -> tomlkit.TOMLDocument:
 def _save(box: Mailbox, doc: tomlkit.TOMLDocument, shared_path: Path) -> None:
     text = tomlkit.dumps(doc)
     try:
-        config_from_raw({**tomllib.loads(text), "jev": _read_toml(shared_path)["jev"]}, box.config_file.name)
+        config_from_raw({**tomllib.loads(text), "classifier": _read_toml(shared_path)["classifier"]},
+                        box.config_file.name)
     except (ConfigError, tomllib.TOMLDecodeError, KeyError) as e:
         raise EditError(f"Nicht gespeichert: {e}") from None
     path = box.config_file
@@ -110,7 +111,7 @@ def save_category(box: Mailbox, shared_path: Path, key: str, form: dict, create:
 
     description = _text(form, "description")
     if not description:
-        raise EditError("Die Beschreibung darf nicht leer sein – Jev ordnet nur nach ihr ein.")
+        raise EditError("Die Beschreibung darf nicht leer sein – das Modell ordnet nur nach ihr ein.")
     label = _text(form, "label", 60)
     folder = _folder(form, "folder", "Zielordner")
     track = _checked(form, "track_expiry")
@@ -365,7 +366,7 @@ def create_mailbox(base_dir: Path, shared_path: Path, template_file: Path, templ
         _top_level_labels(doc)
     text = tomlkit.dumps(doc)
     try:
-        config_from_raw({**tomllib.loads(text), "jev": _read_toml(shared_path)["jev"]}, "mailbox.toml")
+        config_from_raw({**tomllib.loads(text), "classifier": _read_toml(shared_path)["classifier"]}, "mailbox.toml")
     except (ConfigError, KeyError) as e:
         raise EditError(f"Nicht angelegt: {e}") from None
     folder.mkdir(parents=True)
@@ -380,27 +381,23 @@ def shared_writable(shared_path: Path) -> bool:
 
 
 def save_shared(base_dir: Path, shared_path: Path, form: dict) -> None:
-    """Update [jev] in config.toml; every mailbox must still load with it."""
+    """Update [classifier] in config.toml; every mailbox must still load with it."""
     from ..config import load_mailboxes
 
     if not shared_writable(shared_path):
         raise EditError(f"{shared_path.name} ist schreibgeschützt.")
     doc = tomlkit.parse(shared_path.read_text(encoding="utf-8"))
-    jev = doc["jev"]
+    classifier = doc["classifier"]
     for field, label in (("endpoint", "Endpunkt"), ("model", "Modell")):
         value = _text(form, field, 300)
         if not value or " " in value:
             raise EditError(f"{label}: bitte angeben.")
-        jev[field] = value
+        classifier[field] = value
     if not _text(form, "endpoint", 300).startswith("https://"):
         raise EditError("Endpunkt: bitte eine https-Adresse angeben.")
-    key_env = _text(form, "api_key_env", 64).upper()
-    if not _ENV_RE.match(key_env):
-        raise EditError("Variable für den API-Schlüssel: nur Großbuchstaben, Ziffern und _.")
-    jev["api_key_env"] = key_env
-    jev["max_body_chars"] = _number(form, "max_body_chars", "Mailtext-Länge", 200, 20000, integer=True)
-    jev["timeout_seconds"] = _number(form, "timeout_seconds", "Zeitlimit", 1, 300)
-    jev["min_interval_seconds"] = _number(form, "min_interval_seconds", "Mindestabstand", 0, 60)
+    classifier["max_body_chars"] = _number(form, "max_body_chars", "Mailtext-Länge", 200, 20000, integer=True)
+    classifier["timeout_seconds"] = _number(form, "timeout_seconds", "Zeitlimit", 1, 300)
+    classifier["min_interval_seconds"] = _number(form, "min_interval_seconds", "Mindestabstand", 0, 60)
 
     tmp = shared_path.with_name(shared_path.name + ".tmp")
     tmp.write_text(tomlkit.dumps(doc), encoding="utf-8")

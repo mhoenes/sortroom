@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 from email_sorter import maintenance
 from email_sorter.config import Credentials
-from email_sorter.jev import Decision
+from email_sorter.classifier import Decision
 from email_sorter.store import Store
 from pathlib import Path
 from support import example_config

@@ -6,7 +6,7 @@ from imap_tools import MailMessage
 
 from email_sorter import resort, sorter
 from email_sorter.config import Config, Credentials, SenderRule
-from email_sorter.jev import Decision
+from email_sorter.classifier import Decision
 from email_sorter.store import Store
 from support import example_config
 
@@ -15,7 +15,7 @@ CFG = Config(**{**example_config().__dict__, "min_age_hours": 0,
                 "sender_rules": (SenderRule("frombrotherdevice@brother.com", "inbox"),)})
 CREDS = Credentials("u", "p", "k")
 
-# subject -> (category, confidence) that the fake Jev answers
+# subject -> (category, confidence) that the fake classifier answers
 ANSWERS = {
     "Flug nach Lissabon": ("reisen", 0.99),
     "Tisch bei Il Vagabondo": ("termine", 0.98),
@@ -68,7 +68,7 @@ class FakeMailBox:
             self.folders[target][u] = self.folders[self.selected].pop(u)
 
 
-class FakeJev:
+class FakeClassifier:
     def __init__(self):
         self.calls = 0
 
@@ -82,10 +82,10 @@ class FakeJev:
 def env(tmp_path, monkeypatch):
     reisen = {str(u): _mail(u, s) for u, s in enumerate(ANSWERS, start=1)}
     fake = FakeMailBox({"INBOX": {}, "INBOX.Reisen": reisen, "INBOX.Werbung.Abgelaufen": {}})
-    jev = FakeJev()
+    classifier = FakeClassifier()
     monkeypatch.setattr(resort, "MailBox", lambda *a, **kw: fake)
-    monkeypatch.setattr(Config, "jev_client", lambda self, key: jev)
-    return SimpleNamespace(mb=fake, jev=jev, tmp=tmp_path)
+    monkeypatch.setattr(Config, "classifier_client", lambda self, key: classifier)
+    return SimpleNamespace(mb=fake, classifier=classifier, tmp=tmp_path)
 
 
 def test_live_moves_only_confident_mail_to_other_folders(env):
@@ -119,12 +119,12 @@ def test_server_notation_is_accepted(env):
 
 def test_limit_takes_newest_mails(env):
     resort.run_resort(CFG, CREDS, env.tmp, "INBOX/Reisen", live=False, limit=2)
-    assert env.jev.calls == 2  # uids 5 and 4
+    assert env.classifier.calls == 2  # uids 5 and 4
 
 
 def test_expired_offers_folder_is_refused(env):
     result = resort.run_resort(CFG, CREDS, env.tmp, "INBOX/Werbung/Abgelaufen", live=True, limit=None)
-    assert result.exit_code == 2 and env.jev.calls == 0
+    assert result.exit_code == 2 and env.classifier.calls == 0
 
 
 def test_unknown_folder(env):
@@ -140,14 +140,14 @@ def test_inbox_resort_respects_min_age(env, monkeypatch):
                         lambda mb, uids: {u: now - timedelta(hours=ages[u]) for u in uids})
     cfg = Config(**{**CFG.__dict__, "min_age_hours": 24})
     resort.run_resort(cfg, CREDS, env.tmp, "INBOX", live=False, limit=None)
-    assert env.jev.calls == 3  # uids 2 and 4 are younger than 24h
+    assert env.classifier.calls == 3  # uids 2 and 4 are younger than 24h
 
 
 def test_other_folders_ignore_min_age(env, monkeypatch):
     monkeypatch.setattr(sorter, "received_times", lambda mb, uids: pytest.fail("not needed"))
     cfg = Config(**{**CFG.__dict__, "min_age_hours": 24})
     resort.run_resort(cfg, CREDS, env.tmp, "INBOX/Reisen", live=False, limit=None)
-    assert env.jev.calls == 5
+    assert env.classifier.calls == 5
 
 
 def test_keep_in_inbox_senders_are_not_classified_or_moved(env):
@@ -155,7 +155,7 @@ def test_keep_in_inbox_senders_are_not_classified_or_moved(env):
            b"Subject: From_BrotherDevice\r\nDate: Mon, 21 Sep 2026 10:00:00 +0200\r\n\r\nscan")
     env.mb.folders["INBOX.Reisen"]["9"] = MailMessage([(b"9 (UID 9 RFC822 {1}", raw)])
     result = resort.run_resort(CFG, CREDS, env.tmp, "INBOX/Reisen", live=True, limit=None)
-    assert env.jev.calls == 5 and result.classified == 5
+    assert env.classifier.calls == 5 and result.classified == 5
     assert "9" in env.mb.folders["INBOX.Reisen"]
 
 
@@ -166,7 +166,7 @@ def test_rule_for_matches_case_insensitive_part_of_address():
     assert CFG.rule_for("") is None
 
 
-def test_category_rule_moves_in_resort_without_jev(env):
+def test_category_rule_moves_in_resort_without_classifier(env):
     from email_sorter.config import SenderRule
     raw = (b"Message-ID: <shop@x>\r\nFrom: rechnung@shop.de\r\nTo: me@x.de\r\n"
            b"Subject: Rechnung 42\r\nDate: Mon, 21 Sep 2026 10:00:00 +0200\r\n\r\nx")
@@ -174,7 +174,7 @@ def test_category_rule_moves_in_resort_without_jev(env):
     env.mb.folders["INBOX.Finanzen"] = {}
     cfg = Config(**{**CFG.__dict__, "sender_rules": (SenderRule("@shop.de", "finanzen"),)})
     result = resort.run_resort(cfg, CREDS, env.tmp, "INBOX/Reisen", live=True, limit=None)
-    assert env.jev.calls == 5 and result.moved == 3  # the 2 Termine plus the rule mail
+    assert env.classifier.calls == 5 and result.moved == 3  # the 2 Termine plus the rule mail
     assert "9" in env.mb.folders["INBOX.Finanzen"]
     store = Store(env.tmp / "data" / "state.db")
     assert store.db.execute("SELECT source FROM processed WHERE message_key = '<shop@x>'").fetchone() == ("rule",)

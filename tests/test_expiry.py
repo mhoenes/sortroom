@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from email_sorter.expiry import find_deadline, resolve_expiry, window_deadline
-from email_sorter.jev import Decision, build_request, parse_response
+from email_sorter.classifier import Decision, build_request, parse_response
 from email_sorter.store import GONE, MOVED, Store
 from support import example_config
 

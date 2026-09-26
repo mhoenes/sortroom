@@ -1,8 +1,8 @@
 """Work out when a time-limited offer expires.
 
-Jev only answers with choices and probabilities, never dates, so the date comes
+The model only answers with choices and probabilities, never dates, so the date comes
 from two sources: an explicit deadline in the text ("gültig bis 30.09.") wins;
-otherwise Jev's rough window ("ends within 1-2 days") counted from the send date.
+otherwise the model's rough window ("ends within 1-2 days") counted from the send date.
 
 The result is the last day the offer is valid; the mail gets tagged the day after.
 """
@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from datetime import date, timedelta
 
-# Jev choice criteria for the rough window, and how many days after sending each ends
+# choice criteria for the model's rough window, and how many days after sending each ends
 WINDOWS = {
     "same_day": "Ends on the day the email was sent: today, tonight, until midnight, only today, last hours",
     "one_two_days": "Ends within 1-2 days: tomorrow, 24 or 48 hours, last day, last chance",

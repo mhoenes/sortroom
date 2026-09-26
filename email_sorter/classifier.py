@@ -1,8 +1,7 @@
-"""Client for the Jev decision model (TypeSafe "systemOne" request/response shape).
+"""Client for the classification model: any endpoint that speaks the TypeSafe API
+(https://docs.typesafe.ai/api) - TypeSafe itself, OpenRouter's decisions API or a clone.
 
-Works with Vercel AI Gateway (/typesafe/v1/systemone) and OpenRouter
-(/api/alpha/decisions). Everything that knows about the wire format lives in
-build_request() and parse_response().
+Everything that knows about the wire format lives in build_request() and parse_response().
 """
 from __future__ import annotations
 
@@ -16,7 +15,7 @@ from .expiry import WINDOWS
 
 log = logging.getLogger(__name__)
 
-RETRY_STATUS = {408, 429, 500, 502, 503, 504}
+RETRY_STATUS = {408, 429, 500, 502, 503, 504, 529}  # 529: overloaded
 AUTH_STATUS = {401, 402, 403}  # bad key, no credits, forbidden - retrying won't help
 
 NEEDS_ACTION_QUESTION = {
@@ -44,11 +43,11 @@ EXPIRY_WINDOW_QUESTION = {
 }
 
 
-class JevError(RuntimeError):
+class ClassifierError(RuntimeError):
     pass
 
 
-class JevAuthError(JevError):
+class ClassifierAuthError(ClassifierError):
     """Key/credit problem: abort the run instead of failing every mail."""
 
 
@@ -90,10 +89,8 @@ def build_request(model: str, state: dict, categories: dict[str, str]) -> dict:
 
 
 def _cost(data: dict) -> float:
-    # Vercel: provider_metadata.gateway.cost (string); OpenRouter: usage.cost
-    gateway = (data.get("provider_metadata") or {}).get("gateway") or {}
-    cost = gateway.get("cost", (data.get("usage") or {}).get("cost", 0.0))
-    return float(cost or 0.0)
+    # usage.cost where the provider reports it (OpenRouter does); otherwise the cost is unknown: 0
+    return float((data.get("usage") or {}).get("cost") or 0.0)
 
 
 def parse_response(data: dict, categories: dict[str, str]) -> Decision:
@@ -108,9 +105,9 @@ def parse_response(data: dict, categories: dict[str, str]) -> Decision:
         expiry_window = (answers.get("expiry_window") or {}).get("choice")
         cost = _cost(data)
     except (KeyError, TypeError, ValueError) as e:
-        raise JevError(f"unexpected response shape ({e!r}): {str(data)[:300]}") from None
+        raise ClassifierError(f"unexpected response shape ({e!r}): {str(data)[:300]}") from None
     if choice not in categories:
-        raise JevError(f"Jev returned unknown category {choice!r}")
+        raise ClassifierError(f"the model returned unknown category {choice!r}")
     if expiry_window not in WINDOWS:
         expiry_window = None
     return Decision(choice, confidence, probabilities, needs_action, cost, has_expiry, expiry_window)
@@ -120,7 +117,7 @@ MAX_BACKOFF_SECONDS = 60
 
 
 def _retry_delay(response, attempt: int) -> float:
-    """Honor Retry-After (seconds) if the gateway sends it, else exponential backoff."""
+    """Honor Retry-After (seconds) if the endpoint sends it, else exponential backoff."""
     header = response.headers.get("Retry-After") if response is not None else None
     if header:
         try:
@@ -130,7 +127,7 @@ def _retry_delay(response, attempt: int) -> float:
     return min(2**attempt, MAX_BACKOFF_SECONDS)
 
 
-class JevClient:
+class ClassifierClient:
     def __init__(
         self,
         api_key: str,
@@ -169,18 +166,18 @@ class JevClient:
                 if r.status_code == 200:
                     return parse_response(r.json(), categories)
                 if r.status_code in AUTH_STATUS:
-                    raise JevAuthError(f"HTTP {r.status_code}: {r.text[:300]}")
+                    raise ClassifierAuthError(f"HTTP {r.status_code}: {r.text[:300]}")
                 if r.status_code not in RETRY_STATUS:
-                    raise JevError(f"HTTP {r.status_code}: {r.text[:300]}")
+                    raise ClassifierError(f"HTTP {r.status_code}: {r.text[:300]}")
                 last_error = f"HTTP {r.status_code}"
             if attempt < self.retries:
                 delay = _retry_delay(r, attempt)
-                log.info("Jev request failed (%s), retrying in %.0fs", last_error, delay)
+                log.info("classifier request failed (%s), retrying in %.0fs", last_error, delay)
                 time.sleep(delay)
-        raise JevError(f"giving up after {self.retries} attempts: {last_error}")
+        raise ClassifierError(f"giving up after {self.retries} attempts: {last_error}")
 
     def _pace(self) -> None:
-        """Keep at least min_interval seconds between requests (gateway rate limits)."""
+        """Keep at least min_interval seconds between requests (provider rate limits)."""
         wait = self._last_request + self.min_interval - time.monotonic()
         if wait > 0:
             time.sleep(wait)

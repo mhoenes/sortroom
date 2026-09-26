@@ -3,8 +3,8 @@ from pathlib import Path
 import pytest
 import requests
 
-from email_sorter import jev as jev_mod
-from email_sorter.jev import Decision, JevAuthError, JevClient, JevError, build_request, parse_response
+from email_sorter import classifier as classifier_mod
+from email_sorter.classifier import Decision, ClassifierAuthError, ClassifierClient, ClassifierError, build_request, parse_response
 from email_sorter.mailtext import clean_body, html_to_text
 from email_sorter.sorter import plan, server_folder
 from support import example_config
@@ -14,7 +14,7 @@ CFG = example_config()
 
 SAMPLE_RESPONSE = {
     "id": "gen-dec-1",
-    "model": "typesafe/jev-1.13-20260917",
+    "model": "example/model-1.0",
     "answers": {
         "category": {
             "type": "choice",
@@ -40,10 +40,10 @@ def test_shipped_config_is_valid():
     assert CFG.categories["persoenlich"].folder is None
 
 
-# --- Jev request/response ---------------------------------------------------
+# --- classifier request/response ---------------------------------------------------
 
 def test_build_request_has_both_questions():
-    req = build_request("typesafe/jev-1.13", {"subject": "x"}, CFG.descriptions)
+    req = build_request("example/model-1", {"subject": "x"}, CFG.descriptions)
     assert req["questions"]["category"]["type"] == "choice"
     assert set(req["questions"]["category"]["criteria"]) == set(CFG.categories)
     assert req["questions"]["needs_action"]["type"] == "noul"
@@ -55,37 +55,23 @@ def test_parse_response():
     assert d.runner_up == ("unterlagen", 0.05)
 
 
-def test_parse_response_reads_vercel_gateway_cost():
-    vercel = {
-        "model": "typesafe-ai/jev",
-        "answers": SAMPLE_RESPONSE["answers"],
-        "usage": {"input_tokens": 275, "output_tokens": 20},
-        "provider_metadata": {"gateway": {"cost": "0.00001155", "generationId": "gen_x"}},
-    }
-    assert parse_response(vercel, CFG.descriptions).cost == pytest.approx(0.00001155)
-
-
 def test_parse_response_without_cost():
     no_cost = {"answers": SAMPLE_RESPONSE["answers"], "usage": {"input_tokens": 1}}
     assert parse_response(no_cost, CFG.descriptions).cost == 0.0
 
 
-def test_shipped_config_uses_a_known_gateway():
-    known = {
-        "https://openrouter.ai/api/alpha/decisions": ("typesafe/jev-1.13", "OPENROUTER_API_KEY"),
-        "https://ai-gateway.vercel.sh/typesafe/v1/systemone": ("typesafe-ai/jev", "AI_GATEWAY_API_KEY"),
-    }
-    assert known[CFG.jev_endpoint] == (CFG.jev_model, CFG.jev_api_key_env)
+def test_shipped_config_points_at_an_https_endpoint():
+    assert CFG.classifier_endpoint.startswith("https://") and CFG.classifier_model
 
 
 def test_parse_response_rejects_unknown_category():
     bad = {"answers": {"category": {"choice": "nope", "confidence": 1.0}}}
-    with pytest.raises(JevError):
+    with pytest.raises(ClassifierError):
         parse_response(bad, CFG.descriptions)
 
 
 def test_parse_response_rejects_garbage():
-    with pytest.raises(JevError):
+    with pytest.raises(ClassifierError):
         parse_response({"error": "x"}, CFG.descriptions)
 
 
@@ -109,28 +95,29 @@ class FakeSession(requests.Session):
         return self.responses.pop(0)
 
 
-def test_client_retries_on_rate_limit(monkeypatch):
-    monkeypatch.setattr(jev_mod.time, "sleep", lambda s: None)
-    session = FakeSession([FakeResponse(429), FakeResponse(200, SAMPLE_RESPONSE)])
-    client = JevClient("key", "https://example", "m", session=session)
+@pytest.mark.parametrize("status", [429, 529])  # rate limit, overloaded
+def test_client_retries_on_rate_limit(monkeypatch, status):
+    monkeypatch.setattr(classifier_mod.time, "sleep", lambda s: None)
+    session = FakeSession([FakeResponse(status), FakeResponse(200, SAMPLE_RESPONSE)])
+    client = ClassifierClient("key", "https://example", "m", session=session)
     assert client.decide({}, CFG.descriptions).category == "finanzen"
     assert session.calls == 2
 
 
 def test_client_honors_retry_after(monkeypatch):
     sleeps = []
-    monkeypatch.setattr(jev_mod.time, "sleep", sleeps.append)
+    monkeypatch.setattr(classifier_mod.time, "sleep", sleeps.append)
     session = FakeSession([FakeResponse(429, headers={"Retry-After": "7"}), FakeResponse(200, SAMPLE_RESPONSE)])
-    JevClient("key", "https://example", "m", session=session).decide({}, CFG.descriptions)
+    ClassifierClient("key", "https://example", "m", session=session).decide({}, CFG.descriptions)
     assert sleeps == [7.0]
 
 
 def test_client_backoff_is_capped(monkeypatch):
     sleeps = []
-    monkeypatch.setattr(jev_mod.time, "sleep", sleeps.append)
+    monkeypatch.setattr(classifier_mod.time, "sleep", sleeps.append)
     session = FakeSession([FakeResponse(429)] * 8)
-    client = JevClient("key", "https://example", "m", retries=8, session=session)
-    with pytest.raises(JevError, match="giving up after 8"):
+    client = ClassifierClient("key", "https://example", "m", retries=8, session=session)
+    with pytest.raises(ClassifierError, match="giving up after 8"):
         client.decide({}, CFG.descriptions)
     assert sleeps == [2, 4, 8, 16, 32, 60, 60]
 
@@ -138,10 +125,10 @@ def test_client_backoff_is_capped(monkeypatch):
 def test_client_paces_requests(monkeypatch):
     clock = [100.0]
     sleeps = []
-    monkeypatch.setattr(jev_mod.time, "monotonic", lambda: clock[0])
-    monkeypatch.setattr(jev_mod.time, "sleep", lambda s: (sleeps.append(s), clock.__setitem__(0, clock[0] + s)))
+    monkeypatch.setattr(classifier_mod.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(classifier_mod.time, "sleep", lambda s: (sleeps.append(s), clock.__setitem__(0, clock[0] + s)))
     session = FakeSession([FakeResponse(200, SAMPLE_RESPONSE)] * 2)
-    client = JevClient("key", "https://example", "m", min_interval=2.0, session=session)
+    client = ClassifierClient("key", "https://example", "m", min_interval=2.0, session=session)
     client.decide({}, CFG.descriptions)
     clock[0] += 0.5  # next mail comes 0.5s later
     client.decide({}, CFG.descriptions)
@@ -150,8 +137,8 @@ def test_client_paces_requests(monkeypatch):
 
 def test_client_does_not_retry_auth_errors():
     session = FakeSession([FakeResponse(402, {"error": "no credits"})])
-    client = JevClient("key", "https://example", "m", session=session)
-    with pytest.raises(JevAuthError):
+    client = ClassifierClient("key", "https://example", "m", session=session)
+    with pytest.raises(ClassifierAuthError):
         client.decide({}, CFG.descriptions)
     assert session.calls == 1
 

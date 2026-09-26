@@ -87,7 +87,7 @@
       </div>
       <dl>
         <dt>Kategorie</dt><dd>{{ label(m.category) }}</dd>
-        <dt>Entschieden von</dt><dd>{{ {'rule': 'Absender-Regel', 'manual': 'von Hand'}.get(m.source, 'Jev') }}</dd>
+        <dt>Entschieden von</dt><dd>{{ {'rule': 'Absender-Regel', 'manual': 'von Hand'}.get(m.source, 'Modell') }}</dd>
         {% if m.source not in ('rule', 'manual') %}<dt>Konfidenz</dt><dd class="mono">{{ m.confidence|de_conf }}</dd>
         <dt>Handlungsbedarf</dt><dd class="mono">{{ m.needs_action|de_conf }}</dd>{% endif %}
         <dt>Stern</dt><dd>{{ 'ja' if m.flagged else 'nein' }}</dd>

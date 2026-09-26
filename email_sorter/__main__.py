@@ -37,7 +37,7 @@ def _parser() -> argparse.ArgumentParser:
                         help="manual backfill: sort all unprocessed mail received since this date "
                              "(month by month, newest first; the scheduled task never does this)")
     parser.add_argument("--check", action="store_true",
-                        help="test IMAP login and the Jev connection, list folders, change nothing")
+                        help="test IMAP login and the classifier connection, list folders, change nothing")
     parser.add_argument("--recheck-expiry", action="store_true",
                         help="one-off: find expiry dates of already sorted offers (with --live also move expired ones)")
     parser.add_argument("--rename-category", nargs=2, metavar=("OLD", "NEW"),
@@ -50,7 +50,7 @@ def _parser() -> argparse.ArgumentParser:
                              "elsewhere; with --limit N only the newest N (with --live)")
     parser.add_argument("--relocate", metavar="CATEGORY",
                         help="move already sorted mail of CATEGORY into the folder its config now gives it "
-                             "(uses the log, no Jev requests; with --live)")
+                             "(uses the log, no classifier requests; with --live)")
     parser.add_argument("--reconcile", action="store_true",
                         help="compare the log with the mailbox: mark deleted mails, note mails filed by hand "
                              "(with --live; changes nothing on the server)")

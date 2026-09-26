@@ -2,16 +2,11 @@
 # mailboxes/<id>/mailbox.toml (created in the UI via "Postfach hinzufügen").
 # Secrets (API keys) live in .env, not here.
 
-[jev]
-# OpenRouter (decisions API, alpha)
+# The model that files the mails: any service that speaks the TypeSafe API
+# (https://docs.typesafe.ai/api). Its API key is CLASSIFIER_API_KEY in .env.
+[classifier]
 endpoint = "https://openrouter.ai/api/alpha/decisions"
 model = "typesafe/jev-1.13"
-api_key_env = "OPENROUTER_API_KEY"   # name of the .env variable holding the key
-# Vercel AI Gateway alternative:
-# endpoint = "https://ai-gateway.vercel.sh/typesafe/v1/systemone"
-# model = "typesafe-ai/jev"
-# api_key_env = "AI_GATEWAY_API_KEY"
-max_body_chars = 3000     # body text sent to Jev is cut to this length
+max_body_chars = 3000       # body text sent to the model is cut to this length
 timeout_seconds = 20
-min_interval_seconds = 0    # pause between requests; OpenRouter needs none. For Vercel use 2.0:
-                            # it rate-limits per minute, shorter gaps trigger 40-60 s forced waits
+min_interval_seconds = 0    # pause between requests, for providers that limit requests per minute

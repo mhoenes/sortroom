@@ -87,7 +87,7 @@ def relocate_category(cfg: Config, creds: Credentials, category: str, live: bool
                       base_dir=BASE_DIR) -> RunResult:
     """Move already sorted mails of `category` into the folder config.toml now gives it.
 
-    Uses the log, not Jev: only mails classified with at least min_confidence are moved.
+    Uses the log, not the classifier: only mails classified with at least min_confidence are moved.
     Mails no longer where the log expects them (deleted or moved by hand) are skipped.
     """
     cat = cfg.categories.get(category)

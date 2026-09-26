@@ -1,4 +1,4 @@
-"""Turn an imap_tools message into the compact `state` object sent to Jev."""
+"""Turn an imap_tools message into the compact `state` object sent to the classifier."""
 from __future__ import annotations
 
 import hashlib
@@ -36,7 +36,7 @@ def clean_body(text: str, max_chars: int) -> str:
     return body[:max_chars]
 
 
-FULL_TEXT_CHARS = 20_000  # for deadline search; Jev only gets max_body_chars
+FULL_TEXT_CHARS = 20_000  # for deadline search; the model only gets max_body_chars
 
 
 def _body(msg: MailMessage) -> str:

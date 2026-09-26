@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS processed (
     expires         TEXT,                        -- last valid day of the offer (ISO date)
     expiry_checked  INTEGER NOT NULL DEFAULT 1,  -- 0 = processed before expiry tracking existed
     expired_tagged  INTEGER NOT NULL DEFAULT 0,  -- 1 = moved to the expired folder, 2 = mail no longer found
-    source          TEXT NOT NULL DEFAULT 'jev', -- 'jev', 'rule' (sender rule) or 'manual' (set in the UI)
+    source          TEXT NOT NULL DEFAULT 'classifier', -- 'classifier', 'rule' (sender rule) or 'manual' (set in the UI)
     gone            INTEGER NOT NULL DEFAULT 0   -- 1 = no longer in the mailbox (deleted), found by a reconcile
 );
 CREATE TABLE IF NOT EXISTS runs (
@@ -59,6 +59,8 @@ class Store:
         path.parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(path)
         self.db.executescript(_SCHEMA)
+        # mails decided by the model were logged as 'jev' up to 0.7.10
+        self.db.execute("UPDATE processed SET source = 'classifier' WHERE source = 'jev'")
         self.db.commit()
 
     def is_processed(self, key: str) -> bool:
@@ -84,7 +86,7 @@ class Store:
                 int(outcome.flag),
                 d.cost,
                 outcome.expires.isoformat() if outcome.expires else None,
-                getattr(outcome, "source", "jev"),
+                getattr(outcome, "source", "classifier"),
             ),
         )
         self.db.commit()

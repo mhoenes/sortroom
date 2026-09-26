@@ -14,7 +14,7 @@ from pathlib import Path
 from imap_tools import AND, MailBox
 
 from .config import Category, Config, Credentials
-from .jev import JevAuthError, JevError
+from .classifier import ClassifierAuthError, ClassifierError
 from .mailtext import build_state, message_key
 from .sorter import IMAP_TIMEOUT, MAX_EXPIRY_AGE_DAYS, UID_CHUNK, _delimiter, _find_uids, _group_by_folder
 
@@ -36,15 +36,15 @@ class TrialRow:
 
 
 def sample(db_path: Path, category: str, own: int = OWN_SAMPLE, other: int = OTHER_SAMPLE) -> list[tuple]:
-    """(key, moved_to, received, sender, subject, category) of mails decided by Jev, newest first."""
+    """(key, moved_to, received, sender, subject, category) of mails decided by the model, newest first."""
     if not db_path.exists():
         return []
     db = sqlite3.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
     try:
         cols = {r[1] for r in db.execute("PRAGMA table_info(processed)")}
-        jev_only = "AND source = 'jev'" if "source" in cols else ""
+        classified_only = "AND source NOT IN ('rule', 'manual')" if "source" in cols else ""
         sql = ("SELECT message_key, moved_to, received, sender, subject, category FROM processed "
-               f"WHERE category {{}} ? {jev_only} ORDER BY processed_at DESC LIMIT ?")
+               f"WHERE category {{}} ? {classified_only} ORDER BY processed_at DESC LIMIT ?")
         return (db.execute(sql.format("="), (category, own)).fetchall()
                 + db.execute(sql.format("!="), (category, other)).fetchall())
     finally:
@@ -52,7 +52,7 @@ def sample(db_path: Path, category: str, own: int = OWN_SAMPLE, other: int = OTH
 
 
 def with_category(cfg: Config, key: str, description: str) -> dict[str, str]:
-    """The descriptions Jev sees, with one category changed or added."""
+    """The descriptions the model sees, with one category changed or added."""
     cats = dict(cfg.categories)
     cats[key] = replace(cats[key], description=description) if key in cats else Category(
         key, description, None, False, True, False)
@@ -68,7 +68,7 @@ def run_trial(cfg: Config, creds: Credentials, db_path: Path, key: str, descript
     if not rows:
         return [], 0.0
     descriptions = with_category(cfg, key, description)
-    jev = cfg.jev_client(creds.jev_api_key)
+    classifier = cfg.classifier_client(creds.classifier_api_key)
     cost, done = 0.0, 0
     with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(
             creds.imap_user, creds.imap_password, initial_folder=cfg.source_folder) as mb:
@@ -88,10 +88,10 @@ def run_trial(cfg: Config, creds: Credentials, db_path: Path, key: str, descript
                 if k not in rows or rows[k].after or rows[k].error:
                     continue
                 try:
-                    d = jev.decide(build_state(msg, cfg.max_body_chars), descriptions)
-                except JevAuthError:
+                    d = classifier.decide(build_state(msg, cfg.max_body_chars), descriptions)
+                except ClassifierAuthError:
                     raise
-                except JevError as e:
+                except ClassifierError as e:
                     rows[k].error = str(e)[:120]
                     continue
                 rows[k].after, rows[k].confidence = d.category, d.confidence

@@ -41,7 +41,7 @@
     <section class="card stack">
       <h2>Einsortieren</h2>
       <div class="grid cols-3">
-        <label class="f"><span class="lt">Mindest-Konfidenz {{ help('Nur wenn Jev mindestens so sicher ist (0 bis 1), wird verschoben. Unsichere Mails bleiben im Posteingang und erscheinen unter „Zur Prüfung“.') }}</span>
+        <label class="f"><span class="lt">Mindest-Konfidenz {{ help('Nur wenn das Modell mindestens so sicher ist (0 bis 1), wird verschoben. Unsichere Mails bleiben im Posteingang und erscheinen unter „Zur Prüfung“.') }}</span>
           <input type="number" name="min_confidence" min="0" max="1" step="0.01" value="{{ form.min_confidence }}" required>
         </label>
         <label class="f"><span class="lt">Stern bei Handlungsbedarf ab {{ help('Ab dieser Wahrscheinlichkeit für „du musst etwas tun“ bekommt eine Mail einen Stern – in Kategorien, in denen das eingeschaltet ist.') }}</span>
@@ -58,7 +58,7 @@
         <label class="f"><span class="lt">Rückblick in Tagen {{ help('Ein normaler Lauf schaut nur auf Mails der letzten so vielen Tage. Ältere holt ein Backfill.') }}</span>
           <input type="number" name="lookback_days" min="1" max="365" step="1" value="{{ form.lookback_days }}" required>
         </label>
-        <label class="f"><span class="lt">Max. Mails pro Lauf {{ help('Obergrenze für Jev-Anfragen je Lauf; begrenzt die Kosten, falls plötzlich sehr viele Mails ankommen. Absender-Regeln zählen nicht mit.') }}</span>
+        <label class="f"><span class="lt">Max. Mails pro Lauf {{ help('Obergrenze für Anfragen an das Modell je Lauf; begrenzt die Kosten, falls plötzlich sehr viele Mails ankommen. Absender-Regeln zählen nicht mit.') }}</span>
           <input type="number" name="max_per_run" min="1" max="5000" step="1" value="{{ form.max_per_run }}" required>
         </label>
         <label class="f" style="grid-column:span 2"><span class="lt">Standard-Ordner für Abgelaufenes {{ help('Hierhin wandern befristete Angebote nach ihrem letzten gültigen Tag – außer eine Kategorie hat einen eigenen Ordner. Leer: nichts wird verschoben.') }}</span>
@@ -104,10 +104,10 @@
   <fieldset {% if not editable %}disabled{% endif %} class="stack">
     <section class="card stack rules-box">
       <div>
-        <h2>Absender-Regeln {{ help('Mails dieser Absender entscheidet nicht Jev: Sie bleiben im Posteingang oder gehen direkt in eine Kategorie. Treffer, wenn der Text in der Absenderadresse vorkommt, z. B. „@brother.com“. Die erste passende Regel gilt.') }}</h2>
+        <h2>Absender-Regeln {{ help('Mails dieser Absender entscheidet nicht das Modell: Sie bleiben im Posteingang oder gehen direkt in eine Kategorie. Treffer, wenn der Text in der Absenderadresse vorkommt, z. B. „@brother.com“. Die erste passende Regel gilt.') }}</h2>
         <p class="muted hint">Die erste passende Regel gilt. Neue und entfernte Regeln werden erst mit „Regeln speichern“ übernommen.</p>
       </div>
-      <p class="muted no-rules">Noch keine Regeln – alle Mails entscheidet Jev.</p>
+      <p class="muted no-rules">Noch keine Regeln – alle Mails entscheidet das Modell.</p>
       <div class="scroll-x"><table class="rules">
         <thead><tr><th scope="col">Absender enthält</th><th scope="col">Ziel</th><th scope="col"><span class="sr-only">Entfernen</span></th></tr></thead>
         <tbody>
