@@ -36,11 +36,11 @@
     <span class="v">{{ stats.sorted_today|de_num }}</span>
     <span class="d">{{ stats.flagged_7d|de_num }} mit Stern in 7 Tagen</span>
   </div>
-  <div class="card kpi">
+  <a class="card kpi link" href="/ui/m/{{ box.id }}/mails?uncertain=1&amp;period=30d">
     <span class="k">Zur Prüfung</span>
     <span class="v">{{ stats.uncertain|de_num }} <small>unsicher</small></span>
-    <span class="d">Konfidenz unter {{ cfg.min_confidence|de_conf }}, letzte 30 Tage</span>
-  </div>
+    <span class="d">Konfidenz unter {{ cfg.min_confidence|de_conf }}, Eingang letzte 30 Tage</span>
+  </a>
   <div class="card kpi">
     <span class="k">Kosten diesen Monat</span>
     <span class="v mono">{{ stats.cost_month|usd }}</span>
@@ -48,16 +48,30 @@
   </div>
 </div>
 
+{% if review %}
+<section class="card stack tight" aria-label="Zur Prüfung">
+  <div class="row"><h2 class="grow">Zur Prüfung</h2><a href="/ui/m/{{ box.id }}/mails?uncertain=1&amp;period=30d" style="font-size:13px">{{ 'Alle ' ~ stats.uncertain|de_num ~ ' anzeigen' if stats.uncertain > review|length else 'In der Liste öffnen' }}</a></div>
+  <div class="review">
+    {% for m in review %}
+    <a href="/ui/m/{{ box.id }}/mails?uncertain=1&amp;period=30d&amp;key={{ m.message_key|urlencode }}">
+      <span class="what"><b>{{ m.subject or '(ohne Betreff)' }}</b><span class="muted"><span class="mono">{{ m.received|de_dt }}</span> · {{ m.sender }}</span></span>
+      <span class="guess"><span class="muted">Vorschlag</span><b>{{ label(m.category) }} <span class="mono muted">{{ m.confidence|de_conf }}</span></b></span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
 <div class="grid split">
   <section class="card" style="display:flex;flex-direction:column;gap:16px">
-    <div class="row"><h2 class="grow">Einsortiert, letzte 7 Tage</h2><span class="muted" style="font-size:13px">{{ total_7d|de_num }} Mails</span></div>
+    <div class="row"><h2 class="grow">Eingang, letzte 7 Tage</h2><span class="muted" style="font-size:13px">{{ total_7d|de_num }} Mails</span></div>
     {% if bars %}
     <div class="bars">
       {% for b in bars %}
       <div class="bar"><span>{{ b.label }}</span><span class="track"><span class="fill {{ b.tone }}" style="width:{{ b.pct }}%"></span></span><span class="n">{{ b.n|de_num }}</span></div>
       {% endfor %}
     </div>
-    {% else %}<div class="empty">In den letzten 7 Tagen wurde nichts einsortiert.</div>{% endif %}
+    {% else %}<div class="empty">Keine verarbeiteten Mails aus den letzten 7 Tagen.</div>{% endif %}
     <div class="muted" style="margin-top:auto;padding-top:14px;border-top:1px solid var(--line-soft);font-size:13px">
       <strong style="color:var(--ink)">{{ expired_7d|de_num }}</strong> abgelaufene Angebote verschoben
     </div>
@@ -84,23 +98,6 @@
     </table></div>
     {% else %}<div class="empty">Noch keine Läufe mit Mails protokolliert.</div>{% endif %}
 
-    <div class="row" style="margin-top:12px"><h2 class="grow">Zur Prüfung</h2><a href="/ui/m/{{ box.id }}/mails?uncertain=1&amp;period=30d" style="font-size:13px">Alle anzeigen</a></div>
-    {% if review %}
-    <div style="border:1px solid var(--line-soft);border-radius:10px">
-      {% for m in review %}
-      <a href="/ui/m/{{ box.id }}/mails?uncertain=1&amp;period=all&amp;key={{ m.message_key|urlencode }}" style="display:flex;align-items:center;gap:14px;padding:10px 14px;{% if not loop.last %}border-bottom:1px solid var(--line-soft);{% endif %}color:inherit;text-decoration:none">
-        <span style="flex-grow:1;min-width:0;display:flex;flex-direction:column;gap:2px">
-          <span style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ m.subject or '(ohne Betreff)' }}</span>
-          <span class="muted" style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ m.sender }}</span>
-        </span>
-        <span style="width:150px;flex-shrink:0;display:flex;flex-direction:column;gap:2px;font-size:13px">
-          <span class="muted" style="font-size:12px">Vorschlag</span>
-          <span style="font-weight:600">{{ label(m.category) }} <span class="mono muted" style="font-weight:400">{{ m.confidence|de_conf }}</span></span>
-        </span>
-      </a>
-      {% endfor %}
-    </div>
-    {% else %}<div class="empty">Keine unsicheren Mails.</div>{% endif %}
   </section>
 </div>
 {% endblock %}

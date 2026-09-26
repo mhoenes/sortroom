@@ -61,8 +61,8 @@ def stats(db: sqlite3.Connection | None, min_confidence: float, now: datetime | 
         f"SELECT COUNT(*) FROM processed WHERE moved_to IS NULL AND confidence < ? AND gone = 0 "
         f"AND {RECEIVED} >= julianday(?)",
         (min_confidence, _received_since(now, timedelta(days=30)))).fetchone()[0]
-    s.flagged_7d = db.execute("SELECT COUNT(*) FROM processed WHERE flagged = 1 AND processed_at >= ?",
-                              (_iso(now - timedelta(days=7)),)).fetchone()[0]
+    s.flagged_7d = db.execute(f"SELECT COUNT(*) FROM processed WHERE flagged = 1 AND {RECEIVED} >= julianday(?)",
+                              (_received_since(now, timedelta(days=7)),)).fetchone()[0]
     cost, n = db.execute(
         "SELECT COALESCE(SUM(cost_usd), 0), COUNT(*) FROM processed WHERE processed_at >= ? AND source = 'jev'",
         (month,)).fetchone()
@@ -75,23 +75,25 @@ def stats(db: sqlite3.Connection | None, min_confidence: float, now: datetime | 
 
 
 def distribution(db: sqlite3.Connection | None, days: int = 7, now: datetime | None = None) -> list[tuple[str, int]]:
-    """(category, count) of mail sorted in the last `days` days; '' stands for 'left in the inbox'."""
+    """(category, count) of mail received in the last `days` days; '' stands for 'left in the inbox'.
+
+    By date received, so a backfill of old mail doesn't swamp the week."""
     if db is None:
         return []
-    since = _iso((now or datetime.now()) - timedelta(days=days))
+    since = _received_since(now or datetime.now(), timedelta(days=days))
     rows = db.execute(
         "SELECT CASE WHEN moved_to IS NULL THEN '' ELSE category END AS c, COUNT(*) FROM processed "
-        "WHERE processed_at >= ? GROUP BY c ORDER BY COUNT(*) DESC", (since,)).fetchall()
+        f"WHERE {RECEIVED} >= julianday(?) GROUP BY c ORDER BY COUNT(*) DESC", (since,)).fetchall()
     return [(r[0], r[1]) for r in rows]
 
 
 def category_counts(db: sqlite3.Connection | None, days: int = 30, now: datetime | None = None) -> dict[str, int]:
-    """Mails per category in the last `days` days (moved or not)."""
+    """Mails per category received in the last `days` days (moved or not)."""
     if db is None:
         return {}
-    since = _iso((now or datetime.now()) - timedelta(days=days))
-    return dict(db.execute("SELECT category, COUNT(*) FROM processed WHERE processed_at >= ? GROUP BY category",
-                           (since,)).fetchall())
+    since = _received_since(now or datetime.now(), timedelta(days=days))
+    return dict(db.execute(f"SELECT category, COUNT(*) FROM processed WHERE {RECEIVED} >= julianday(?) "
+                           "GROUP BY category", (since,)).fetchall())
 
 
 def expired_moved(db: sqlite3.Connection | None, days: int = 7, now: datetime | None = None) -> int:
@@ -111,13 +113,16 @@ def recent_runs(db: sqlite3.Connection | None, limit: int = 8, skip_empty: bool 
                                         (limit,))]
 
 
-def uncertain_mails(db: sqlite3.Connection | None, min_confidence: float, limit: int = 10) -> list[dict]:
+def uncertain_mails(db: sqlite3.Connection | None, min_confidence: float, limit: int = 10,
+                    days: int | None = None, now: datetime | None = None) -> list[dict]:
+    """Uncertain mails still in the inbox, newest received first; `days` limits them like stats().uncertain."""
     if db is None:
         return []
+    since = f"AND {RECEIVED} >= julianday(?) " if days else ""
+    args = [min_confidence] + ([_received_since(now or datetime.now(), timedelta(days=days))] if days else [])
     return [dict(r) for r in db.execute(
-        "SELECT * FROM processed WHERE moved_to IS NULL AND confidence < ? AND gone = 0 "
-        f"ORDER BY {RECEIVED} DESC LIMIT ?",
-        (min_confidence, limit))]
+        f"SELECT * FROM processed WHERE moved_to IS NULL AND confidence < ? AND gone = 0 {since}"
+        f"ORDER BY {RECEIVED} DESC LIMIT ?", args + [limit])]
 
 
 @dataclass

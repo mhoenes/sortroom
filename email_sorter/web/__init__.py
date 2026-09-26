@@ -273,7 +273,7 @@ def overview(request: Request, box_id: str):
         st = queries.stats(db, cfg.min_confidence)
         dist = queries.distribution(db, 7)
         runs = queries.recent_runs(db, 8)
-        review = queries.uncertain_mails(db, cfg.min_confidence, 5)
+        review = queries.uncertain_mails(db, cfg.min_confidence, 5, days=30)  # as stats().uncertain
         expired = queries.expired_moved(db, 7)
     finally:
         if db:
