@@ -22,8 +22,18 @@ h1, h2 { margin: 0; }
 .shell { display: flex; min-height: 100vh; }
 .side { width: 232px; flex-shrink: 0; padding: 24px 16px; background: var(--side); color: var(--side-ink);
   display: flex; flex-direction: column; gap: 28px; position: sticky; top: 0; height: 100vh; }
-.brand { padding: 0 12px; display: flex; align-items: center; gap: 12px; }
-.brand > div { display: flex; flex-direction: column; gap: 2px; }
+.side-top { display: flex; align-items: center; gap: 8px; }
+.side-body { flex-grow: 1; display: flex; flex-direction: column; gap: 28px; }
+.brand { flex-grow: 1; min-width: 0; padding: 0 12px; display: flex; align-items: center; gap: 12px;
+  color: inherit; text-decoration: none; }
+.brand:hover { color: inherit; }
+.brand > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.brand .box { display: none; }
+.menu-btn { display: none; flex-shrink: 0; align-items: center; justify-content: center; width: 44px; height: 44px;
+  border: 0; border-radius: 8px; background: transparent; color: var(--side-ink); cursor: pointer; }
+.menu-btn:hover { background: var(--side-2); }
+.menu-btn .close, .side.open .menu-btn .open { display: none; }
+.side.open .menu-btn .close { display: inline; }
 .brand img { flex-shrink: 0; border-radius: 8px; }
 .brand b { font-size: 17px; font-weight: 600; }
 .brand span { font-family: var(--mono); font-size: 12px; color: var(--side-muted); }
@@ -237,10 +247,19 @@ svg.star { display: block; width: 16px; height: 16px; fill: #D99A06; }
 }
 @media (max-width: 960px) {
   .maillist .conf, .has-detail .maillist .conf { display: none; }
+  /* the sidebar becomes a top bar: brand with the current mailbox, menu behind a button */
+  .shell { flex-direction: column; }
+  .side { width: auto; height: auto; top: 0; z-index: 30; padding: 8px 12px 8px 16px; gap: 0; }
+  .brand { padding: 0; }
+  .brand .ver { display: none; }
+  .brand .box { display: block; font-family: var(--sans); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .menu-btn { display: inline-flex; }
+  .side-body { display: none; }
+  .side.open .side-body { display: flex; gap: 16px; padding: 16px 0 8px; max-height: calc(100vh - 60px); overflow-y: auto; }
+  .switcher .menu { position: static; margin-top: 6px; }
+  .detail { scroll-margin-top: 72px; }
 }
 @media (max-width: 760px) {
-  .shell { flex-direction: column; }
-  .side { width: auto; height: auto; position: static; gap: 16px; }
   .main { padding: 20px 16px; }
   .cols-4, .cols-2 { grid-template-columns: minmax(0, 1fr); }
   .head { flex-wrap: wrap; align-items: flex-start; }

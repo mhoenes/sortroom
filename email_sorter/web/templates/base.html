@@ -15,7 +15,15 @@
 <body>
 <div class="shell">
 <nav class="side" aria-label="Hauptnavigation">
-  <div class="brand"><img src="/ui/static/icon-small.svg?v={{ version }}" alt="" width="32" height="32"><div><b>Sortroom</b><span>v{{ version }}</span></div></div>
+  <div class="side-top">
+    <a class="brand" href="/ui"><img src="/ui/static/icon-small.svg?v={{ version }}" alt="" width="32" height="32"><div><b>Sortroom</b>
+      <span class="ver">v{{ version }}</span>{% if current %}<span class="box">{{ current.name }}</span>{% endif %}</div></a>
+    <button class="menu-btn" type="button" aria-expanded="false" aria-controls="side-body" aria-label="Menü">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path class="open" d="M4 7h16M4 12h16M4 17h16"/><path class="close" d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+
+  <div class="side-body" id="side-body">
 
   <div class="nav">
     <a href="/ui" {% if active == 'all' %}aria-current="page"{% endif %}>
@@ -69,6 +77,7 @@
     <form method="post" action="/logout"><button type="submit">Abmelden</button></form>
     <a class="source" href="{{ source_url }}" target="_blank" rel="noopener">Quellcode · AGPL-3.0</a>
   </div>
+  </div>
 </nav>
 <main class="main">
 {% set flash = pop_flash(request) if request is defined else None %}
@@ -77,6 +86,13 @@
 </main>
 </div>
 <script>
+  // narrow screens: the sidebar is a top bar whose menu opens on demand
+  (() => {
+    const side = document.querySelector('.side'), btn = side.querySelector('.menu-btn');
+    const set = open => { side.classList.toggle('open', open); btn.setAttribute('aria-expanded', String(open)); };
+    btn.addEventListener('click', () => set(!side.classList.contains('open')));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && side.classList.contains('open')) { set(false); btn.focus(); } });
+  })();
   // success messages disappear after 3 s; warnings and errors stay
   document.querySelectorAll('[data-autohide]').forEach(el => setTimeout(() => {
     el.classList.add('hiding');
