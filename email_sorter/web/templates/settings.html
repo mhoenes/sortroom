@@ -88,32 +88,65 @@
   </fieldset>
 </form>
 
-<form method="post" action="/ui/m/{{ box.id }}/settings/sender-rules" id="regeln">
-  <input type="hidden" name="csrf" value="{{ csrf }}">
-  <input type="hidden" name="rows" value="{{ rules|length }}">
-  <fieldset {% if not editable %}disabled{% endif %} class="stack">
-    <section class="card stack">
-      <div>
-        <h2>Absender-Regeln {{ help('Mails dieser Absender entscheidet nicht Jev: Sie bleiben im Posteingang oder gehen direkt in eine Kategorie. Treffer, wenn der Text in der Absenderadresse vorkommt, z. B. „@brother.com“. Die erste passende Regel gilt.') }}</h2>
-        <p class="muted hint">Leere Zeilen werden ignoriert. Für eine weitere Regel eine freie Zeile ausfüllen und speichern.</p>
-      </div>
-      <div class="scroll-x"><table class="rules">
-        <thead><tr><th scope="col">Absender enthält</th><th scope="col">Ziel</th><th scope="col">Entfernen</th></tr></thead>
-        <tbody>
-        {% for match, action in rules %}
-          <tr>
-            <td><input type="text" name="match_{{ loop.index0 }}" value="{{ match }}" aria-label="Absender, Zeile {{ loop.index }}" placeholder="{{ 'name@firma.de oder @firma.de' if not match }}"></td>
-            <td><select name="action_{{ loop.index0 }}" aria-label="Ziel, Zeile {{ loop.index }}">
+{% macro rule_row(i, match, action) %}<tr>
+            <td><input type="text" name="match_{{ i }}" value="{{ match }}" aria-label="Absender enthält" placeholder="name@firma.de oder @firma.de"></td>
+            <td><select name="action_{{ i }}" aria-label="Ziel">
               <option value="inbox" {% if action == 'inbox' %}selected{% endif %}>Im Posteingang lassen</option>
               {% for key, c in cfg.categories.items() %}<option value="{{ key }}" {% if action == key %}selected{% endif %}>{{ c.label }}{% if c.folder %} → {{ c.folder|folder_label }}{% endif %}</option>{% endfor %}
             </select></td>
-            <td>{% if match %}<label class="check small"><input type="checkbox" name="remove_{{ loop.index0 }}" value="1">entfernen</label>{% endif %}</td>
-          </tr>
+            <td class="rule-del">{% if editable %}<button class="icon-btn rule-remove" type="button" aria-label="Regel entfernen" title="Regel entfernen">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>{% endif %}</td>
+          </tr>{% endmacro %}
+<form method="post" action="/ui/m/{{ box.id }}/settings/sender-rules" id="regeln">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {# row numbers only grow; a removed row simply leaves a gap the server skips #}
+  <input type="hidden" name="rows" value="{{ rules|length }}">
+  <fieldset {% if not editable %}disabled{% endif %} class="stack">
+    <section class="card stack rules-box">
+      <div>
+        <h2>Absender-Regeln {{ help('Mails dieser Absender entscheidet nicht Jev: Sie bleiben im Posteingang oder gehen direkt in eine Kategorie. Treffer, wenn der Text in der Absenderadresse vorkommt, z. B. „@brother.com“. Die erste passende Regel gilt.') }}</h2>
+        <p class="muted hint">Die erste passende Regel gilt. Neue und entfernte Regeln werden erst mit „Regeln speichern“ übernommen.</p>
+      </div>
+      <p class="muted no-rules">Noch keine Regeln – alle Mails entscheidet Jev.</p>
+      <div class="scroll-x"><table class="rules">
+        <thead><tr><th scope="col">Absender enthält</th><th scope="col">Ziel</th><th scope="col"><span class="sr-only">Entfernen</span></th></tr></thead>
+        <tbody>
+        {% for match, action in rules %}
+          {{ rule_row(loop.index0, match, action) }}
         {% endfor %}
         </tbody>
       </table></div>
-      {% if editable %}<div class="actions"><button class="btn primary" type="submit">Regeln speichern</button></div>{% endif %}
+      {% if editable %}
+      <template id="rule-row">{{ rule_row('__i__', '', 'inbox') }}</template>
+      <div class="actions">
+        <button class="btn rule-add" type="button">+ Regel hinzufügen</button>
+        <button class="btn primary" type="submit">Regeln speichern</button>
+        <span class="muted hint unsaved" hidden>Noch nicht gespeichert</span>
+      </div>
+      {% endif %}
     </section>
   </fieldset>
 </form>
+<script>
+  // add and remove rule rows in place; nothing is saved until "Regeln speichern"
+  (() => {
+    const form = document.getElementById('regeln'), tpl = document.getElementById('rule-row');
+    if (!tpl) return;
+    const body = form.querySelector('tbody'), rows = form.querySelector('[name=rows]');
+    const unsaved = () => { form.querySelector('.unsaved').hidden = false; };
+    form.addEventListener('input', unsaved);
+    form.addEventListener('click', e => {
+      if (e.target.closest('.rule-remove')) {
+        e.target.closest('tr').remove();
+        unsaved();
+      } else if (e.target.closest('.rule-add')) {
+        const i = Number(rows.value);
+        rows.value = i + 1;
+        body.insertAdjacentHTML('beforeend', tpl.innerHTML.replaceAll('__i__', i));
+        body.lastElementChild.querySelector('input').focus();
+        unsaved();
+      }
+    });
+  })();
+</script>
 {% endblock %}
