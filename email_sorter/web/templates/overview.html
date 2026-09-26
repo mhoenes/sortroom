@@ -66,7 +66,7 @@
   <section class="card" style="display:flex;flex-direction:column;gap:12px;min-width:0">
     <h2>Letzte Läufe</h2>
     {% if runs %}
-    <table>
+    <div class="scroll-x"><table>
       <thead><tr><th scope="col">Zeit</th><th scope="col">Art</th><th scope="col" class="num">Mails</th><th scope="col" class="num">Verschoben</th><th scope="col" class="num">Kosten</th><th scope="col">Status</th></tr></thead>
       <tbody>
       {% for r in runs %}
@@ -81,7 +81,7 @@
         </tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     {% else %}<div class="empty">Noch keine Läufe mit Mails protokolliert.</div>{% endif %}
 
     <div class="row" style="margin-top:12px"><h2 class="grow">Zur Prüfung</h2><a href="/ui/m/{{ box.id }}/mails?uncertain=1&amp;period=30d" style="font-size:13px">Alle anzeigen</a></div>

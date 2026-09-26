@@ -8,8 +8,8 @@
   --warn-bg: #FBEEDC; --warn: #6E3503; --warn-bar: #B45309;
   --err-bg: #FBE7E4; --err: #95251A; --err-bar: #A32A1D;
   --neutral-bg: #EFEDE7;
-  --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, 'Cascadia Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--sans); font-size: 14px; }
@@ -117,6 +117,7 @@ td { padding: 10px; border-bottom: 1px solid var(--line-soft); vertical-align: m
 tr:last-child td { border-bottom: none; }
 td.num, th.num { text-align: right; font-family: var(--mono); }
 td.clip { max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scroll-x { overflow-x: auto; }
 tr.sel td { background: var(--accent-soft); }
 tbody tr.link { cursor: pointer; } tbody tr.link:hover td { background: #FAF9F6; }
 td a.rowlink { color: inherit; text-decoration: none; display: block; }
@@ -132,11 +133,32 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
   border: 1px solid var(--line-strong); background: var(--surface); font-weight: 500; cursor: pointer; }
 .check input { width: 16px; height: 16px; accent-color: var(--accent); }
 .filters { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.filters .search { flex: 3 1 300px; }
+.filters .search > span { display: flex; gap: 8px; }
+.filters .search input { flex-grow: 1; min-width: 0; }
+.filters .sel { flex: 1 1 150px; max-width: 220px; }
+.filters .toggles { flex-basis: 100%; }
 
-/* mails page */
-.mails { grid-template-columns: minmax(0, 1fr) 360px; align-items: start; }
-.detail { position: sticky; top: 24px; display: flex; flex-direction: column; gap: 16px; }
-.detail h2 { font-size: 17px; line-height: 1.35; }
+/* mails page: the detail column only exists while a mail is open */
+.mails { grid-template-columns: minmax(0, 1fr); align-items: start; }
+.mails.has-detail { grid-template-columns: minmax(0, 1fr) 360px; }
+.detail { position: sticky; top: 24px; max-height: calc(100vh - 48px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 16px; }
+.detail a.close { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+  margin: -6px -8px 0 0; border-radius: 8px; color: var(--muted); }
+.detail a.close:hover { background: var(--neutral-bg); color: var(--ink); }
+.maillist td { white-space: nowrap; padding-top: 8px; padding-bottom: 8px; }
+.maillist td.mail { width: 100%; }
+.maillist .subj, .maillist .meta { display: block; overflow: hidden; text-overflow: ellipsis; }
+.maillist .subj { font-weight: 500; }
+.maillist .meta { margin-top: 2px; font-size: 12px; color: var(--muted); }
+.maillist .date-inline { display: none; }
+.maillist .pill { max-width: 150px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+.maillist .meter .track { width: 40px; }
+/* with the detail open, confidence and folder are shown there - give the subject the room */
+.has-detail .maillist .conf, .has-detail .maillist .where { display: none; }
+@media (min-width: 1600px) { .has-detail .maillist .conf, .has-detail .maillist .where { display: table-cell; } }
+.detail h2 { font-size: 17px; line-height: 1.35; overflow-wrap: anywhere; }
 .detail dl { margin: 0; display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px 12px; font-size: 13px; }
 .detail dt { color: var(--muted); } .detail dd { margin: 0; overflow-wrap: anywhere; }
 .pager { display: flex; align-items: center; gap: 12px; justify-content: flex-end; font-size: 13px; color: var(--muted); padding-top: 10px; }
@@ -199,15 +221,22 @@ svg.star { display: block; width: 16px; height: 16px; fill: #D99A06; }
   font-weight: 600; cursor: help; vertical-align: middle; }
 .help:hover, .help:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
 .help::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%);
-  width: max-content; max-width: 300px; padding: 8px 10px; border-radius: 8px; background: var(--ink); color: #fff;
+  width: max-content; max-width: min(300px, 80vw); padding: 8px 10px; border-radius: 8px; background: var(--ink); color: #fff;
   font-size: 12px; font-weight: 400; line-height: 1.45; text-align: left; white-space: normal; z-index: 20;
-  pointer-events: none; opacity: 0; transition: opacity .12s; }
-.help:hover::after, .help:focus-visible::after { opacity: 1; }
+  pointer-events: none; display: none; }
+/* display, not opacity: a hidden but laid-out tip would widen the page */
+.help:hover::after, .help:focus-visible::after { display: block; }
 
 @media (max-width: 1100px) {
   .cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .split, .mails, .cols-3, .catgrid { grid-template-columns: minmax(0, 1fr); }
-  .detail, .editor { position: static; }
+  .split, .mails, .mails.has-detail, .cols-3, .catgrid { grid-template-columns: minmax(0, 1fr); }
+  .detail, .editor { position: static; max-height: none; }
+  .mails .detail { order: -1; }
+  .has-detail .maillist .conf { display: table-cell; }
+  .maillist .where, .has-detail .maillist .where { display: none; }
+}
+@media (max-width: 960px) {
+  .maillist .conf, .has-detail .maillist .conf { display: none; }
 }
 @media (max-width: 760px) {
   .shell { flex-direction: column; }
@@ -215,4 +244,8 @@ svg.star { display: block; width: 16px; height: 16px; fill: #D99A06; }
   .main { padding: 20px 16px; }
   .cols-4, .cols-2 { grid-template-columns: minmax(0, 1fr); }
   .head { flex-wrap: wrap; align-items: flex-start; }
+  .filters .sel { max-width: none; }
+  .maillist .date { display: none; }
+  .maillist .date-inline { display: inline; }
+  .maillist .pill { max-width: 110px; }
 }
