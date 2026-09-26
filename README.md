@@ -56,7 +56,9 @@ sure `./mailboxes` is writable for uid 1000. Forms carry a CSRF token.
 - **Postfach hinzufügen** – creates `mailboxes/<id>/mailbox.toml` with the
   categories of an existing mailbox; credentials go into `.env` under the
   variable names you choose (restart the container afterwards). Not available
-  while a single-file `config.toml` is used – migrate first
+  while a single-file `config.toml` is used – migrate first. For Gmail (`imap.gmail.com`) the
+  copied folders lose their `INBOX/` prefix: Gmail only has top-level labels
+  (`Werbung`, not `INBOX/Werbung`); Outlook still shows them under the inbox
 - **Gemeinsam** – the shared `[jev]` settings in `config.toml` (read-only when
   it is mounted `:ro`)
 

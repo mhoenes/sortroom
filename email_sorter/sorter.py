@@ -119,11 +119,40 @@ def _delimiter(mb: MailBox) -> str:
     return next((f.delim for f in folders if f.delim), "/")
 
 
+def _folder_hint(name: str) -> str:
+    """Gmail keeps mail in labels, and a label below INBOX is not a place mail can be moved to."""
+    if "/" in name and name.split("/", 1)[0].upper() == "INBOX":
+        return (f" On Gmail use a top-level label such as {name.split('/', 1)[1]!r} instead of {name!r} "
+                "(Kategorien → Zielordner).")
+    return ""
+
+
 def _ensure_folder(mb: MailBox, name: str) -> None:
     if not mb.folder.exists(name):
         log.info("creating folder %s", name)
-        mb.folder.create(name)
+        try:
+            mb.folder.create(name)
+        except Exception as e:
+            raise RuntimeError(f"could not create folder {name}: {e}.{_folder_hint(name)}") from None
         mb.folder.subscribe(name, True)
+
+
+def move_uids(mb: MailBox, uids: list[str], folder: str) -> None:
+    """MOVE, creating the folder once if the server says it is missing ([TRYCREATE]) although it
+    looked present - Gmail answers a LIST for names it cannot actually hold."""
+    try:
+        mb.move(uids, folder)
+    except Exception as e:
+        if "TRYCREATE" not in str(e):
+            raise
+        log.info("%s is missing on the server, creating it", folder)
+        try:
+            mb.folder.create(folder)
+            mb.folder.subscribe(folder, True)
+            mb.move(uids, folder)
+        except Exception as e2:
+            raise RuntimeError(f"folder {folder} does not exist and could not be used: {e2}."
+                               f"{_folder_hint(folder)}") from None
 
 
 def classify_new(
@@ -254,7 +283,7 @@ def apply(mb: MailBox, outcomes: list[Outcome], store: Store) -> int:
         try:
             _ensure_folder(mb, folder)
             for chunk in _chunks([o.uid for o in group]):
-                mb.move(chunk, folder)
+                move_uids(mb, chunk, folder)
             log.info("moved %d mail(s) to %s", len(group), folder)
         except Exception as e:
             log.error("moving to %s failed, will retry next run: %s", folder, e)
@@ -365,7 +394,7 @@ def move_expired(mb: MailBox, cfg: Config, store: Store, today: date | None = No
                     if uids and target != folder:
                         _ensure_folder(mb, target)
                         for chunk in _chunks(list(uids.values())):
-                            mb.move(chunk, target)
+                            move_uids(mb, chunk, target)
                         log.info("moved %d expired offer(s) %s -> %s", len(uids), folder, target)
                     store.mark_expired(uids, MOVED)
                     store.mark_expired(set(wanted) - set(uids), GONE)  # deleted or moved away by the user

@@ -318,6 +318,21 @@ def can_add_mailbox(boxes: dict[str, Mailbox], base_dir: Path) -> str | None:
     return None
 
 
+def is_gmail(host: str) -> bool:
+    return host.lower().rstrip(".").endswith(("gmail.com", "googlemail.com"))
+
+
+def _top_level_labels(doc) -> None:
+    """Gmail has no folders below the inbox: 'INBOX/Werbung' becomes the label 'Werbung'
+    (clients such as Outlook still show it under the inbox)."""
+    tables = [doc["rules"]] + list(doc["categories"].values())
+    for table in tables:
+        for key in ("folder", "expired_folder"):
+            value = table.get(key)
+            if value and "/" in value and value.split("/", 1)[0].upper() == "INBOX":
+                table[key] = value.split("/", 1)[1]
+
+
 def create_mailbox(base_dir: Path, shared_path: Path, template: Mailbox, form: dict) -> str:
     """Write mailboxes/<id>/mailbox.toml with the template's rules and categories. Returns the id."""
     box_id = _text(form, "id", 40).lower()
@@ -356,6 +371,8 @@ def create_mailbox(base_dir: Path, shared_path: Path, template: Mailbox, form: d
         del rules["keep_in_inbox_from"]
     doc["rules"] = rules
     doc["categories"] = source["categories"]
+    if is_gmail(host):
+        _top_level_labels(doc)
     text = tomlkit.dumps(doc)
     try:
         config_from_raw({**tomllib.loads(text), "jev": _read_toml(shared_path)["jev"]}, "mailbox.toml")

@@ -11,8 +11,8 @@ from pathlib import Path
 from imap_tools import MailBox
 
 from .config import INBOX_ACTION, Config, Credentials
-from .sorter import (IMAP_TIMEOUT, MAX_EXPIRY_AGE_DAYS, _delimiter, _ensure_folder, _find_uids,
-                     server_folder)
+from .sorter import (IMAP_TIMEOUT, MAX_EXPIRY_AGE_DAYS, move_uids, server_folder, _delimiter, _ensure_folder,
+                     _find_uids)
 from .store import Store
 
 log = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ def move_mail(cfg: Config, creds: Credentials, base_dir: Path, key: str, categor
                     raise ManualError(f"Die Mail liegt nicht mehr in {current or cfg.source_folder} "
                                       "– gelöscht oder von Hand verschoben?")
                 _ensure_folder(mb, dst)
-                mb.move([uids[key]], dst)
+                move_uids(mb, [uids[key]], dst)
                 mb.folder.set(cfg.source_folder)
             log.info("moved %r by hand: %s -> %s", row["subject"], src, dst)
         store.set_manual(key, row["category"] if category == INBOX_ACTION else category, target)

@@ -207,3 +207,30 @@ def test_clean_body_drops_quotes_and_signature():
 
 def test_clean_body_truncates():
     assert len(clean_body("a" * 5000, 100)) == 100
+
+
+def test_move_creates_folder_the_server_says_is_missing():
+    from types import SimpleNamespace
+
+    from email_sorter.sorter import move_uids
+
+    class Box:
+        def __init__(self, create_ok=True):
+            self.moves, self.created, self.create_ok = [], [], create_ok
+            self.folder = SimpleNamespace(create=self.create, subscribe=lambda n, v: None)
+
+        def create(self, name):
+            if not self.create_ok:
+                raise RuntimeError("NO [CANNOT] invalid name")
+            self.created.append(name)
+
+        def move(self, uids, folder):
+            if folder not in self.created:
+                raise RuntimeError(f"NO [TRYCREATE] No folder {folder} (Failure)")
+            self.moves.append((uids, folder))
+
+    box = Box()
+    move_uids(box, ["1"], "Werbung")
+    assert box.created == ["Werbung"] and box.moves == [(["1"], "Werbung")]
+    with pytest.raises(RuntimeError, match="top-level label such as 'Werbung'"):
+        move_uids(Box(create_ok=False), ["1"], "INBOX/Werbung")

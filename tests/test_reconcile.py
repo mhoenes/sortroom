@@ -105,3 +105,17 @@ def test_inbox_stored_as_null(tmp_path):
         assert queries.folders(db) == [] and queries.stats(db, 0.7).uncertain == 1
     finally:
         db.close()
+
+
+def test_gmail_all_mail_counts_as_kept_but_not_as_place(tmp_path, monkeypatch):
+    mails = {"INBOX": ["<inbox@x>"], "Werbung": ["<kept@x>"],
+             "[Gmail]/Alle Nachrichten": ["<inbox@x>", "<kept@x>", "<filed@x>", "<deleted@x>"],
+             "[Gmail]/Papierkorb": ["<trash@x>"]}
+    flags = {"[Gmail]/Alle Nachrichten": ("\\All",), "[Gmail]/Papierkorb": ("\\Trash",)}
+    _setup(tmp_path, monkeypatch, mails, flags)
+    result = reconcile.run_reconcile(CFG, CREDS, tmp_path, live=True)
+    assert (result["gone"], result["filed"]) == (1, 0)   # only the trashed one; archived ones are kept
+    store = Store(tmp_path / "data" / "state.db")
+    rows = {k: (m, g) for k, m, g in store.locations()}
+    store.close()
+    assert rows["<filed@x>"] == (None, 0) and rows["<trash@x>"] == (None, 1)
