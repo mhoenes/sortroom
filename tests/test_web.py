@@ -20,7 +20,8 @@ PASSWORD = "richtig-geheim"
 def _mail(store, key, category, conf, moved_to, subject, sender="shop@example.de", flagged=False,
           source="jev", expires=None):
     store.record(SimpleNamespace(
-        key=key, received="2026-09-24T10:00+02:00", sender=sender, subject=subject,
+        key=key, received=(datetime.now().astimezone() - timedelta(days=2)).isoformat(timespec="minutes"),
+        sender=sender, subject=subject,
         decision=Decision(category, conf, {category: conf}, 0.9 if flagged else 0.1, 0.0001),
         folder=moved_to, flag=flagged, expires=expires, source=source))
 
@@ -159,6 +160,10 @@ def test_mails_sorted_and_filtered_by_received(tmp_path):
         assert rows[-1]["message_key"] == "<backfilled>"
         assert queries.stats(db, 0.7).uncertain == 3
         assert [m["message_key"] for m in queries.uncertain_mails(db, 0.7)][0] == "<la>"
+        assert len(queries.uncertain_mails(db, 0.7)) == 4                  # the overview limits it like the count
+        assert len(queries.uncertain_mails(db, 0.7, days=30)) == 3
+        assert queries.distribution(db, 7) == [("", 3)]                     # the backfill doesn't swamp the week
+        assert queries.category_counts(db) == {"werbung": 3}
     finally:
         db.close()
 

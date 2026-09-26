@@ -88,6 +88,8 @@ a.source-login:hover { color: var(--ink); text-decoration: underline; }
 .kpi .v { font-size: 26px; font-weight: 600; }
 .kpi .v small { font-size: 15px; font-weight: 400; color: var(--muted); }
 .kpi .d { font-size: 13px; color: var(--muted); }
+a.card.link { color: inherit; text-decoration: none; }
+a.card.link:hover { border-color: var(--line-strong); }
 .row { display: flex; align-items: baseline; gap: 8px; }
 .row .grow { flex-grow: 1; }
 .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-weight: 500; font-size: 12px; white-space: nowrap;
@@ -172,6 +174,19 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 .detail dl { margin: 0; display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px 12px; font-size: 13px; }
 .detail dt { color: var(--muted); } .detail dd { margin: 0; overflow-wrap: anywhere; }
 .pager { display: flex; align-items: center; gap: 12px; justify-content: flex-end; font-size: 13px; color: var(--muted); padding-top: 10px; }
+
+/* overview: uncertain mails to review */
+.review { border: 1px solid var(--line-soft); border-radius: 10px; }
+.review a { display: flex; align-items: center; gap: 14px; padding: 10px 14px; color: inherit; text-decoration: none; }
+.review a + a { border-top: 1px solid var(--line-soft); }
+.review a:hover { background: #FAF9F6; }
+.review .what, .review .guess { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.review .what { flex-grow: 1; }
+.review .what > *, .review .guess > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review .what b { font-weight: 500; }
+.review .what .muted { font-size: 13px; }
+.review .guess { width: 170px; flex-shrink: 0; font-size: 13px; }
+.review .guess .muted { font-size: 12px; font-weight: 400; }
 
 /* mailbox cards */
 .boxcard { display: flex; flex-direction: column; gap: 16px; }
@@ -267,4 +282,7 @@ svg.star { display: block; width: 16px; height: 16px; fill: #D99A06; }
   .maillist .date { display: none; }
   .maillist .date-inline { display: inline; }
   .maillist .pill { max-width: 110px; }
+  .review a { flex-direction: column; align-items: stretch; gap: 6px; }
+  .review .what, .review .guess { width: auto; }
+  .review .guess { flex-direction: row; gap: 6px; }
 }
