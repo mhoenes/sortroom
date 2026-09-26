@@ -1,6 +1,6 @@
 # Sortroom
 
-Sorts a Strato IMAP inbox into folders using a classification model behind the
+Sorts an IMAP inbox into folders using a classification model behind the
 [TypeSafe API](https://docs.typesafe.ai/api) – TypeSafe itself, OpenRouter's decisions API
 or any other service that speaks it. The model doesn't generate text – it picks one of your
 categories and returns probabilities, so it can never invent a folder.
@@ -208,7 +208,7 @@ each other's work.
 5. Mails are read with `BODY.PEEK` – unread stays unread.
 
 Folders are created automatically on the first live run
-(`INBOX/Finanzen` → `INBOX.Finanzen` if Strato uses `.` as separator;
+(`INBOX/Finanzen` → `INBOX.Finanzen` if the server uses `.` as separator;
 `--check` shows which).
 
 ## Renaming categories or folders

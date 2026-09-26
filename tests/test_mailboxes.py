@@ -46,7 +46,7 @@ def _box(root: Path, box_id: str, **kw):
 
 def test_mailbox_folders_share_classifier_and_have_own_settings(tmp_path):
     (tmp_path / "config.toml").write_text(SHARED, encoding="utf-8")
-    _box(tmp_path, "privat", name="Privat", host="imap.strato.de")
+    _box(tmp_path, "privat", name="Privat", host="imap.example.com")
     _box(tmp_path, "gmail", name="Gmail", host="imap.gmail.com", user_env="GMAIL_USER", pw_env="GMAIL_PASSWORD")
     boxes = load_mailboxes(tmp_path, tmp_path / "config.toml")
     assert list(boxes) == ["gmail", "privat"]

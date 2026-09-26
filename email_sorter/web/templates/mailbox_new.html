@@ -29,7 +29,7 @@
   <section class="card stack">
     <h2>2 · IMAP-Server</h2>
     <div class="grid cols-3">
-      <label class="f"><span class="lt">Server {{ help('z. B. imap.gmail.com oder imap.strato.de') }}</span>
+      <label class="f"><span class="lt">Server {{ help('Hostname des IMAP-Servers deines Anbieters, z. B. imap.gmail.com oder imap.example.com') }}</span>
         <input type="text" name="imap_host" value="{{ form.imap_host }}" required></label>
       <label class="f"><span class="lt">Port {{ help('Meist 993 (IMAP über SSL).') }}</span>
         <input type="number" name="imap_port" min="1" max="65535" step="1" value="{{ form.imap_port }}" required></label>

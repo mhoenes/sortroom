@@ -23,7 +23,7 @@
         <label class="f"><span class="lt">Anzeigename {{ help('Name des Postfachs in der Oberfläche.') }}</span>
           <input type="text" name="name" value="{{ form.name }}" maxlength="60" required>
         </label>
-        <label class="f"><span class="lt">IMAP-Server {{ help('Hostname des Mailservers, z. B. imap.strato.de. Die Verbindung ist immer verschlüsselt (SSL).') }}</span>
+        <label class="f"><span class="lt">IMAP-Server {{ help('Hostname des IMAP-Servers, z. B. imap.example.com. Die Verbindung ist immer verschlüsselt (SSL).') }}</span>
           <input type="text" name="imap_host" value="{{ form.imap_host }}" required>
         </label>
         <label class="f"><span class="lt">Port {{ help('Meist 993 für IMAP über SSL.') }}</span>
