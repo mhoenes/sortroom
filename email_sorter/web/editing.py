@@ -29,10 +29,6 @@ def writable(box: Mailbox) -> bool:
     return bool(box.config_file) and box.config_file.exists() and os.access(box.config_file, os.W_OK)
 
 
-def is_single_file(box: Mailbox) -> bool:
-    return bool(box.config_file) and box.config_file.name != "mailbox.toml"
-
-
 def _doc(box: Mailbox) -> tomlkit.TOMLDocument:
     if not writable(box):
         raise EditError("Diese Einstellungen sind schreibgeschützt.")
@@ -42,11 +38,7 @@ def _doc(box: Mailbox) -> tomlkit.TOMLDocument:
 def _save(box: Mailbox, doc: tomlkit.TOMLDocument, shared_path: Path) -> None:
     text = tomlkit.dumps(doc)
     try:
-        raw = tomllib.loads(text)
-        if is_single_file(box):
-            config_from_raw(raw, box.config_file.name)
-        else:
-            config_from_raw({**raw, "jev": _read_toml(shared_path)["jev"]}, box.config_file.name)
+        config_from_raw({**tomllib.loads(text), "jev": _read_toml(shared_path)["jev"]}, box.config_file.name)
     except (ConfigError, tomllib.TOMLDecodeError, KeyError) as e:
         raise EditError(f"Nicht gespeichert: {e}") from None
     path = box.config_file
@@ -154,11 +146,10 @@ def delete_category(box: Mailbox, shared_path: Path, key: str) -> None:
 
 def save_settings(box: Mailbox, shared_path: Path, form: dict) -> None:
     doc = _doc(box)
-    if not is_single_file(box):
-        name = _text(form, "name", 60)
-        if not name:
-            raise EditError("Der Anzeigename darf nicht leer sein.")
-        doc["name"] = name
+    name = _text(form, "name", 60)
+    if not name:
+        raise EditError("Der Anzeigename darf nicht leer sein.")
+    doc["name"] = name
     imap = doc.setdefault("imap", tomlkit.table())
     host = _text(form, "imap_host", 200)
     if not host or " " in host:
@@ -186,7 +177,7 @@ def save_settings(box: Mailbox, shared_path: Path, form: dict) -> None:
 
 
 def save_sender_rules(box: Mailbox, shared_path: Path, rules: list[tuple[str, str]]) -> None:
-    """Replace all sender rules (order kept). The older keep_in_inbox_from list is folded in."""
+    """Replace all sender rules (order kept)."""
     doc = _doc(box)
     categories = doc.get("categories") or {}
     clean: list[tuple[str, str]] = []
@@ -200,11 +191,8 @@ def save_sender_rules(box: Mailbox, shared_path: Path, rules: list[tuple[str, st
             raise EditError(f"Unbekanntes Ziel „{action}“ für {match}.")
         clean.append((match, action))
     old = doc.get("sender_rules")
-    legacy = "rules" in doc and "keep_in_inbox_from" in doc["rules"]
-    if not legacy and [(t.get("match"), t.get("action")) for t in old or []] == clean:
+    if [(t.get("match"), t.get("action")) for t in old or []] == clean:
         return  # nothing changed; leave the file as it is
-    if legacy:
-        del doc["rules"]["keep_in_inbox_from"]
     # A comment block before the next section is parsed as the tail of the last rule; take it
     # off and put it back after the new last rule, so it stays in front of that section.
     trailing = _detach_trailing(old[-1]) if old else []
@@ -312,12 +300,8 @@ _ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
 _ENV_RE = re.compile(r"^[A-Z_][A-Z0-9_]{0,63}$")
 
 
-def can_add_mailbox(boxes: dict[str, Mailbox], base_dir: Path) -> str | None:
+def can_add_mailbox(base_dir: Path) -> str | None:
     """None if a mailbox can be added here, else the reason why not."""
-    if any(is_single_file(b) for b in boxes.values()):
-        return ("Dieses Setup nutzt noch eine einzelne config.toml. Zuerst mit "
-                "„python -m email_sorter --migrate-mailbox privat --live“ in einen Postfach-Ordner umziehen – "
-                "sonst würde das bestehende Postfach ausgeblendet.")
     root = base_dir / "mailboxes"
     if not os.access(root if root.exists() else base_dir, os.W_OK):
         return f"Der Ordner {root.name}/ ist nicht beschreibbar."
@@ -339,8 +323,9 @@ def _top_level_labels(doc) -> None:
                 table[key] = value.split("/", 1)[1]
 
 
-def create_mailbox(base_dir: Path, shared_path: Path, template: Mailbox, form: dict) -> str:
-    """Write mailboxes/<id>/mailbox.toml with the template's rules and categories. Returns the id."""
+def create_mailbox(base_dir: Path, shared_path: Path, template_file: Path, template_name: str, form: dict) -> str:
+    """Write mailboxes/<id>/mailbox.toml with the rules, schedule and categories of `template_file`
+    (another mailbox or the built-in example). Returns the id."""
     box_id = _text(form, "id", 40).lower()
     if not _ID_RE.match(box_id):
         raise EditError("Kürzel: Kleinbuchstaben, Ziffern, _ oder -, beginnt mit Buchstabe oder Ziffer.")
@@ -360,9 +345,9 @@ def create_mailbox(base_dir: Path, shared_path: Path, template: Mailbox, form: d
     if envs["user_env"] == envs["password_env"]:
         raise EditError("Benutzer und Passwort brauchen zwei verschiedene Variablen.")
 
-    source = tomlkit.parse(template.config_file.read_text(encoding="utf-8"))
+    source = tomlkit.parse(template_file.read_text(encoding="utf-8"))
     doc = tomlkit.document()
-    doc.add(tomlkit.comment(f"Postfach „{name}“ – angelegt in der Weboberfläche, Kategorien von „{template.name}“"))
+    doc.add(tomlkit.comment(f"Postfach „{name}“ – angelegt in der Weboberfläche, Kategorien von „{template_name}“"))
     doc.add(tomlkit.nl())
     doc["name"] = name
     imap = tomlkit.table()
@@ -372,10 +357,9 @@ def create_mailbox(base_dir: Path, shared_path: Path, template: Mailbox, form: d
     imap["user_env"] = envs["user_env"]
     imap["password_env"] = envs["password_env"]
     doc["imap"] = imap
-    rules = source["rules"]
-    if "keep_in_inbox_from" in rules:
-        del rules["keep_in_inbox_from"]
-    doc["rules"] = rules
+    doc["rules"] = source["rules"]
+    if "schedule" in source:
+        doc["schedule"] = source["schedule"]
     doc["categories"] = source["categories"]
     if is_gmail(host):
         _top_level_labels(doc)

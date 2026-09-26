@@ -4,11 +4,9 @@ from pathlib import Path
 import pytest
 
 from email_sorter import __main__ as cli
-from email_sorter.config import ConfigError, LEGACY_ID, load_credentials, load_mailboxes
-from email_sorter.migrate import migrate_mailbox, split_sections
+from email_sorter.config import EXAMPLE_MAILBOX, ConfigError, load_credentials, load_mailboxes
 
 ROOT = Path(__file__).resolve().parent.parent
-SHIPPED = (ROOT / "config" / "config.toml").read_text(encoding="utf-8")
 
 SHARED = """
 [jev]
@@ -47,15 +45,6 @@ def _box(root: Path, box_id: str, **kw):
     (d / "mailbox.toml").write_text(MAILBOX.format(**{**vals, **kw}), encoding="utf-8")
 
 
-def test_legacy_single_file_is_mailbox_default(tmp_path):
-    (tmp_path / "config.toml").write_text(SHIPPED, encoding="utf-8")
-    boxes = load_mailboxes(tmp_path, tmp_path / "config.toml")
-    assert list(boxes) == [LEGACY_ID]
-    box = boxes[LEGACY_ID]
-    assert box.workspace == tmp_path and box.lock_path == tmp_path / "data" / "run.lock"
-    assert "werbung" in box.cfg.categories
-
-
 def test_mailbox_folders_share_jev_and_have_own_settings(tmp_path):
     (tmp_path / "config.toml").write_text(SHARED, encoding="utf-8")
     _box(tmp_path, "privat", name="Privat", host="imap.strato.de")
@@ -68,8 +57,10 @@ def test_mailbox_folders_share_jev_and_have_own_settings(tmp_path):
     assert boxes["gmail"].lock_path != boxes["privat"].lock_path
 
 
-def test_mailbox_folders_win_over_legacy_sections(tmp_path):
-    (tmp_path / "config.toml").write_text(SHIPPED, encoding="utf-8")  # still has [imap] etc.
+def test_mailbox_sections_in_the_shared_config_are_ignored(tmp_path):
+    (tmp_path / "config.toml").write_text(SHARED + MAILBOX.format(name="x", host="h", user_env="U", pw_env="P"),
+                                          encoding="utf-8")
+    assert load_mailboxes(tmp_path, tmp_path / "config.toml") == {}
     _box(tmp_path, "privat")
     assert list(load_mailboxes(tmp_path, tmp_path / "config.toml")) == ["privat"]
 
@@ -100,54 +91,17 @@ def test_bad_mailbox_folder_name(tmp_path):
         load_mailboxes(tmp_path, tmp_path / "config.toml")
 
 
-def test_nothing_configured(tmp_path):
+def test_no_mailbox_yet(tmp_path):
     (tmp_path / "config.toml").write_text(SHARED, encoding="utf-8")
-    with pytest.raises(ConfigError, match="no mailbox configured"):
-        load_mailboxes(tmp_path, tmp_path / "config.toml")
+    assert load_mailboxes(tmp_path, tmp_path / "config.toml") == {}
 
 
-# ---------------------------------------------------------------- migration
-
-def test_split_sections_keeps_comments_with_their_section():
-    shared, mailbox = split_sections(SHIPPED)
-    assert "[jev]" in shared and "[imap]" not in shared and "[categories." not in shared
-    assert "[imap]" in mailbox and "[rules]" in mailbox and "[categories.werbung]" in mailbox
-    assert "# Categories" in mailbox          # the explanation block above the first category
-    assert "# OpenRouter (decisions API" in shared
-    assert tomllib.loads(mailbox)["categories"].keys() == tomllib.loads(SHIPPED)["categories"].keys()
-
-
-def test_migrate_dry_run_changes_nothing(tmp_path):
-    (tmp_path / "config.toml").write_text(SHIPPED, encoding="utf-8")
-    (tmp_path / "data").mkdir()
-    (tmp_path / "data" / "state.db").write_bytes(b"db")
-    result = migrate_mailbox(tmp_path, tmp_path / "config.toml", "privat", "Privat", live=False)
-    assert result.exit_code == 0 and not (tmp_path / "mailboxes").exists()
-    assert (tmp_path / "data" / "state.db").exists()
-
-
-def test_migrate_live_moves_config_log_and_reports(tmp_path):
-    (tmp_path / "config.toml").write_text(SHIPPED, encoding="utf-8")
-    (tmp_path / "data").mkdir()
-    (tmp_path / "data" / "state.db").write_bytes(b"db")
-    (tmp_path / "reports").mkdir()
-    (tmp_path / "reports" / "dry-run-1.csv").write_text("x", encoding="utf-8")
-    result = migrate_mailbox(tmp_path, tmp_path / "config.toml", "privat", "Privat", live=True)
-    assert result.exit_code == 0
-    box = tmp_path / "mailboxes" / "privat"
-    assert (box / "data" / "state.db").read_bytes() == b"db" and not (tmp_path / "data" / "state.db").exists()
-    assert (box / "reports" / "dry-run-1.csv").exists()
-    assert (tmp_path / "config.toml").read_text(encoding="utf-8") == SHIPPED  # left alone
-    boxes = load_mailboxes(tmp_path, tmp_path / "config.toml")
-    assert list(boxes) == ["privat"] and boxes["privat"].name == "Privat"
-    assert boxes["privat"].cfg.categories == load_mailboxes(ROOT, ROOT / "config" / "config.toml")[LEGACY_ID].cfg.categories
-    # a second migration is refused
-    assert migrate_mailbox(tmp_path, tmp_path / "config.toml", "zwei", None, live=True).exit_code == 2
-
-
-def test_migrate_rejects_bad_id(tmp_path):
-    (tmp_path / "config.toml").write_text(SHIPPED, encoding="utf-8")
-    assert migrate_mailbox(tmp_path, tmp_path / "config.toml", "Mein Postfach", None, live=True).exit_code == 2
+def test_shipped_files():
+    shared = tomllib.loads((ROOT / "config" / "config.toml").read_text(encoding="utf-8"))
+    assert list(shared) == ["jev"]
+    example = tomllib.loads(EXAMPLE_MAILBOX.read_text(encoding="utf-8"))
+    assert {"imap", "rules", "schedule", "categories"} <= set(example) and "jev" not in example
+    assert "werbung" in example["categories"]
 
 
 # ---------------------------------------------------------------- CLI mailbox selection
@@ -187,6 +141,13 @@ def test_unknown_mailbox(two_boxes):
     assert cli.main(["--config", str(tmp / "config.toml"), "--mailbox", "nope"]) == 2
 
 
+def test_cli_without_mailboxes(tmp_path, monkeypatch):
+    (tmp_path / "config.toml").write_text(SHARED, encoding="utf-8")
+    monkeypatch.setattr(cli, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(cli, "setup_logging", lambda verbose: None)
+    assert cli.main(["--config", str(tmp_path / "config.toml")]) == 2
+
+
 # ---------------------------------------------------------------- sender rules
 
 def _cfg_with(tmp_path, extra: str):
@@ -197,7 +158,7 @@ def _cfg_with(tmp_path, extra: str):
     return load_mailboxes(tmp_path, tmp_path / "config.toml")["privat"].cfg
 
 
-def test_sender_rules_in_order_then_legacy_list(tmp_path):
+def test_sender_rules_in_order(tmp_path):
     cfg = _cfg_with(tmp_path, """
 [[sender_rules]]
 match = "Newsletter@Shop.de"
@@ -212,16 +173,6 @@ action = "inbox"
     assert cfg.rule_for("info@shop.de").action == "inbox"
 
 
-def test_legacy_keep_in_inbox_from_becomes_inbox_rules(tmp_path):
-    cfg = _cfg_with(tmp_path, "")
-    f = tmp_path / "mailboxes" / "privat" / "mailbox.toml"
-    toml = f.read_text(encoding="utf-8")
-    f.write_text(toml.replace("max_per_run = 200", 'max_per_run = 200\nkeep_in_inbox_from = ["Scanner@x.de"]'),
-                 encoding="utf-8")
-    cfg = load_mailboxes(tmp_path, tmp_path / "config.toml")["privat"].cfg
-    assert [(r.match, r.action) for r in cfg.sender_rules] == [("scanner@x.de", "inbox")]
-
-
 @pytest.mark.parametrize("rule, message", [
     ('match = "x@y.de"\naction = "gibtsnicht"', "action must be"),
     ('match = ""\naction = "inbox"', "needs a match"),
@@ -231,22 +182,11 @@ def test_invalid_sender_rules(tmp_path, rule, message):
         _cfg_with(tmp_path, f"\n[[sender_rules]]\n{rule}\n")
 
 
-def test_sender_rules_travel_with_the_mailbox_on_migration():
-    shared, mailbox = split_sections(SHIPPED)
-    assert "[[sender_rules]]" in mailbox and "[[sender_rules]]" not in shared
-    assert "# Sender rules" in mailbox
-
-
 def test_default_config_path(tmp_path, monkeypatch):
     from email_sorter import runtime
 
     monkeypatch.setattr(runtime, "BASE_DIR", tmp_path)
     monkeypatch.delenv("SORTROOM_CONFIG", raising=False)
-    monkeypatch.delenv("EMAIL_SORTER_CONFIG", raising=False)
     assert runtime.default_config_path() == tmp_path / "config" / "config.toml"
-    (tmp_path / "config.toml").write_text("", encoding="utf-8")        # mounted the pre-0.6.1 way
-    assert runtime.default_config_path() == tmp_path / "config.toml"
-    monkeypatch.setenv("EMAIL_SORTER_CONFIG", "/x/old.toml")
-    assert runtime.default_config_path() == Path("/x/old.toml")
     monkeypatch.setenv("SORTROOM_CONFIG", "/x/new.toml")
     assert runtime.default_config_path() == Path("/x/new.toml")

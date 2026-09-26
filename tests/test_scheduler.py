@@ -6,8 +6,9 @@ from types import SimpleNamespace
 import pytest
 
 from email_sorter import scheduler
-from email_sorter.config import ConfigError, _read_toml, config_from_raw, load_config
+from email_sorter.config import EXAMPLE_MAILBOX, ConfigError, _read_toml, config_from_raw
 from email_sorter.runtime import BASE_DIR
+from support import example_config
 
 T0 = datetime(2026, 9, 26, 12, 0)
 
@@ -93,7 +94,7 @@ def test_config_error_means_no_runs():
 
 def test_scheduled_run_skips_a_busy_mailbox(tmp_path, monkeypatch):
     box = _box("privat", tmp=tmp_path)
-    box.cfg, box.workspace = load_config(BASE_DIR / "config" / "config.toml"), tmp_path
+    box.cfg, box.workspace = example_config(), tmp_path
     monkeypatch.setattr(scheduler, "load_credentials", lambda cfg: "creds")
     runs = []
     monkeypatch.setattr(scheduler, "run", lambda *a, **kw: runs.append(kw))
@@ -107,7 +108,7 @@ def test_scheduled_run_skips_a_busy_mailbox(tmp_path, monkeypatch):
 
 
 def test_schedule_settings_in_config():
-    raw = _read_toml(BASE_DIR / "config" / "config.toml")
+    raw = {**_read_toml(EXAMPLE_MAILBOX), "jev": _read_toml(BASE_DIR / "config" / "config.toml")["jev"]}
     cfg = config_from_raw(raw, "x")
     assert cfg.schedule_enabled and cfg.schedule_minutes == 10          # on by default
     cfg = config_from_raw({**raw, "schedule": {"enabled": False, "interval_minutes": 30}}, "x")

@@ -5,11 +5,14 @@ import pytest
 from imap_tools import MailMessage
 
 from email_sorter import resort, sorter
-from email_sorter.config import Config, Credentials, load_config
+from email_sorter.config import Config, Credentials, SenderRule
 from email_sorter.jev import Decision
 from email_sorter.store import Store
+from support import example_config
 
-CFG = Config(**{**load_config(Path(__file__).resolve().parent.parent / "config" / "config.toml").__dict__, "min_age_hours": 0})
+# the example mailbox has no sender rules; these tests use the scanner rule of a real setup
+CFG = Config(**{**example_config().__dict__, "min_age_hours": 0,
+                "sender_rules": (SenderRule("frombrotherdevice@brother.com", "inbox"),)})
 CREDS = Credentials("u", "p", "k")
 
 # subject -> (category, confidence) that the fake Jev answers

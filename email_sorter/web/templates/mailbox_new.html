@@ -51,9 +51,10 @@
   </section>
 
   <section class="card stack">
-    <h2>4 · Kategorien {{ help('Das neue Postfach startet mit Kategorien und Schwellen eines bestehenden Postfachs. Beides lässt sich danach unabhängig ändern. Absender-Regeln werden nicht übernommen.') }}</h2>
+    <h2>4 · Kategorien {{ help('Das neue Postfach startet mit den Kategorien, Schwellen und dem Zeitplan eines bestehenden Postfachs oder mit den Standard-Kategorien. Alles lässt sich danach unabhängig ändern. Absender-Regeln werden nicht übernommen.') }}</h2>
     <label class="f" style="max-width:360px">Übernehmen von
-      <select name="template">{% for id, b in boxes.items() %}<option value="{{ id }}" {% if form.template == id %}selected{% endif %}>{{ b.name }} ({{ b.cfg.categories|length }} Kategorien)</option>{% endfor %}</select>
+      <select name="template">{% for id, b in boxes.items() %}<option value="{{ id }}" {% if form.template == id %}selected{% endif %}>{{ b.name }} ({{ b.cfg.categories|length }} Kategorien)</option>{% endfor %}
+        <option value="_example" {% if form.template == '_example' %}selected{% endif %}>Standard-Kategorien ({{ example_categories }} Kategorien)</option></select>
     </label>
     <p class="muted hint">Bei Gmail (imap.gmail.com) werden die Zielordner als Labels auf oberster Ebene angelegt, also „Werbung“ statt „INBOX/Werbung“. Outlook zeigt sie trotzdem unter dem Posteingang an.</p>
   </section>

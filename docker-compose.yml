@@ -22,4 +22,3 @@ services:
       - ./config:/app/config        # config.toml: shared settings ([jev]), editable under "Gemeinsam"
       - ./mailboxes:/app/mailboxes  # one folder per mailbox: mailbox.toml, data/state.db, reports/
       - ./logs:/app/logs
-      - ./reports:/app/reports      # dry-run CSV reports of single-file setups

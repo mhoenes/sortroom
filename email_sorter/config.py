@@ -163,7 +163,7 @@ def config_from_raw(raw: dict, where: str) -> Config:
 
 
 def _sender_rules(raw: dict, categories: dict[str, Category], where: str) -> tuple[SenderRule, ...]:
-    """[[sender_rules]] entries, then the older rules.keep_in_inbox_from list as inbox rules."""
+    """[[sender_rules]] entries, in order."""
     out = []
     for i, r in enumerate(raw.get("sender_rules", []), start=1):
         match = str(r.get("match", "")).strip().lower()
@@ -174,21 +174,14 @@ def _sender_rules(raw: dict, categories: dict[str, Category], where: str) -> tup
             raise ConfigError(f"{where}: sender rule {i} ({match}): action must be "
                               f"{INBOX_ACTION!r} or a category, not {action!r}")
         out.append(SenderRule(match, action))
-    for s in raw.get("rules", {}).get("keep_in_inbox_from", []):
-        if str(s).strip():
-            out.append(SenderRule(str(s).strip().lower(), INBOX_ACTION))
     return tuple(out)
 
 
-def load_config(path: Path) -> Config:
-    """A single-file config (global and mailbox settings in one config.toml)."""
-    return config_from_raw(_read_toml(path), str(path))
-
-
-# ---------------------------------------------------------------- several mailboxes
+# ---------------------------------------------------------------- mailboxes
 
 _MAILBOX_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
-LEGACY_ID = "default"
+# categories, rules and schedule a new mailbox starts from when there is none to copy
+EXAMPLE_MAILBOX = Path(__file__).with_name("example_mailbox.toml")
 
 
 @dataclass(frozen=True)
@@ -198,7 +191,7 @@ class Mailbox:
     name: str
     workspace: Path  # data/state.db, data/run.lock and reports/ live below this
     cfg: Config
-    config_file: Path | None = None  # mailbox.toml, or config.toml for a single-file setup
+    config_file: Path | None = None  # its mailbox.toml
 
     @property
     def lock_path(self) -> Path:
@@ -206,11 +199,10 @@ class Mailbox:
 
 
 def load_mailboxes(base_dir: Path, config_path: Path) -> dict[str, Mailbox]:
-    """All configured mailboxes, by id.
+    """All configured mailboxes, by id (empty until the first one is added).
 
     config.toml holds what all mailboxes share ([jev]); each mailboxes/<id>/mailbox.toml holds a
-    mailbox's name, [imap], [rules] and [categories.*]. Without a mailboxes/ folder, a config.toml
-    that still has [imap] is the single mailbox "default", with its data in base_dir as before.
+    mailbox's name, [imap], [rules], [schedule] and [categories.*].
     """
     shared = _read_toml(config_path)
     if "jev" not in shared:
@@ -226,12 +218,7 @@ def load_mailboxes(base_dir: Path, config_path: Path) -> dict[str, Mailbox]:
             raise ConfigError(f"{file}: [jev] belongs in {config_path.name}, it is shared by all mailboxes")
         cfg = config_from_raw({**raw, "jev": shared["jev"]}, str(file))
         boxes[box_id] = Mailbox(box_id, str(raw.get("name") or box_id), file.parent, cfg, file)
-    if boxes:
-        return boxes
-    if "imap" in shared:
-        return {LEGACY_ID: Mailbox(LEGACY_ID, "Postfach", base_dir, config_from_raw(shared, str(config_path)),
-                                   config_path)}
-    raise ConfigError(f"no mailbox configured: add {root / '<id>' / 'mailbox.toml'}")
+    return boxes
 
 
 def load_credentials(cfg: Config) -> Credentials:

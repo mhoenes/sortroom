@@ -1,12 +1,13 @@
 from types import SimpleNamespace
 
 from email_sorter import maintenance
-from email_sorter.config import Credentials, load_config
+from email_sorter.config import Credentials
 from email_sorter.jev import Decision
 from email_sorter.store import Store
 from pathlib import Path
+from support import example_config
 
-CFG = load_config(Path(__file__).resolve().parent.parent / "config" / "config.toml")
+CFG = example_config()
 CREDS = Credentials("u", "p", "k")
 
 

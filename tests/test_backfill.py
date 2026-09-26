@@ -8,12 +8,13 @@ from imap_tools import MailMessage
 
 from email_sorter import __main__ as cli
 from email_sorter import sorter
-from email_sorter.config import Config, Credentials, load_config
+from email_sorter.config import Config, Credentials
 from email_sorter.jev import Decision, JevError
 from email_sorter.store import Store
+from support import example_config
 
 ROOT = Path(__file__).resolve().parent.parent
-CFG = load_config(ROOT / "config" / "config.toml")
+CFG = example_config()
 CREDS = Credentials("u", "p", "k")
 
 

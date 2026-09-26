@@ -61,9 +61,6 @@ async def _lifespan(app: FastAPI):
         if box.lock_path.exists():
             log.info("[%s] removing run lock left over from a previous process", box.id)
             box.lock_path.unlink(missing_ok=True)
-        if box.config_file == CONFIG_PATH:
-            log.warning("[%s] single-file setup: its log is kept in %s, which the Docker setup no longer "
-                        "mounts - run --migrate-mailbox to keep it across restarts", box.id, box.workspace / "data")
     if enabled_by_env():
         app.state.scheduler.start()
     yield
@@ -91,6 +88,8 @@ def _pick(boxes: dict[str, Mailbox], box_id: str | None) -> Mailbox:
         if box_id not in boxes:
             raise HTTPException(404, f"unknown mailbox {box_id!r}")
         return boxes[box_id]
+    if not boxes:
+        raise HTTPException(404, "no mailbox configured yet - add one in the admin UI")
     if len(boxes) == 1:
         return next(iter(boxes.values()))
     raise HTTPException(422, f"several mailboxes configured, name one: {', '.join(boxes)}")

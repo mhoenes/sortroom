@@ -20,7 +20,7 @@ from ..config import INBOX_ACTION, ConfigError, Mailbox, load_credentials
 from ..jev import JevAuthError
 from ..trial import OTHER_SAMPLE, OWN_SAMPLE, run_trial
 from . import _box, _sidebar, queries, require_login, router, templates
-from .editing import (EditError, delete_category, is_single_file, save_category, save_sender_rules,
+from .editing import (EditError, delete_category, save_category, save_sender_rules,
                       save_settings, writable)
 
 log = logging.getLogger(__name__)
@@ -227,7 +227,7 @@ def _settings_page(request: Request, box_id: str, form: dict | None = None, erro
     return _page(request, "settings.html", {
         **_sidebar(request, boxes, box, "settings"), "box": box, "cfg": cfg, "form": form, "error": error,
         "schedule": request.app.state.scheduler.status(box),
-        "rules": rules + [("", INBOX_ACTION)] * 3, "editable": writable(box), "single_file": is_single_file(box),
+        "rules": rules + [("", INBOX_ACTION)] * 3, "editable": writable(box),
         "config_name": box.config_file.name if box.config_file else "–"}, status)
 
 

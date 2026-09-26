@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+import tomllib
 from datetime import date
 from urllib.parse import quote
 
@@ -12,7 +13,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from .. import jobs
 from ..check import check
-from ..config import INBOX_ACTION, ConfigError, Mailbox, _read_toml, load_credentials
+from ..config import EXAMPLE_MAILBOX, INBOX_ACTION, ConfigError, Mailbox, _read_toml, load_credentials
 from ..maintenance import relocate_category, rename_category, rename_folder
 from ..manual import ManualError, move_mail
 from ..reconcile import run_reconcile
@@ -26,6 +27,8 @@ from .editing import (EditError, add_sender_rule, can_add_mailbox, create_mailbo
 from .editor import _flash, _form, _page, _shared_path, de_plain
 
 log = logging.getLogger(__name__)
+
+EXAMPLE = "_example"  # template choice: the built-in example mailbox
 
 TASKS = {
     "run": "Lauf",
@@ -257,10 +260,12 @@ def _set_expiry(box: Mailbox, key: str, form: dict) -> str:
 
 def _new_mailbox_page(request: Request, form: dict | None = None, error: str | None = None, status: int = 200):
     boxes = _boxes(request)
-    blocked = can_add_mailbox(boxes, request.app.state.base_dir)
+    blocked = can_add_mailbox(request.app.state.base_dir)
     return _page(request, "mailbox_new.html", {
         **_sidebar(request, boxes, None, "all"), "boxes": boxes, "blocked": blocked, "error": error,
-        "form": form or {"imap_port": "993", "source_folder": "INBOX", "template": next(iter(boxes))}}, status)
+        "example_categories": len(tomllib.loads(EXAMPLE_MAILBOX.read_text(encoding="utf-8"))["categories"]),
+        "form": form or {"imap_port": "993", "source_folder": "INBOX", "template": next(iter(boxes), EXAMPLE)}},
+        status)
 
 
 @router.get("/ui/mailboxes/new", response_class=HTMLResponse, dependencies=[Depends(require_login)])
@@ -274,13 +279,17 @@ async def mailbox_create(request: Request):
     boxes = _boxes(request)
     base = request.app.state.base_dir
     try:
-        reason = can_add_mailbox(boxes, base)
+        reason = can_add_mailbox(base)
         if reason:
             raise EditError(reason)
-        template = boxes.get(str(form.get("template") or ""))
-        if template is None:
-            raise EditError("Bitte ein Postfach als Vorlage wählen.")
-        box_id = create_mailbox(base, _shared_path(request), template, form)
+        choice = str(form.get("template") or "")
+        if choice == EXAMPLE:
+            template_file, template_name = EXAMPLE_MAILBOX, "Standard-Kategorien"
+        elif choice in boxes:
+            template_file, template_name = boxes[choice].config_file, boxes[choice].name
+        else:
+            raise EditError("Bitte eine Vorlage für die Kategorien wählen.")
+        box_id = create_mailbox(base, _shared_path(request), template_file, template_name, form)
     except EditError as e:
         return _new_mailbox_page(request, form=form, error=str(e), status=422)
     _flash(request, "Postfach angelegt. Zugangsdaten in die .env eintragen, Container neu starten und dann "

@@ -54,10 +54,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--reconcile", action="store_true",
                         help="compare the log with the mailbox: mark deleted mails, note mails filed by hand "
                              "(with --live; changes nothing on the server)")
-    parser.add_argument("--migrate-mailbox", metavar="ID",
-                        help="move a single-file setup into mailboxes/ID/ (with --live); see --name")
-    parser.add_argument("--name", help="display name for --migrate-mailbox")
-    parser.add_argument("--config", type=Path, help="shared config (default: config.toml or config/config.toml)")
+    parser.add_argument("--config", type=Path, help="shared config (default: config/config.toml)")
     parser.add_argument("-v", "--verbose", action="store_true")
     return parser
 
@@ -120,14 +117,13 @@ def main(argv: list[str] | None = None) -> int:
     args.config = args.config or default_config_path()
     setup_logging(args.verbose)
 
-    if args.migrate_mailbox:
-        from .migrate import migrate_mailbox
-        return migrate_mailbox(BASE_DIR, args.config, args.migrate_mailbox, args.name, live=args.live).exit_code
-
     try:
         boxes = load_mailboxes(BASE_DIR, args.config)
     except ConfigError as e:
         log.error("configuration error: %s", e)
+        return 2
+    if not boxes:
+        log.error("no mailbox configured yet: add one in the admin UI (Postfach hinzufügen)")
         return 2
 
     if args.mailbox:

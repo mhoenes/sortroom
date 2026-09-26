@@ -2,12 +2,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from email_sorter import reconcile
-from email_sorter.config import Credentials, load_config
+from email_sorter.config import Credentials
 from email_sorter.jev import Decision
 from email_sorter.store import Store
 from email_sorter.web import queries
+from support import example_config
 
-CFG = load_config(Path(__file__).resolve().parent.parent / "config" / "config.toml")
+CFG = example_config()
 CREDS = Credentials("u", "p", "k")
 
 
@@ -91,20 +92,6 @@ def test_reconcile_dry_run_and_reappearing_mail(tmp_path, monkeypatch):
     store.set_gone(["<kept@x>"], True)
     store.close()
     assert reconcile.run_reconcile(CFG, CREDS, tmp_path, live=True)["back"] == 1
-
-
-def test_inbox_stored_as_null(tmp_path):
-    store = Store(tmp_path / "data" / "state.db")
-    _record(store, "<a@x>", "INBOX", confidence=0.3)
-    store.close()
-    store = Store(tmp_path / "data" / "state.db")  # reopening normalizes old "INBOX" rows
-    assert store.locations() == [("<a@x>", None, 0)]
-    store.close()
-    db = queries.connect(tmp_path)
-    try:
-        assert queries.folders(db) == [] and queries.stats(db, 0.7).uncertain == 1
-    finally:
-        db.close()
 
 
 def test_gmail_all_mail_counts_as_kept_but_not_as_place(tmp_path, monkeypatch):

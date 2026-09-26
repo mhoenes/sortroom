@@ -42,6 +42,12 @@
       <a class="btn" href="/ui/m/{{ c.box.id }}/mails">Mails</a>
     </div>
   </section>
+{% else %}
+  <section class="card stack" style="grid-column:1 / -1">
+    <h2>Noch kein Postfach</h2>
+    <p class="muted" style="margin:0">Leg das erste Postfach an – mit den Standard-Kategorien als Ausgangspunkt. Die Zugangsdaten kommen in die .env.</p>
+    <div class="actions"><a class="btn primary" href="/ui/mailboxes/new">Postfach hinzufügen</a></div>
+  </section>
 {% endfor %}
 </div>
 {% endblock %}
