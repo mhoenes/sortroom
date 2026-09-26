@@ -273,9 +273,10 @@ def test_first_mailbox_from_the_example(client, setup):
     shutil.rmtree(setup / "mailboxes")
     assert "Noch kein Postfach" in client.get("/ui").text
     html = client.get("/ui/mailboxes/new").text
-    assert 'value="_example" selected' in html and "Standard-Kategorien" in html
+    assert 'value="_example_de" selected' in html and "Standard-Kategorien, Deutsch" in html  # UI language first
+    assert 'value="_example_en"' in html and "Standard-Kategorien, English" in html
     form = {"csrf": _csrf(html), "name": "Privat", "id": "privat", "imap_host": "imap.example.com", "imap_port": "993",
-            "source_folder": "INBOX", "user_env": "IMAP_USER", "password_env": "IMAP_PASSWORD", "template": "_example"}
+            "source_folder": "INBOX", "user_env": "IMAP_USER", "password_env": "IMAP_PASSWORD", "template": "_example_de"}
     assert client.post("/ui/mailboxes/new", data=form, follow_redirects=False).status_code == 303
     box = _box(setup)
     assert box.name == "Privat" and "werbung" in box.cfg.categories and box.cfg.schedule_enabled

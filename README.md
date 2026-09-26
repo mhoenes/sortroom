@@ -21,19 +21,22 @@ The container serves a browser UI next to the API: `http://<docker-host>:8765`
 characters; without it the UI stays locked). Sessions last 7 days; failed
 logins are slowed down. Behind an HTTPS reverse proxy set `UI_SECURE_COOKIES=1`.
 
-- **Alle Postfächer** – every mailbox with status, today's count, uncertain
+The UI speaks English and German, set for everybody under **Global settings** →
+Language (`[ui] language = "de"` in `config/config.toml`; default `en`).
+
+- **All mailboxes** – every mailbox with status, today's count, uncertain
   mail and this month's cost
-- **Übersicht** (per mailbox) – last run, distribution of the last 7 days,
+- **Overview** (per mailbox) – last run, distribution of the last 7 days,
   run log, uncertain mail
 - **Mails** – everything sorted, with search and filters (category, folder,
   period, uncertain, flagged) and a detail panel
 
-- **Kategorien** – edit name, description, folder, star/expiry switches and a
+- **Categories** – edit name, description, folder, star/expiry switches and a
   per-category folder for expired offers; add or delete categories.
-  **Mit dem Modell testen** classifies the category's last 10 mails and 15 others with
+  **Test with the model** classifies the category's last 10 mails and 15 others with
   the draft description (read-only, nothing is moved; about $0.002) and shows
   what would change
-- **Einstellungen** – display name, IMAP server/port/inbox, thresholds, waiting
+- **Settings** – display name, IMAP server/port/inbox, thresholds, waiting
   time, look-back, max per run, default folder for expired offers, and the
   sender rules table
 
@@ -43,24 +46,26 @@ exactly like the sorter loads them, and the previous version is kept as
 write is shown read-only – `./mailboxes` and `./config` must be writable for
 uid 1000. Forms carry a CSRF token.
 
-- **Wartung** – start a run, backfill, re-sort a folder, move a category into
+- **Maintenance** – start a run, backfill, re-sort a folder, move a category into
   its new folder, rename a folder (server, log and settings) or a category key,
   recheck expiry dates, reconcile the log with the mailbox (marks mails you
-  deleted as "nicht mehr im Postfach" so they leave the review list; notes
+  deleted as "no longer in the mailbox" so they leave the review list; notes
   uncertain mails you filed by hand; reads only, trash/spam/sent/drafts don't
   count), check the connection. Each job runs in the background
-  under the mailbox lock ("Probelauf" is a dry run, "Ausführen" the real thing) and shows
+  under the mailbox lock ("Dry run" changes nothing, "Run" is the real thing) and shows
   its log; also shows whether the mailbox's .env variables are set
 - **Mails** detail – accept the model's suggestion for an uncertain mail, move a mail
-  to another category (logged as "von Hand"), or create a sender rule from it
-- **Postfach hinzufügen** – creates `mailboxes/<id>/mailbox.toml` with the
+  to another category (logged as "by hand"), or create a sender rule from it
+- **Add mailbox** – creates `mailboxes/<id>/mailbox.toml` with the
   categories, thresholds and schedule of an existing mailbox or the built-in
-  standard categories (`email_sorter/example_mailbox.toml`); credentials go
+  standard categories in English or German (`email_sorter/example_mailbox.en.toml`,
+  `example_mailbox.de.toml`); credentials go
   into `.env` under the variable names you choose (restart the container
   afterwards). This is also how the first mailbox is created. For Gmail (`imap.gmail.com`) the
   copied folders lose their `INBOX/` prefix: Gmail only has top-level labels
-  (`Werbung`, not `INBOX/Werbung`); Outlook still shows them under the inbox
-- **Globale Einstellungen** (bottom of the sidebar) – the shared `[classifier]` settings (endpoint, model, text length) in `config/config.toml`
+  (`Advertising`, not `INBOX/Advertising`); Outlook still shows them under the inbox
+- **Global settings** (bottom of the sidebar) – UI language and the shared `[classifier]` settings
+  (endpoint, model, text length) in `config/config.toml`
 
 Jobs are kept in memory until the container restarts; backfills started via
 `POST /backfill` show up there too. The API endpoints keep their bearer-token
@@ -104,7 +109,7 @@ copy .env.example .env      # then fill in IMAP_USER, IMAP_PASSWORD, CLASSIFIER_
 ```
 
 Open `http://localhost:8765`, log in and create the first mailbox under
-"Postfach hinzufügen". The CLI below works on the same `mailboxes/`.
+"Add mailbox". The CLI below works on the same `mailboxes/`.
 
 ## Usage
 
@@ -118,12 +123,12 @@ Options: `--limit N` (classify at most N mails), `-v` (log every decision),
 `--config other.toml`.
 
 Fresh mail waits `min_age_hours` in the inbox before it is sorted. With
-`sort_read_at_once = true` in `[rules]` (Einstellungen → "Gelesene sofort
-einsortieren"), mail you have already read is sorted at the next run anyway.
+`sort_read_at_once = true` in `[rules]` (Settings → "Sort read mails
+at once"), mail you have already read is sorted at the next run anyway.
 
 **Recommended rollout:** run dry runs for a few days, open the CSV reports
 (they open directly in German Excel), sharpen category descriptions on the
-Kategorien page where the model got it wrong, then go live.
+Categories page where the model got it wrong, then go live.
 
 Dry runs don't record anything, so each one re-classifies the same mails
 (a fraction of a cent) – that's intended, so you can compare after tweaking.
@@ -131,7 +136,7 @@ Dry runs don't record anything, so each one re-classifies the same mails
 ## Sorting older mail (manual backfill)
 
 Normal and scheduled runs only look at the last `lookback_days`. Older mail is
-sorted only when you start it yourself (CLI, Wartung page or `POST /backfill`) –
+sorted only when you start it yourself (CLI, Maintenance page or `POST /backfill`) –
 the built-in schedule never does:
 
 ```powershell
@@ -187,8 +192,8 @@ Docker host with a personal access token that has `read:packages`:
 3. Create `.env` (see `.env.example`): IMAP, `CLASSIFIER_API_KEY` and
    `ADMIN_PASSWORD`; `API_TOKEN` only if you want to use the HTTP API.
 4. `docker compose pull && docker compose up -d`, open the UI and create the
-   first mailbox under "Postfach hinzufügen". Check it with Wartung →
-   "Verbindung prüfen", or `docker compose logs -f sortroom`.
+   first mailbox under "Add mailbox". Check it with Maintenance →
+   "Check connection", or `docker compose logs -f sortroom`.
 
 **Don't run two sorters on the same mailbox** (e.g. the container and a local
 copy): each installation has its own `state.db` and they would not know about
@@ -213,8 +218,8 @@ Folders are created automatically on the first live run
 
 ## Renaming categories or folders
 
-Easiest on the Wartung page ("Ordner umbenennen", "Kategorie-Schlüssel
-umbenennen"), which also updates the settings. On the command line, change
+Easiest on the Maintenance page ("Rename a folder", "Rename a category
+key"), which also updates the settings. On the command line, change
 `mailbox.toml`, then bring the log (and the server) in line – otherwise
 the sorter creates a new empty folder and old mail stays under the old name.
 Stop any running sorter first, run without `--live` to preview:
@@ -247,7 +252,7 @@ action = "werbung"                        # any category key
 folder without a model request (no cost, no flag, no expiry date). Rule-sorted
 mail is logged with source `rule`. Applies to normal runs, backfills and
 re-sorts; the 24-hour wait still applies. The rules can be edited under
-Einstellungen or created from a mail on the Mails page.
+Settings or created from a mail on the Mails page.
 
 ## Run log
 
@@ -293,22 +298,26 @@ Mails sorted before this feature existed can be checked once:
 ```
 
 
-## Standard categories (`email_sorter/example_mailbox.toml`)
+## Standard categories
 
-| Key | Folder | Notes |
+"Add mailbox" offers the same twelve categories in English (`email_sorter/example_mailbox.en.toml`)
+and German (`example_mailbox.de.toml`); only keys, folders and the mailbox's default name differ.
+The descriptions the model reads are English in both.
+
+| Key (en / de) | Folder (en / de) | Notes |
 |---|---|---|
-| finanzen | INBOX/Finanzen | routine bills, receipts, statements |
-| bestellungen | INBOX/Bestellungen | |
-| reisen | INBOX/Reisen | travel only |
-| termine | INBOX/Termine | booked events and appointments |
-| unterlagen | INBOX/Unterlagen | documents to keep for years: contracts, official letters, tax certificates |
-| werbung | INBOX/Werbung | expired offers → Werbung/Abgelaufen |
-| benachrichtigungen | INBOX/Benachrichtigungen | |
-| portal | – (inbox) | "new document in your customer portal" notices |
-| persoenlich | – (inbox) | |
-| sicherheit | – (inbox) | always flagged |
-| verdaechtig | INBOX/Verdächtig | phishing/scams, never flagged |
-| sonstiges | – (inbox) | |
+| finance / finanzen | INBOX/Finance / INBOX/Finanzen | routine bills, receipts, statements |
+| orders / bestellungen | INBOX/Orders / INBOX/Bestellungen | |
+| travel / reisen | INBOX/Travel / INBOX/Reisen | travel only |
+| appointments / termine | INBOX/Appointments / INBOX/Termine | booked events and appointments |
+| documents / unterlagen | INBOX/Documents / INBOX/Unterlagen | documents to keep for years: contracts, official letters, tax certificates |
+| advertising / werbung | INBOX/Advertising / INBOX/Werbung | expired offers → …/Expired, …/Abgelaufen |
+| notifications / benachrichtigungen | INBOX/Notifications / INBOX/Benachrichtigungen | |
+| portal | same folder as notifications | "new document in your customer portal" notices |
+| personal / persoenlich | – (inbox) | |
+| security / sicherheit | – (inbox) | always flagged |
+| suspicious / verdaechtig | INBOX/Suspicious / INBOX/Verdächtig | phishing/scams, never flagged |
+| other / sonstiges | – (inbox) | |
 
 Add, rename or remove categories freely – the `description` is what the model
 reads, so write it like you'd explain the folder to a person.
@@ -316,7 +325,7 @@ reads, so write it like you'd explain the folder to a person.
 ## Running automatically
 
 Sortroom starts the runs itself: every mailbox has a schedule under
-Einstellungen → Zeitplan (`[schedule]` in `mailbox.toml`, on by default,
+Settings → Schedule (`[schedule]` in `mailbox.toml`, on by default,
 every 10 minutes):
 
 ```toml
@@ -346,6 +355,15 @@ any scheduler; overlapping runs of a mailbox are skipped via its
 | `mailboxes/<id>/reports/dry-run-*.csv` | dry-run results incl. runner-up category |
 | `logs/sortroom.log` | every run (rotating, 5 × 1 MB) |
 
+## Translations
+
+UI texts are written in English in the templates (`{{ _('…') }}`) and in the Python code
+(`_("…")` from `email_sorter/i18n.py`); each further language has a catalog
+`email_sorter/locale/<code>.json` that maps the English text to its translation
+(`[singular, plural]` for `ngettext`). `python tools/i18n_check.py` lists texts missing from a
+catalog; the tests fail on a missing one. A new language needs a catalog, an entry in
+`i18n.LANGUAGES` and, if wanted, its own `example_mailbox.<code>.toml`.
+
 ## Tests
 
 ```powershell
@@ -359,8 +377,8 @@ any scheduler; overlapping runs of a mailbox are skipped via its
   `parse_response()` in `email_sorter/classifier.py` need updating.
 - Mail content (first 3000 chars) is sent to the configured endpoint and whoever runs the
   model behind it.
-- Switching provider only needs `endpoint` and `model` in `config.toml` (or under Globale
-  Einstellungen) and its key in `CLASSIFIER_API_KEY`. The cost per mail is shown when the
+- Switching provider only needs `endpoint` and `model` in `config.toml` (or under Global
+  settings) and its key in `CLASSIFIER_API_KEY`. The cost per mail is shown when the
   provider reports it in `usage.cost` (OpenRouter does); otherwise it stays at 0.
 - Exit codes: `0` ok, `1` some mails failed (retried next run), `2` config or
   API-key/credit problem.

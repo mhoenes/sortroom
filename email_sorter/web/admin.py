@@ -13,8 +13,10 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from .. import jobs
 from ..check import check
-from ..config import (CLASSIFIER_KEY_ENV, EXAMPLE_MAILBOX, INBOX_ACTION, ConfigError, Mailbox, _read_toml,
+from .. import i18n
+from ..config import (CLASSIFIER_KEY_ENV, EXAMPLE_MAILBOXES, INBOX_ACTION, ConfigError, Mailbox, _read_toml,
                       load_credentials)
+from ..i18n import _
 from ..maintenance import relocate_category, rename_category, rename_folder
 from ..manual import ManualError, move_mail
 from ..reconcile import run_reconcile
@@ -29,19 +31,9 @@ from .editor import _flash, _form, _page, _shared_path, form_number
 
 log = logging.getLogger(__name__)
 
-EXAMPLE = "_example"  # template choice: the built-in example mailbox
+EXAMPLE = "_example_"  # template choice prefix: the built-in standard categories of a language
 
-TASKS = {
-    "run": "Lauf",
-    "backfill": "Backfill",
-    "recheck": "Ablaufdaten nachprüfen",
-    "resort": "Ordner neu einsortieren",
-    "relocate": "Kategorie in ihren Ordner nachziehen",
-    "rename_folder": "Ordner umbenennen",
-    "rename_category": "Kategorie-Schlüssel umbenennen",
-    "reconcile": "Protokoll mit Postfach abgleichen",
-    "check": "Verbindung prüfen",
-}
+TASKS = {"run", "backfill", "recheck", "resort", "relocate", "rename_folder", "rename_category", "reconcile", "check"}
 RISKY_TASKS = {"rename_folder", "rename_category"}  # change the server and the settings
 
 
@@ -77,53 +69,53 @@ def _limit(form: dict) -> int | None:
     if not raw:
         return None
     if not raw.isdigit() or not 1 <= int(raw) <= 100000:
-        raise EditError("Anzahl: eine ganze Zahl ab 1.")
+        raise EditError(_("Count: a whole number from 1."))
     return int(raw)
 
 
 def _job_for(request: Request, box: Mailbox, task: str, form: dict):
     """(label, fn, needs_lock) for a maintenance form."""
     cfg, ws, live = box.cfg, box.workspace, _flag(form, "live")
-    mode = "" if live else " (Probelauf)"
+    mode = "" if live else f" ({_('dry run')})"
     creds = load_credentials(cfg)
     shared = _shared_path(request)
     if task == "run":
         limit = _limit(form)
-        return f"Lauf{mode}", lambda: run(cfg, creds, ws, live=live, limit=limit), True
+        return _("Run") + mode, lambda: run(cfg, creds, ws, live=live, limit=limit), True
     if task == "backfill":
         try:
             since = date.fromisoformat(str(form.get("since") or ""))
         except ValueError:
-            raise EditError("Backfill: bitte ein Startdatum angeben.") from None
+            raise EditError(_("Backfill: please enter a start date.")) from None
         if since > date.today():
-            raise EditError("Backfill: das Startdatum liegt in der Zukunft.")
+            raise EditError(_("Backfill: the start date is in the future."))
         limit = _limit(form)
-        return (f"Backfill seit {since:%d.%m.%Y}{mode}",
+        return (_("Backfill since %(date)s", date=i18n.date(since.isoformat())) + mode,
                 lambda: run_backfill(cfg, creds, ws, live=live, since=since, limit=limit), True)
     if task == "recheck":
-        return f"Ablaufdaten nachprüfen{mode}", lambda: run_recheck_expiry(cfg, creds, ws, live=live), True
+        return _("Check expiry dates") + mode, lambda: run_recheck_expiry(cfg, creds, ws, live=live), True
     if task == "resort":
         folder = str(form.get("folder") or "").strip()
         if not folder:
-            raise EditError("Bitte einen Ordner wählen.")
+            raise EditError(_("Please choose a folder."))
         limit = _limit(form)
-        return (f"{folder} neu einsortieren{mode}",
+        return (_("Re-sort %(folder)s", folder=folder) + mode,
                 lambda: run_resort(cfg, creds, ws, folder, live=live, limit=limit), True)
     if task == "relocate":
         category = str(form.get("category") or "")
         if category not in cfg.categories or not cfg.categories[category].folder:
-            raise EditError("Bitte eine Kategorie mit Zielordner wählen.")
-        return (f"{cfg.categories[category].label} nach {cfg.categories[category].folder} nachziehen{mode}",
+            raise EditError(_("Please choose a category with a target folder."))
+        return (_("Move %(category)s into %(folder)s", category=cfg.categories[category].label,
+                  folder=cfg.categories[category].folder) + mode,
                 lambda: relocate_category(cfg, creds, category, live=live, base_dir=ws), True)
     if task == "rename_folder":
         old, new = (str(form.get(k) or "").strip().strip("/") for k in ("old", "new"))
         if not old or not new or old == new:
-            raise EditError("Bitte alten und neuen Ordnernamen angeben.")
+            raise EditError(_("Please enter the old and the new folder name."))
         if old.upper() == "INBOX":
-            raise EditError("Der Posteingang selbst kann nicht umbenannt werden.")
+            raise EditError(_("The inbox itself cannot be renamed."))
         if live and not writable(box):
-            raise EditError("Die Einstellungen sind schreibgeschützt – die Ordner in den Kategorien "
-                            "ließen sich nicht nachziehen.")
+            raise EditError(_("The settings are read-only – the folders of the categories could not be updated."))
 
         def rename() -> RunResult:
             result = rename_folder(cfg, creds, old, new, live=live, base_dir=ws)
@@ -131,44 +123,44 @@ def _job_for(request: Request, box: Mailbox, task: str, form: dict):
                 n = rename_folder_refs(box, shared, old, new)
                 log.info("%d folder setting(s) now point to %s", n, new)
             return result
-        return f"Ordner {old} → {new}{mode}", rename, True
+        return _("Folder %(old)s → %(new)s", old=old, new=new) + mode, rename, True
     if task == "rename_category":
         old, new = str(form.get("old") or ""), str(form.get("new") or "").strip().lower()
         if old not in cfg.categories:
-            raise EditError("Bitte eine Kategorie wählen.")
+            raise EditError(_("Please choose a category."))
         if not new or new in cfg.categories:
-            raise EditError("Der neue Schlüssel fehlt oder ist schon vergeben.")
+            raise EditError(_("The new key is missing or already taken."))
         if live and not writable(box):
-            raise EditError("Die Einstellungen sind schreibgeschützt.")
+            raise EditError(_("The settings are read-only."))
 
         def rename_key() -> RunResult:
             if live:
                 rename_category_key(box, shared, old, new)
             return rename_category(old, new, live=live, base_dir=ws)
-        return f"Kategorie {old} → {new}{mode}", rename_key, True
+        return _("Category %(old)s → %(new)s", old=old, new=new) + mode, rename_key, True
     if task == "reconcile":
-        return f"Protokoll abgleichen{mode}", lambda: run_reconcile(cfg, creds, ws, live=live), True
+        return _("Reconcile the log") + mode, lambda: run_reconcile(cfg, creds, ws, live=live), True
     if task == "check":
         def run_check() -> dict:
             code = check(cfg, creds, out=lambda line: log.info("%s", line.strip("\n")))
             return {"ok": code == 0, "exit_code": code}
-        return "Verbindung prüfen", run_check, False
-    raise HTTPException(404, "Unbekannte Aufgabe")
+        return _("Check connection"), run_check, False
+    raise HTTPException(404, _("Unknown task"))
 
 
 @router.post("/ui/m/{box_id}/maintenance/{task}", dependencies=[Depends(require_login)])
 async def maintenance_start(request: Request, box_id: str, task: str):
     form = await _form(request)
-    _, box = _box(request, box_id)
+    _all_boxes, box = _box(request, box_id)
     if task not in TASKS:
-        raise HTTPException(404, "Unbekannte Aufgabe")
+        raise HTTPException(404, _("Unknown task"))
     try:
         label, fn, needs_lock = _job_for(request, box, task, form)
     except (EditError, ConfigError) as e:
         _flash(request, str(e), "err")
         return RedirectResponse(f"/ui/m/{box.id}/maintenance", status_code=303)
     if needs_lock and (request.app.state.is_busy(box) or jobs.running(box.id)):
-        _flash(request, "Für dieses Postfach läuft gerade etwas. Bitte warten, bis es fertig ist.", "warn")
+        _flash(request, _("Something is running for this mailbox. Please wait until it is done."), "warn")
         return RedirectResponse(f"/ui/m/{box.id}/maintenance", status_code=303)
     job = jobs.start(box, task, label, fn, request={k: v for k, v in form.items() if k != "csrf"},
                      needs_lock=needs_lock)
@@ -180,7 +172,7 @@ def job_page(request: Request, box_id: str, job_id: str):
     boxes, box = _box(request, box_id)
     job = jobs.get(job_id)
     if not job or job["mailbox"] != box.id:
-        raise HTTPException(404, "Unbekannter Job (Jobs werden nur bis zum Neustart aufbewahrt)")
+        raise HTTPException(404, _("Unknown job (jobs are only kept until the next restart)"))
     return _page(request, "job.html", {**_sidebar(request, boxes, box, "maintenance"), "box": box, "job": job,
                                        "rerun": _live_rerun(job), "risky": job["kind"] in RISKY_TASKS,
                                        "editable": writable(box)})
@@ -203,7 +195,7 @@ def _live_rerun(job: dict) -> dict | None:
 @router.post("/ui/m/{box_id}/mails/action", dependencies=[Depends(require_login)])
 async def mail_action(request: Request, box_id: str):
     form = await _form(request)
-    _, box = _box(request, box_id)
+    _all_boxes, box = _box(request, box_id)
     key, action = str(form.get("key") or ""), str(form.get("action") or "")
     back = str(form.get("back") or "")
     back = f"/ui/m/{box.id}/mails?{back}" if back and not back.startswith(("/", "http")) else \
@@ -222,22 +214,22 @@ async def mail_action(request: Request, box_id: str):
         if action == "rule":
             match = str(form.get("match") or "").strip().lower()
             if not match:
-                raise EditError("Bitte einen Absender angeben.")
+                raise EditError(_("Please enter a sender."))
             add_sender_rule(box, _shared_path(request), match, category)
-            text = f"Absender-Regel für {match} gespeichert."
+            text = _("Sender rule for %(match)s saved.", match=match)
             if _flag(form, "apply"):
                 move_mail(box.cfg, creds, box.workspace, key, category)
-                text += " Die Mail wurde verschoben."
+                text += " " + _("The mail was moved.")
             return text
         if action in ("accept", "move"):
             folder = move_mail(box.cfg, creds, box.workspace, key, category)
-            return f"Verschoben nach {folder}." if folder else "Liegt jetzt im Posteingang."
-        raise EditError("Unbekannte Aktion.")
+            return _("Moved to %(folder)s.", folder=folder) if folder else _("Now in the inbox.")
+        raise EditError(_("Unknown action."))
 
     def locked() -> str:
         with single_instance(box.lock_path) as acquired:
             if not acquired:
-                raise EditError("Für dieses Postfach läuft gerade ein Lauf. Bitte gleich noch einmal versuchen.")
+                raise EditError(_("A run is in progress for this mailbox. Please try again in a moment."))
             return act()
 
     try:
@@ -246,7 +238,7 @@ async def mail_action(request: Request, box_id: str):
         _flash(request, str(e), "err")
     except Exception as e:
         log.exception("[%s] mail action failed", box.id)
-        _flash(request, f"Fehlgeschlagen: {e}", "err")
+        _flash(request, _("Failed: %(e)s", e=e), "err")
     return RedirectResponse(back, status_code=303)
 
 
@@ -255,20 +247,20 @@ def _set_expiry(box: Mailbox, key: str, form: dict) -> str:
     try:
         expires = date.fromisoformat(raw) if raw else None
     except ValueError:
-        raise EditError("Bitte ein gültiges Datum angeben.") from None
+        raise EditError(_("Please enter a valid date.")) from None
     store = Store(box.workspace / "data" / "state.db")
     try:
         row = store.get(key)
         if row is None or not store.set_manual_expiry(key, expires):
-            raise EditError("Diese Mail steht nicht im Protokoll.")
+            raise EditError(_("This mail is not in the log."))
     finally:
         store.close()
     if expires is None:
-        return "Ablaufdatum entfernt."
-    text = f"Gültig bis {expires:%d.%m.%Y} gespeichert."
+        return _("Expiry date removed.")
+    text = _("Valid until %(date)s saved.", date=i18n.date(expires.isoformat()))
     target = expired_target(box.cfg, row["category"])
     if expires < date.today() and target and row["expired_tagged"] != 1:
-        text += f" Der nächste Lauf verschiebt die Mail nach {target}."
+        text += " " + _("The next run moves the mail to %(folder)s.", folder=target)
     return text
 
 
@@ -279,8 +271,11 @@ def _new_mailbox_page(request: Request, form: dict | None = None, error: str | N
     blocked = can_add_mailbox(request.app.state.base_dir)
     return _page(request, "mailbox_new.html", {
         **_sidebar(request, boxes, None, "all"), "boxes": boxes, "blocked": blocked, "error": error,
-        "example_categories": len(tomllib.loads(EXAMPLE_MAILBOX.read_text(encoding="utf-8"))["categories"]),
-        "form": form or {"imap_port": "993", "source_folder": "INBOX", "template": next(iter(boxes), EXAMPLE)}},
+        "example_categories": {code: len(tomllib.loads(path.read_text(encoding="utf-8"))["categories"])
+                               for code, path in EXAMPLE_MAILBOXES.items()},
+        "languages": i18n.LANGUAGES,
+        "form": form or {"imap_port": "993", "source_folder": "INBOX",
+                         "template": next(iter(boxes), EXAMPLE + i18n.language())}},
         status)
 
 
@@ -299,17 +294,18 @@ async def mailbox_create(request: Request):
         if reason:
             raise EditError(reason)
         choice = str(form.get("template") or "")
-        if choice == EXAMPLE:
-            template_file, template_name = EXAMPLE_MAILBOX, "Standard-Kategorien"
+        if choice.startswith(EXAMPLE) and choice[len(EXAMPLE):] in EXAMPLE_MAILBOXES:
+            lang = choice[len(EXAMPLE):]
+            template_file = EXAMPLE_MAILBOXES[lang]
+            template_name = _("Standard categories, %(language)s", language=i18n.LANGUAGES[lang])
         elif choice in boxes:
             template_file, template_name = boxes[choice].config_file, boxes[choice].name
         else:
-            raise EditError("Bitte eine Vorlage für die Kategorien wählen.")
+            raise EditError(_("Please choose a template for the categories."))
         box_id = create_mailbox(base, _shared_path(request), template_file, template_name, form)
     except EditError as e:
         return _new_mailbox_page(request, form=form, error=str(e), status=422)
-    _flash(request, "Postfach angelegt. Zugangsdaten in die .env eintragen, Container neu starten und dann "
-                    "„Verbindung prüfen“.")
+    _flash(request, _('Mailbox created. Put the login into .env, restart the container and then "Check connection".'))
     return RedirectResponse(f"/ui/m/{box_id}/maintenance", status_code=303)
 
 
@@ -323,10 +319,11 @@ def _shared_page(request: Request, form: dict | None = None, error: str | None =
         form = {"endpoint": classifier.get("endpoint", ""), "model": classifier.get("model", ""),
                 "max_body_chars": classifier.get("max_body_chars", 3000),
                 "timeout_seconds": form_number(float(classifier.get("timeout_seconds", 20))),
-                "min_interval_seconds": form_number(float(classifier.get("min_interval_seconds", 0)))}
+                "min_interval_seconds": form_number(float(classifier.get("min_interval_seconds", 0))),
+                "language": i18n.configured_language(path)}
     return _page(request, "shared.html", {
         **_sidebar(request, boxes, None, "shared"), "form": form, "error": error, "editable": shared_writable(path),
-        "config_name": path.name, "key_env": CLASSIFIER_KEY_ENV,
+        "config_name": path.name, "key_env": CLASSIFIER_KEY_ENV, "languages": i18n.LANGUAGES,
         "key_set": bool(os.environ.get(CLASSIFIER_KEY_ENV))}, status)
 
 
@@ -342,5 +339,5 @@ async def shared_settings_save(request: Request):
         save_shared(request.app.state.base_dir, _shared_path(request), form)
     except EditError as e:
         return _shared_page(request, form=form, error=str(e), status=422)
-    _flash(request, "Gespeichert. Gilt für alle Postfächer ab dem nächsten Lauf.")
+    _flash(request, _("Saved. Applies to all mailboxes from the next run."))
     return RedirectResponse("/ui/settings", status_code=303)

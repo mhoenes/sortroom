@@ -1,6 +1,6 @@
-{% if j.status == 'running' %}<span class="pill info">läuft</span>
-{% elif j.status == 'rejected' %}<span class="pill warn">nicht gestartet</span>
-{% elif j.status == 'failed' %}<span class="pill err">Fehler</span>
-{% elif j.result and j.result.ok is false %}<span class="pill warn">mit Fehlern</span>
-{% elif j.result and j.result.live is false %}<span class="pill">Probelauf</span>
-{% else %}<span class="pill ok">fertig</span>{% endif %}
+{% if j.status == 'running' %}<span class="pill info">{{ _('running') }}</span>
+{% elif j.status == 'rejected' %}<span class="pill warn">{{ _('not started') }}</span>
+{% elif j.status == 'failed' %}<span class="pill err">{{ _('failed') }}</span>
+{% elif j.result and j.result.ok is false %}<span class="pill warn">{{ _('with errors') }}</span>
+{% elif j.result and j.result.live is false %}<span class="pill">{{ _('Dry run') }}</span>
+{% else %}<span class="pill ok">{{ _('done') }}</span>{% endif %}

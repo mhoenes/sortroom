@@ -1,5 +1,5 @@
-# Example mailbox: "Postfach hinzufügen" starts from these categories and rules when no
-# mailbox exists yet (and offers them as "Standard-Kategorien" later). The wizard sets
+# German standard categories: "Add mailbox" offers these categories and rules as
+# "Standard categories, Deutsch" (example_mailbox.en.toml has the English ones). The wizard sets
 # name and [imap]; everything can be changed in the UI afterwards.
 # Secrets (IMAP login) live in .env, never here.
 

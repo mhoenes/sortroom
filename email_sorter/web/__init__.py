@@ -18,13 +18,17 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from .. import __version__
+from .. import __version__, i18n
 from ..config import ConfigError, Mailbox, default_label
+from ..i18n import _
 from ..sorter import expired_target
 from . import queries
 
 HERE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(HERE / "templates"))
+templates.env.add_extension("jinja2.ext.i18n")
+templates.env.install_gettext_callables(i18n.translate, i18n.translate_plural, newstyle=True)
+templates.env.globals["lang"] = i18n.language
 router = APIRouter()
 
 SESSION_DAYS = 7
@@ -45,6 +49,15 @@ def session_secret() -> str:
         return explicit
     seed = f"email-sorter-session:{admin_password()}:{os.environ.get('API_TOKEN', '')}"
     return hashlib.sha256(seed.encode()).hexdigest()
+
+
+async def language_middleware(request: Request, call_next):
+    """Every request renders in the language set under Globale Einstellungen ([ui] language)."""
+    token = i18n.set_language(i18n.configured_language(request.app.state.config_path))
+    try:
+        return await call_next(request)
+    finally:
+        i18n.reset_language(token)
 
 
 class LoginRequired(Exception):
@@ -87,7 +100,7 @@ def login(request: Request, password: str = Form(""), next: str = Form("/ui")):
         _failed_logins.setdefault(ip, []).append(time.time())
     return templates.TemplateResponse(request, "login.html", {
         "next": _safe_next(next), "configured": configured,
-        "error": "Falsches Passwort." if configured else None}, status_code=401)
+        "error": _("Wrong password.") if configured else None}, status_code=401)
 
 
 @router.post("/logout")
@@ -103,65 +116,12 @@ def _safe_next(url: str) -> str:
 
 # ---------------------------------------------------------------- formatting
 
-def de_num(value, decimals: int = 0) -> str:
-    if value is None:
-        return "–"
-    s = f"{value:,.{decimals}f}"
-    return s.replace(",", " ").replace(".", ",")
-
-
-def de_conf(value) -> str:
-    return "–" if value is None else f"{value:.2f}".replace(".", ",")
-
-
-def de_dt(value: str | None, with_year: bool = False) -> str:
-    if not value:
-        return "–"
-    try:
-        dt = datetime.fromisoformat(value)
-    except ValueError:
-        return value
-    if dt.tzinfo:
-        dt = dt.astimezone()  # a mail's Date header carries the sender's offset; show local time
-    if with_year:
-        return dt.strftime("%d.%m.%Y %H:%M")
-    if dt.year != datetime.now().year:
-        return dt.strftime("%d.%m.%Y")  # from an earlier year: the date matters, not the time
-    return dt.strftime("%d.%m. %H:%M")
-
-
-def de_date(value: str | None) -> str:
-    if not value:
-        return "–"
-    try:
-        return datetime.fromisoformat(value).strftime("%d.%m.%Y")
-    except ValueError:
-        return value
-
-
 def usd(value, decimals: int = 2) -> str:
     return f"${(value or 0):.{decimals}f}"
 
 
-def ago(value: str | None) -> str:
-    if not value:
-        return "noch nie"
-    try:
-        delta = datetime.now() - datetime.fromisoformat(value)
-    except ValueError:
-        return value
-    minutes = int(delta.total_seconds() // 60)
-    if minutes < 1:
-        return "gerade eben"
-    if minutes < 60:
-        return f"vor {minutes} Min"
-    if minutes < 48 * 60:
-        return f"vor {minutes // 60} Std"
-    return f"vor {minutes // 1440} Tagen"
-
-
-for _name, _fn in (("de_num", de_num), ("de_conf", de_conf), ("de_dt", de_dt), ("de_date", de_date),
-                   ("usd", usd), ("ago", ago)):
+for _name, _fn in (("num", i18n.num), ("conf", i18n.conf), ("dt", i18n.dt), ("date", i18n.date),
+                   ("usd", usd), ("ago", i18n.ago)):
     templates.env.filters[_name] = _fn
 templates.env.globals["version"] = __version__
 
@@ -179,24 +139,31 @@ templates.env.globals["asset"] = _ASSETS.__getitem__  # unknown name: fails loud
 # repository if you run a modified version for others.
 templates.env.globals["source_url"] = os.environ.get("SOURCE_URL", "https://github.com/mhoenes/sortroom")
 
-RUN_KINDS = {"run": "Lauf", "backfill": "Backfill", "resort": "Re-Sort", "recheck": "Ablauf-Prüfung"}
+def run_kind(kind: str) -> str:
+    return {"run": _("Run"), "backfill": _("Backfill"), "resort": _("Re-sort"),
+            "recheck": _("Expiry check")}.get(kind, kind)
 
 
 def run_status(run: dict) -> tuple[str, str]:
     """(label, tone) for a run's status pill."""
     if run.get("error"):
-        return ("Abgebrochen", "err")
+        return (_("Aborted"), "err")
     if run.get("exit_code", 0) != 0:
-        return (f"{run.get('failed') or ''} Fehler".strip(), "warn")
+        failed = run.get("failed") or 0
+        return (i18n.ngettext("%(num)s error", "%(num)s errors", failed) if failed else _("Errors"), "warn")
     if not run.get("live"):
-        return ("Probelauf", "neutral")
+        return (_("Dry run"), "neutral")
     if not run.get("classified"):
-        return ("Nichts zu tun", "neutral")
+        return (_("Nothing to do"), "neutral")
     return ("OK", "ok")
 
 
+# categories shown in red: suspicious mail (key of the German and the English standard categories)
+DANGER_CATEGORIES = {"verdaechtig", "suspicious"}
+
 templates.env.globals["run_status"] = run_status
-templates.env.globals["run_kinds"] = RUN_KINDS
+templates.env.globals["run_kind"] = run_kind
+templates.env.globals["danger"] = DANGER_CATEGORIES.__contains__
 
 
 # ---------------------------------------------------------------- page helpers
@@ -205,13 +172,13 @@ def _boxes(request: Request) -> dict[str, Mailbox]:
     try:
         return request.app.state.load_mailboxes()
     except ConfigError as e:
-        raise HTTPException(500, f"Konfigurationsfehler: {e}") from None
+        raise HTTPException(500, _("Configuration error: %(e)s", e=e)) from None
 
 
 def _box(request: Request, box_id: str) -> tuple[dict[str, Mailbox], Mailbox]:
     boxes = _boxes(request)
     if box_id not in boxes:
-        raise HTTPException(404, "Unbekanntes Postfach")
+        raise HTTPException(404, _("Unknown mailbox"))
     return boxes, boxes[box_id]
 
 
@@ -233,14 +200,14 @@ def _sidebar(request: Request, boxes: dict[str, Mailbox], current: Mailbox | Non
 
 def _label(box: Mailbox, key: str) -> str:
     if not key:
-        return "Posteingang"
+        return _("Inbox")
     cat = box.cfg.categories.get(key)
     return cat.label if cat else default_label(key)
 
 
 def _folder_label(path: str | None) -> str:
     if not path or path.strip("/").upper() == "INBOX":
-        return "Posteingang"
+        return _("Inbox")
     return path.split("/")[-1] if path.count("/") <= 1 else "/".join(path.split("/")[1:])
 
 
@@ -271,8 +238,7 @@ def all_mailboxes(request: Request):
         totals["uncertain"] += st.uncertain
         totals["cost"] += st.cost_month
     return templates.TemplateResponse(request, "mailboxes.html", {
-        **_sidebar(request, boxes, None, "all"), "cards": cards, "totals": totals,
-        "month": datetime.now().strftime("%B")})
+        **_sidebar(request, boxes, None, "all"), "cards": cards, "totals": totals})
 
 
 @router.get("/ui/m/{box_id}", response_class=HTMLResponse, dependencies=[Depends(require_login)])
@@ -289,10 +255,10 @@ def overview(request: Request, box_id: str):
     finally:
         if db:
             db.close()
-    total_7d = sum(n for _, n in dist)
-    top = max((n for _, n in dist), default=0)
+    total_7d = sum(n for _c, n in dist)
+    top = max((n for _c, n in dist), default=0)
     bars = [{"label": _label(box, c), "n": n, "pct": round(100 * n / top, 1) if top else 0,
-             "tone": "inbox" if c == "" else ("danger" if c == "verdaechtig" else "")} for c, n in dist]
+             "tone": "inbox" if c == "" else ("danger" if c in DANGER_CATEGORIES else "")} for c, n in dist]
     return templates.TemplateResponse(request, "overview.html", {
         **_sidebar(request, boxes, box, "overview"), "box": box, "stats": st, "bars": bars,
         "total_7d": total_7d, "runs": runs, "review": review, "expired_7d": expired,

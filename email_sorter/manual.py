@@ -11,6 +11,7 @@ from pathlib import Path
 from imap_tools import MailBox
 
 from .config import INBOX_ACTION, Config, Credentials
+from .i18n import _
 from .sorter import (IMAP_TIMEOUT, MAX_EXPIRY_AGE_DAYS, move_uids, server_folder, _delimiter, _ensure_folder,
                      _find_uids)
 from .store import Store
@@ -28,7 +29,7 @@ def target_for(cfg: Config, category: str) -> str | None:
         return None
     cat = cfg.categories.get(category)
     if cat is None:
-        raise ManualError(f"Unbekannte Kategorie „{category}“.")
+        raise ManualError(_("Unknown category \"%(key)s\".", key=category))
     return cat.folder
 
 
@@ -38,7 +39,7 @@ def move_mail(cfg: Config, creds: Credentials, base_dir: Path, key: str, categor
     try:
         row = store.get(key)
         if row is None:
-            raise ManualError("Diese Mail steht nicht im Protokoll.")
+            raise ManualError(_("This mail is not in the log."))
         target = target_for(cfg, category)
         current = row["moved_to"]
         if (current or None) != (target or None):
@@ -49,11 +50,11 @@ def move_mail(cfg: Config, creds: Credentials, base_dir: Path, key: str, categor
                 src = server_folder(current or cfg.source_folder, delim)
                 dst = server_folder(target or cfg.source_folder, delim)
                 if not mb.folder.exists(src):
-                    raise ManualError(f"Der Ordner {current or cfg.source_folder} existiert nicht mehr.")
+                    raise ManualError(_("The folder %(folder)s no longer exists.", folder=current or cfg.source_folder))
                 uids = _find_uids(mb, src, {key: row["received"]}, fallback_days=MAX_EXPIRY_AGE_DAYS)
                 if key not in uids:
-                    raise ManualError(f"Die Mail liegt nicht mehr in {current or cfg.source_folder} "
-                                      "– gelöscht oder von Hand verschoben?")
+                    raise ManualError(_("The mail is no longer in %(folder)s – deleted or moved by hand?",
+                                        folder=current or cfg.source_folder))
                 _ensure_folder(mb, dst)
                 move_uids(mb, [uids[key]], dst)
                 mb.folder.set(cfg.source_folder)

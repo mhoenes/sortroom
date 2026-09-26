@@ -14,6 +14,7 @@ from pathlib import Path
 from imap_tools import MailBox
 
 from .config import Config, Credentials
+from .i18n import _
 from .mailtext import message_key
 from .sorter import IMAP_TIMEOUT, UID_CHUNK, _delimiter
 from .store import Store
@@ -86,8 +87,10 @@ def run_reconcile(cfg: Config, creds: Credentials, base_dir: Path, live: bool) -
                 store.set_moved_to([key], where)
         else:
             log.info("dry run - log not changed")
-        summary = (f"{len(gone)} Mail(s) nicht mehr im Postfach, {len(back)} wieder aufgetaucht, "
-                   f"{len(filed)} von Hand einsortiert" + ("" if live else " – Probelauf, nichts geändert"))
+        summary = _("%(gone)s mail(s) no longer in the mailbox, %(back)s back again, %(filed)s filed by hand",
+                    gone=len(gone), back=len(back), filed=len(filed))
+        if not live:
+            summary += " – " + _("dry run, nothing changed")
         return {"ok": True, "live": live, "gone": len(gone), "back": len(back), "filed": len(filed),
                 "summary": summary}
     finally:

@@ -1,39 +1,46 @@
 {% extends "base.html" %}
-{% block title %}Globale Einstellungen{% endblock %}
+{% block title %}{{ _('Global settings') }}{% endblock %}
 {% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text }}" data-tip="{{ text }}">?</span>{% endmacro %}
 {% block content %}
 <div class="head">
   <div class="title">
-    <h1>Globale Einstellungen</h1>
-    <div class="sub">Gelten für alle Postfächer · gespeichert in <span class="mono">{{ config_name }}</span></div>
+    <h1>{{ _('Global settings') }}</h1>
+    <div class="sub">{{ _('Apply to all mailboxes · saved in <span class="mono">%(file)s</span>', file=config_name) }}</div>
   </div>
 </div>
 
-{% if not editable %}<div class="banner" role="status">Nur lesen: {{ config_name }} ist schreibgeschützt eingebunden. Änderungen bitte in der Datei vornehmen.</div>{% endif %}
+{% if not editable %}<div class="banner" role="status">{{ _('Read only: %(file)s is mounted read-only. Please make changes in the file.', file=config_name) }}</div>{% endif %}
 {% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
 
 <form method="post" action="/ui/settings">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <fieldset {% if not editable %}disabled{% endif %} class="stack">
     <section class="card stack">
-      <div><h2>Modell</h2>
-        <p class="muted hint">Jeder Dienst, der die <a href="https://docs.typesafe.ai/api" target="_blank" rel="noopener">TypeSafe-API</a> anbietet.</p></div>
+      <h2>{{ _('Interface') }}</h2>
       <div class="grid cols-3">
-        <label class="f" style="grid-column:span 2"><span class="lt">Endpunkt {{ help('Adresse, an die jede Mail zur Einordnung geschickt wird, z. B. https://openrouter.ai/api/alpha/decisions') }}</span>
+        <label class="f"><span class="lt">{{ _('Language') }} {{ help(_('Language of this interface for everybody who uses it.')) }}</span>
+          <select name="language">{% for code, name in languages.items() %}<option value="{{ code }}" {% if form.language == code %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+      </div>
+    </section>
+    <section class="card stack">
+      <div><h2>{{ _('Model') }}</h2>
+        <p class="muted hint">{{ _('Any service that offers the <a href="https://docs.typesafe.ai/api" target="_blank" rel="noopener">TypeSafe API</a>.') }}</p></div>
+      <div class="grid cols-3">
+        <label class="f" style="grid-column:span 2"><span class="lt">{{ _('Endpoint') }} {{ help(_('Address every mail is sent to for filing, e.g. https://openrouter.ai/api/alpha/decisions')) }}</span>
           <input type="text" name="endpoint" value="{{ form.endpoint }}" required class="mono"></label>
-        <label class="f"><span class="lt">Modell {{ help('Name des Modells, wie ihn der Anbieter des Endpunkts erwartet.') }}</span>
+        <label class="f"><span class="lt">{{ _('Model') }} {{ help(_('Name of the model as the provider of the endpoint expects it.')) }}</span>
           <input type="text" name="model" value="{{ form.model }}" required class="mono"></label>
-        <div class="f"><span class="lt">API-Schlüssel {{ help('Steht aus Sicherheitsgründen nur in der .env-Datei. Nach einer Änderung dort den Container neu starten.') }}</span>
-          <span class="static"><span class="mono">{{ key_env }}</span>&nbsp;{% if key_set %}<span class="pill ok">in .env gesetzt</span>{% else %}<span class="pill err">fehlt in .env</span>{% endif %}</span></div>
-        <label class="f"><span class="lt">Mailtext-Länge {{ help('So viele Zeichen des Mailtextes bekommt das Modell. Mehr Text kann genauer sein, kostet aber etwas mehr.') }}</span>
+        <div class="f"><span class="lt">{{ _('API key') }} {{ help(_('For security it lives only in the .env file. Restart the container after changing it there.')) }}</span>
+          <span class="static"><span class="mono">{{ key_env }}</span>&nbsp;{% if key_set %}<span class="pill ok">{{ _('set in .env') }}</span>{% else %}<span class="pill err">{{ _('missing in .env') }}</span>{% endif %}</span></div>
+        <label class="f"><span class="lt">{{ _('Mail text length') }} {{ help(_('This many characters of the mail text are sent to the model. More text can be more accurate but costs a bit more.')) }}</span>
           <input type="number" name="max_body_chars" min="200" max="20000" step="1" value="{{ form.max_body_chars }}" required></label>
-        <label class="f"><span class="lt">Zeitlimit in Sekunden {{ help('So lange wird auf eine Antwort des Endpunkts gewartet.') }}</span>
+        <label class="f"><span class="lt">{{ _('Timeout in seconds') }} {{ help(_('How long to wait for an answer from the endpoint.')) }}</span>
           <input type="number" name="timeout_seconds" min="1" max="300" step="any" value="{{ form.timeout_seconds }}" required></label>
-        <label class="f"><span class="lt">Mindestabstand in Sekunden {{ help('Pause zwischen zwei Anfragen, falls der Anbieter die Anfragen pro Minute begrenzt. Meist 0.') }}</span>
+        <label class="f"><span class="lt">{{ _('Minimum interval in seconds') }} {{ help(_('Pause between two requests, for providers that limit the requests per minute. Usually 0.')) }}</span>
           <input type="number" name="min_interval_seconds" min="0" max="60" step="any" value="{{ form.min_interval_seconds }}" required></label>
       </div>
     </section>
-    {% if editable %}<div class="actions"><button class="btn primary" type="submit">Speichern</button></div>{% endif %}
+    {% if editable %}<div class="actions"><button class="btn primary" type="submit">{{ _('Save') }}</button></div>{% endif %}
   </fieldset>
 </form>
 {% endblock %}

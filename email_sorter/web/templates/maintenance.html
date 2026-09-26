@@ -1,90 +1,90 @@
 {% extends "base.html" %}
-{% block title %}Wartung · {{ box.name }}{% endblock %}
+{% block title %}{{ _('Maintenance') }} · {{ box.name }}{% endblock %}
 {% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text }}" data-tip="{{ text }}">?</span>{% endmacro %}
 {% macro hidden() %}<input type="hidden" name="csrf" value="{{ csrf }}">{% endmacro %}
 {% block content %}
 <div class="head">
   <div class="title">
-    <h1>Wartung · {{ box.name }}</h1>
-    <div class="sub">Läufe von Hand starten, nachsortieren, umbenennen · jeder Job läuft im Hintergrund</div>
+    <h1>{{ _('Maintenance') }} · {{ box.name }}</h1>
+    <div class="sub">{{ _('Start runs by hand, re-sort, rename · every job runs in the background') }}</div>
   </div>
 </div>
 
-{% if busy %}<div class="banner" role="status">Für dieses Postfach läuft gerade ein Lauf. Neue Jobs warten, bis er fertig ist.</div>{% endif %}
+{% if busy %}<div class="banner" role="status">{{ _('A run is in progress for this mailbox. New jobs wait until it is done.') }}</div>{% endif %}
 
 <div class="grid split">
   <section class="card stack">
-    <h2>Zugang</h2>
+    <h2>{{ _('Access') }}</h2>
     <div class="scroll-x"><table>
       <tbody>
       {% for name, ok in env %}
-        <tr><td class="mono">{{ name }}</td><td>{% if ok %}<span class="pill ok">gesetzt</span>{% else %}<span class="pill err">fehlt in .env</span>{% endif %}</td></tr>
+        <tr><td class="mono">{{ name }}</td><td>{% if ok %}<span class="pill ok">{{ _('set') }}</span>{% else %}<span class="pill err">{{ _('missing in .env') }}</span>{% endif %}</td></tr>
       {% endfor %}
       </tbody>
     </table></div>
-    <p class="muted hint">Zugangsdaten stehen nur in der .env. Nach einer Änderung dort den Container neu starten.</p>
+    <p class="muted hint">{{ _('Credentials live only in .env. Restart the container after changing them there.') }}</p>
     <form method="post" action="/ui/m/{{ box.id }}/maintenance/check">{{ hidden() }}
-      <button class="btn" type="submit">Verbindung prüfen</button>
-      {{ help('Meldet sich am IMAP-Server an, zeigt die Zielordner und schickt dem Modell eine Beispielmail. Verschiebt nichts; kostet einen Bruchteil eines Cents.') }}
+      <button class="btn" type="submit">{{ _('Check connection') }}</button>
+      {{ help(_('Logs in to the IMAP server, lists the target folders and sends the model a sample mail. Moves nothing; costs a fraction of a cent.')) }}
     </form>
   </section>
 
   <section class="card stack">
-    <h2>Letzte Jobs</h2>
+    <h2>{{ _('Recent jobs') }}</h2>
     {% if jobs %}
     <div class="scroll-x"><table>
-      <thead><tr><th scope="col">Start</th><th scope="col">Aufgabe</th><th scope="col">Status</th></tr></thead>
+      <thead><tr><th scope="col">{{ _('Start') }}</th><th scope="col">{{ _('Task') }}</th><th scope="col">{{ _('Status') }}</th></tr></thead>
       <tbody>
       {% for j in jobs %}
-        <tr class="link"><td class="mono" style="white-space:nowrap"><a class="rowlink" href="/ui/m/{{ box.id }}/jobs/{{ j.id }}">{{ j.started|de_dt }}</a></td>
+        <tr class="link"><td class="mono" style="white-space:nowrap"><a class="rowlink" href="/ui/m/{{ box.id }}/jobs/{{ j.id }}">{{ j.started|dt }}</a></td>
           <td class="clip" style="width:60%"><a class="rowlink" href="/ui/m/{{ box.id }}/jobs/{{ j.id }}">{{ j.label }}</a></td>
           <td>{% include "_job_status.html" %}</td></tr>
       {% endfor %}
       </tbody>
     </table></div>
-    {% else %}<div class="empty">Seit dem letzten Neustart wurde kein Job gestartet.</div>{% endif %}
+    {% else %}<div class="empty">{{ _('No job has been started since the last restart.') }}</div>{% endif %}
   </section>
 </div>
 
 {% macro go(primary=false, danger=false, disabled=false) %}<div class="go">
-      {# Probelauf comes first, so Enter in a field only ever starts a dry run #}
-      <button class="btn small" type="submit" {% if disabled %}disabled{% endif %}>Probelauf</button>
+      {# the dry run comes first, so Enter in a field only ever starts a dry run #}
+      <button class="btn small" type="submit" {% if disabled %}disabled{% endif %}>{{ _('Dry run') }}</button>
       <button class="btn small {{ 'primary' if primary }}{{ 'danger' if danger }}" type="submit" name="live" value="1"
-        {% if disabled %}disabled title="Einstellungen schreibgeschützt"{% endif %}
-        {% if danger %}onclick="return confirm('Wirklich ausführen? Vorher mit einem Probelauf prüfen, was passiert.')"{% endif %}>Ausführen</button>
+        {% if disabled %}disabled title="{{ _('Settings are read-only') }}"{% endif %}
+        {% if danger %}onclick='return confirm({{ _("Really run it? Check first with a dry run what would happen.")|tojson }})'{% endif %}>{{ _('Run') }}</button>
     </div>{% endmacro %}
 
 <section class="card stack">
-  <div class="group-head"><h2>Einsortieren</h2>
-    <p class="muted hint">Mit dem Modell, kostet etwa 0,01 $ pro 100 Mails. Ein Probelauf zeigt im Protokoll, was passieren würde, und ändert nichts.</p></div>
+  <div class="group-head"><h2>{{ _('Sorting') }}</h2>
+    <p class="muted hint">{{ _('Uses the model, costs about $0.01 per 100 mails. A dry run shows in the log what would happen and changes nothing.') }}</p></div>
   <div class="tasks">
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/run">{{ hidden() }}
-      <div class="about"><h3>Lauf jetzt starten</h3>
-        <p>Derselbe Lauf wie der geplante: neue Mails der letzten {{ box.cfg.lookback_days }} Tage, die älter als die Wartezeit sind.</p></div>
-      <div class="fields"><label class="f">Max. Mails <input type="number" name="limit" min="1" max="100000" step="1" placeholder="{{ box.cfg.max_per_run }}"></label></div>
+      <div class="about"><h3>{{ _('Start a run now') }}</h3>
+        <p>{{ _('The same run as the scheduled one: new mails of the last %(days)s days that are older than the waiting time.', days=box.cfg.lookback_days) }}</p></div>
+      <div class="fields"><label class="f">{{ _('Max. mails') }} <input type="number" name="limit" min="1" max="100000" step="1" placeholder="{{ box.cfg.max_per_run }}"></label></div>
       {{ go(primary=true) }}
     </form>
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/backfill">{{ hidden() }}
-      <div class="about"><h3>Backfill</h3>
-        <p>Sortiert ältere Mails im Posteingang ab einem Datum, Monat für Monat. Bereits verarbeitete werden übersprungen.</p></div>
-      <div class="fields"><label class="f">Ab Datum <input type="date" name="since" max="{{ today }}" required></label>
-        <label class="f">Max. Mails <input type="number" name="limit" min="1" max="100000" step="1" placeholder="alle"></label></div>
+      <div class="about"><h3>{{ _('Backfill') }}</h3>
+        <p>{{ _('Sorts older mails in the inbox from a date on, month by month. Mails already processed are skipped.') }}</p></div>
+      <div class="fields"><label class="f">{{ _('From date') }} <input type="date" name="since" max="{{ today }}" required></label>
+        <label class="f">{{ _('Max. mails') }} <input type="number" name="limit" min="1" max="100000" step="1" placeholder="{{ _('all') }}"></label></div>
       {{ go() }}
     </form>
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/resort">{{ hidden() }}
-      <div class="about"><h3>Ordner neu einsortieren</h3>
-        <p>Ordnet alle Mails eines Ordners mit den aktuellen Beschreibungen neu ein und verschiebt die, die woanders hingehören – z. B. nach einer geänderten Beschreibung.</p></div>
-      <div class="fields"><label class="f">Ordner
+      <div class="about"><h3>{{ _('Re-sort a folder') }}</h3>
+        <p>{{ _('Files all mails of a folder again with the current descriptions and moves those that belong elsewhere – e.g. after a changed description.') }}</p></div>
+      <div class="fields"><label class="f">{{ _('Folder') }}
           <select name="folder" required>
-            <option value="{{ box.cfg.source_folder }}">Posteingang</option>
+            <option value="{{ box.cfg.source_folder }}">{{ _('Inbox') }}</option>
             {% for f in folders %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
           </select></label>
-        <label class="f">Max. Mails <input type="number" name="limit" min="1" max="100000" step="1" placeholder="alle"></label></div>
+        <label class="f">{{ _('Max. mails') }} <input type="number" name="limit" min="1" max="100000" step="1" placeholder="{{ _('all') }}"></label></div>
       {{ go() }}
     </form>
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/recheck">{{ hidden() }}
-      <div class="about"><h3>Ablaufdaten nachprüfen</h3>
-        <p>Sucht bei bereits sortierten Mails aus Kategorien mit „Ablaufdatum verfolgen“, die noch nie geprüft wurden, nach einem Ablaufdatum.</p></div>
+      <div class="about"><h3>{{ _('Check expiry dates') }}</h3>
+        <p>{{ _('Looks for an expiry date in already sorted mails of categories with "Track expiry date" that were never checked.') }}</p></div>
       <div class="fields"></div>
       {{ go() }}
     </form>
@@ -92,19 +92,19 @@
 </section>
 
 <section class="card stack">
-  <div class="group-head"><h2>Abgleichen</h2>
-    <p class="muted hint">Ohne Modell, kostenlos.</p></div>
+  <div class="group-head"><h2>{{ _('Reconcile') }}</h2>
+    <p class="muted hint">{{ _('Without the model, free of charge.') }}</p></div>
   <div class="tasks">
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/reconcile">{{ hidden() }}
-      <div class="about"><h3>Protokoll mit Postfach abgleichen</h3>
-        <p>Liest alle Ordner (ohne Papierkorb, Spam, Gesendet, Entwürfe) und markiert Mails, die du gelöscht hast, als „nicht mehr im Postfach“ – sie verschwinden dann aus „Zur Prüfung“. Unsichere Mails, die du von Hand einsortiert hast, bekommen ihren Ordner. Ändert nichts auf dem Server.</p></div>
+      <div class="about"><h3>{{ _('Reconcile the log with the mailbox') }}</h3>
+        <p>{{ _('Reads all folders (except trash, spam, sent and drafts) and marks mails you deleted as "no longer in the mailbox" – they then disappear from "To review". Uncertain mails you filed by hand get their folder. Changes nothing on the server.') }}</p></div>
       <div class="fields"></div>
       {{ go() }}
     </form>
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/relocate">{{ hidden() }}
-      <div class="about"><h3>Kategorie in ihren Ordner nachziehen</h3>
-        <p>Nach einem geänderten Zielordner: verschiebt die bereits sortierten Mails der Kategorie laut Protokoll in den neuen Ordner.</p></div>
-      <div class="fields"><label class="f">Kategorie
+      <div class="about"><h3>{{ _('Move a category into its folder') }}</h3>
+        <p>{{ _('After a changed target folder: moves the already sorted mails of the category into the new folder, according to the log.') }}</p></div>
+      <div class="fields"><label class="f">{{ _('Category') }}
           <select name="category" required>
             {% for key, c in box.cfg.categories.items() if c.folder %}<option value="{{ key }}">{{ c.label }} → {{ c.folder }}</option>{% endfor %}
           </select></label></div>
@@ -114,23 +114,23 @@
 </section>
 
 <section class="card stack">
-  <div class="group-head"><h2>Umbenennen</h2>
-    <p class="muted hint">Ändert Ordner auf dem Server und die Einstellungen. Erst einen Probelauf machen und das Protokoll lesen.</p></div>
+  <div class="group-head"><h2>{{ _('Rename') }}</h2>
+    <p class="muted hint">{{ _('Changes folders on the server and the settings. Do a dry run first and read the log.') }}</p></div>
   <div class="tasks">
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/rename_folder">{{ hidden() }}
-      <div class="about"><h3>Ordner umbenennen</h3>
-        <p>Benennt den Ordner samt Unterordnern auf dem Server um, zieht das Protokoll nach und passt die Zielordner der Kategorien an.</p></div>
-      <div class="fields"><label class="f">Alter Name <input type="text" name="old" list="folders" required placeholder="INBOX/…"></label>
-        <label class="f">Neuer Name <input type="text" name="new" required placeholder="INBOX/…"></label>
+      <div class="about"><h3>{{ _('Rename a folder') }}</h3>
+        <p>{{ _('Renames the folder and its subfolders on the server, updates the log and adjusts the target folders of the categories.') }}</p></div>
+      <div class="fields"><label class="f">{{ _('Old name') }} <input type="text" name="old" list="folders" required placeholder="INBOX/…"></label>
+        <label class="f">{{ _('New name') }} <input type="text" name="new" required placeholder="INBOX/…"></label>
         <datalist id="folders">{% for f in folders %}<option value="{{ f }}">{% endfor %}</datalist></div>
       {{ go(danger=true, disabled=not editable) }}
     </form>
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/rename_category">{{ hidden() }}
-      <div class="about"><h3>Kategorie-Schlüssel umbenennen</h3>
-        <p>Ändert den internen Schlüssel in den Einstellungen, in den Absender-Regeln und im Protokoll. Der Anzeigename bleibt; Ordner ändern sich nicht.</p></div>
-      <div class="fields"><label class="f">Kategorie
+      <div class="about"><h3>{{ _('Rename a category key') }}</h3>
+        <p>{{ _('Changes the internal key in the settings, the sender rules and the log. The display name stays; folders do not change.') }}</p></div>
+      <div class="fields"><label class="f">{{ _('Category') }}
           <select name="old" required>{% for key, c in box.cfg.categories.items() %}<option value="{{ key }}">{{ c.label }} ({{ key }})</option>{% endfor %}</select></label>
-        <label class="f">Neuer Schlüssel <input type="text" name="new" required pattern="[a-z0-9_]{1,40}"></label></div>
+        <label class="f">{{ _('New key') }} <input type="text" name="new" required pattern="[a-z0-9_]{1,40}"></label></div>
       {{ go(danger=true, disabled=not editable) }}
     </form>
   </div>

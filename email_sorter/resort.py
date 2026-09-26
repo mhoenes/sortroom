@@ -75,7 +75,7 @@ def resort_outcomes(mb: MailBox, cfg: Config, classifier: ClassifierClient, fold
                 failed.append(key)
                 log.warning("could not classify %r: %s", msg.subject, e)
                 continue
-            target, _, _ = plan(decision, cfg)
+            target, _flag, _expiry = plan(decision, cfg)
             if target is None:
                 where, note = folder, ("uncertain, stays" if decision.confidence < cfg.min_confidence
                                        else "category belongs in the inbox, stays")

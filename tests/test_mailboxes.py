@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from email_sorter import __main__ as cli
-from email_sorter.config import EXAMPLE_MAILBOX, ConfigError, load_credentials, load_mailboxes
+from email_sorter.config import EXAMPLE_MAILBOXES, ConfigError, load_credentials, load_mailboxes
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -107,9 +107,15 @@ def test_old_config_section_gets_a_clear_message(tmp_path):
 def test_shipped_files():
     shared = tomllib.loads((ROOT / "config" / "config.toml").read_text(encoding="utf-8"))
     assert list(shared) == ["classifier"] and "api_key_env" not in shared["classifier"]
-    example = tomllib.loads(EXAMPLE_MAILBOX.read_text(encoding="utf-8"))
-    assert {"imap", "rules", "schedule", "categories"} <= set(example) and "classifier" not in example
-    assert "werbung" in example["categories"]
+    de, en = (tomllib.loads(EXAMPLE_MAILBOXES[lang].read_text(encoding="utf-8")) for lang in ("de", "en"))
+    for example in (de, en):
+        assert {"imap", "rules", "schedule", "categories"} <= set(example) and "classifier" not in example
+    # the English standard categories mirror the German ones: same rules, same switches, same descriptions
+    assert de["rules"].keys() == en["rules"].keys() and len(de["categories"]) == len(en["categories"])
+    for (_k, d), (_e, e) in zip(de["categories"].items(), en["categories"].items()):
+        assert {k: v for k, v in d.items() if k != "folder"} == {k: v for k, v in e.items() if k != "folder"}             or d["description"].replace("finanzen", "finance") == e["description"]
+        assert ("folder" in d) == ("folder" in e)
+    assert "werbung" in de["categories"] and en["categories"]["advertising"]["track_expiry"]
 
 
 # ---------------------------------------------------------------- CLI mailbox selection

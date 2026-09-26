@@ -6,6 +6,7 @@ read-only.
 """
 from __future__ import annotations
 
+import contextvars
 import logging
 import secrets
 import threading
@@ -18,6 +19,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from ..config import INBOX_ACTION, ConfigError, Mailbox, load_credentials
 from ..classifier import ClassifierAuthError
+from ..i18n import _
 from ..trial import OTHER_SAMPLE, OWN_SAMPLE, run_trial
 from . import _box, _sidebar, queries, require_login, router, templates
 from .editing import (EditError, delete_category, save_category, save_sender_rules,
@@ -44,7 +46,7 @@ async def _form(request: Request) -> dict:
     form = await request.form()
     sent = str(form.get("csrf", ""))
     if not sent or not secrets.compare_digest(sent, request.session.get("csrf", "")):
-        raise HTTPException(403, "Formular abgelaufen – bitte die Seite neu laden.")
+        raise HTTPException(403, _("Form expired – please reload the page."))
     return {k: form.get(k) for k in form.keys()}
 
 
@@ -88,7 +90,7 @@ def _category_page(request: Request, box_id: str, cat: str = "", new: bool = Fal
     if not new and not cat and not form:
         cat = next(iter(box.cfg.categories), "")
     if cat and cat not in box.cfg.categories and not new:
-        raise HTTPException(404, "Unbekannte Kategorie")
+        raise HTTPException(404, _("Unknown category"))
     current = box.cfg.categories.get(cat) if not new else None
     if form is None:
         form = {"key": cat, "label": current.label if current else "",
@@ -117,19 +119,19 @@ def categories(request: Request, box_id: str, cat: str = "", new: str = ""):
 @router.post("/ui/m/{box_id}/categories", response_class=HTMLResponse, dependencies=[Depends(require_login)])
 async def categories_save(request: Request, box_id: str):
     form = await _form(request)
-    _, box = _box(request, box_id)
+    _all_boxes, box = _box(request, box_id)
     new = form.get("new") == "1"
     key = str(form.get("key") or "").strip().lower()
     try:
         if form.get("delete") == "1":
             delete_category(box, _shared_path(request), key)
-            _flash(request, f"Kategorie „{box.cfg.categories[key].label}“ gelöscht.")
+            _flash(request, _("Category \"%(name)s\" deleted.", name=box.cfg.categories[key].label))
             return RedirectResponse(f"/ui/m/{box.id}/categories", status_code=303)
         key = save_category(box, _shared_path(request), key, form, create=new)
     except EditError as e:
         view = {**form, **{k: form.get(k) == "on" for k in ("flag", "flag_on_action", "track_expiry")}}
         return _category_page(request, box_id, cat=key, new=new, form=view, error=str(e), status=422)
-    _flash(request, "Gespeichert. Gilt ab dem nächsten Lauf.")
+    _flash(request, _("Saved. Applies from the next run."))
     return RedirectResponse(f"/ui/m/{box.id}/categories?cat={quote(key)}", status_code=303)
 
 
@@ -138,16 +140,16 @@ async def categories_save(request: Request, box_id: str):
 @router.post("/ui/m/{box_id}/categories/test", dependencies=[Depends(require_login)])
 async def categories_test(request: Request, box_id: str):
     form = await _form(request)
-    _, box = _box(request, box_id)
+    _all_boxes, box = _box(request, box_id)
     key = str(form.get("key") or "").strip().lower()
     description = str(form.get("description") or "").strip()
     new = form.get("new") == "1"
     if not key or not description or len(description) > 4000:
         view = {**form, **{k: form.get(k) == "on" for k in ("flag", "flag_on_action", "track_expiry")}}
         return _category_page(request, box_id, cat=key, new=new, form=view,
-                              error="Für den Test braucht es einen Schlüssel und eine Beschreibung.", status=422)
+                              error=_("The test needs a key and a description."), status=422)
     if any(j["box"] == box.id and j["status"] == "running" for j in _trials.values()):
-        _flash(request, "Es läuft schon ein Test für dieses Postfach.", "warn")
+        _flash(request, _("A test is already running for this mailbox."), "warn")
         return RedirectResponse(f"/ui/m/{box.id}/categories?cat={quote(key)}", status_code=303)
     try:
         creds = load_credentials(box.cfg)
@@ -169,12 +171,13 @@ async def categories_test(request: Request, box_id: str):
             rows, cost = run_trial(box.cfg, creds, box.workspace / "data" / "state.db", key, description, progress)
             job.update(status="done", rows=rows, cost=cost)
         except ClassifierAuthError as e:
-            job.update(status="failed", error=f"Der Endpunkt lehnt den API-Schlüssel ab: {e}")
+            job.update(status="failed", error=_("The endpoint rejects the API key: %(e)s", e=e))
         except Exception as e:
             log.exception("[%s] category trial failed", box.id)
             job.update(status="failed", error=str(e))
 
-    threading.Thread(target=work, name=f"trial-{job['id']}", daemon=True).start()
+    threading.Thread(target=contextvars.copy_context().run, args=(work,), name=f"trial-{job['id']}",
+                     daemon=True).start()
     return RedirectResponse(f"/ui/m/{box.id}/categories/test/{job['id']}", status_code=303)
 
 
@@ -184,7 +187,7 @@ def categories_test_result(request: Request, box_id: str, job_id: str):
     boxes, box = _box(request, box_id)
     job = _trials.get(job_id)
     if not job or job["box"] != box.id:
-        raise HTTPException(404, "Unbekannter Test (Tests werden nur bis zum Neustart aufbewahrt)")
+        raise HTTPException(404, _("Unknown test (tests are only kept until the next restart)"))
     key, rows = job["key"], job["rows"]
     tested = [r for r in rows if r.after]
     own = [r for r in tested if r.before == key]
@@ -202,7 +205,7 @@ def categories_test_result(request: Request, box_id: str, job_id: str):
         **_sidebar(request, boxes, box, "categories"), "box": box, "job": job, "rows": rows, "s": summary,
         "cat_label": cat.label if cat else key,
         "label": lambda k: box.cfg.categories[k].label if k in box.cfg.categories else (
-            k if k != key else f"{k} (neu)")})
+            k if k != key else _("%(key)s (new)", key=k))})
 
 
 # ---------------------------------------------------------------- settings
@@ -237,12 +240,12 @@ def settings(request: Request, box_id: str):
 @router.post("/ui/m/{box_id}/settings", response_class=HTMLResponse, dependencies=[Depends(require_login)])
 async def settings_save(request: Request, box_id: str):
     form = await _form(request)
-    _, box = _box(request, box_id)
+    _all_boxes, box = _box(request, box_id)
     try:
         save_settings(box, _shared_path(request), form)
     except EditError as e:
         return _settings_page(request, box_id, form=form, error=str(e), status=422)
-    _flash(request, "Einstellungen gespeichert. Gilt ab dem nächsten Lauf.")
+    _flash(request, _("Settings saved. They apply from the next run."))
     return RedirectResponse(f"/ui/m/{box.id}/settings", status_code=303)
 
 
@@ -250,7 +253,7 @@ async def settings_save(request: Request, box_id: str):
              dependencies=[Depends(require_login)])
 async def sender_rules_save(request: Request, box_id: str):
     form = await _form(request)
-    _, box = _box(request, box_id)
+    _all_boxes, box = _box(request, box_id)
     rules = []
     for i in range(int(form.get("rows") or 0)):  # removed rows leave gaps: empty, skipped when saving
         rules.append((str(form.get(f"match_{i}") or ""), str(form.get(f"action_{i}") or INBOX_ACTION)))
@@ -258,5 +261,5 @@ async def sender_rules_save(request: Request, box_id: str):
         save_sender_rules(box, _shared_path(request), rules)
     except EditError as e:
         return _settings_page(request, box_id, error=str(e), rules=[r for r in rules if r[0].strip()], status=422)
-    _flash(request, "Absender-Regeln gespeichert. Gilt ab dem nächsten Lauf.")
+    _flash(request, _("Sender rules saved. They apply from the next run."))
     return RedirectResponse(f"/ui/m/{box.id}/settings#regeln", status_code=303)
