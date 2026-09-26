@@ -9,11 +9,12 @@
 
 services:
   sortroom:
-    # Prebuilt image from GitHub Container Registry, set SORTROOM_IMAGE in .env.
+    # Prebuilt image from GitHub Container Registry. Pin a version (e.g. :0.5) or use a fork
+    # by editing this line or setting SORTROOM_IMAGE in .env.
     # Update: docker compose pull && docker compose up -d
-    # To build locally instead: docker build -t sortroom:latest .  and leave
-    # SORTROOM_IMAGE empty.
-    image: ${SORTROOM_IMAGE:-sortroom:latest}
+    # To build locally instead: docker build -t sortroom:latest .  and set
+    # SORTROOM_IMAGE=sortroom:latest.
+    image: ${SORTROOM_IMAGE:-ghcr.io/mhoenes/sortroom:latest}
     container_name: sortroom
     ports:
       - "${UI_PORT:-8765}:8765"
