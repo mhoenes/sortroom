@@ -279,7 +279,7 @@ def overview(request: Request, box_id: str):
     return templates.TemplateResponse(request, "overview.html", {
         **_sidebar(request, boxes, box, "overview"), "box": box, "stats": st, "bars": bars,
         "total_7d": total_7d, "runs": runs, "review": review, "expired_7d": expired,
-        "label": lambda k: _label(box, k)})
+        "schedule": request.app.state.scheduler.status(box), "label": lambda k: _label(box, k)})
 
 
 @router.get("/ui/m/{box_id}/mails", response_class=HTMLResponse, dependencies=[Depends(require_login)])

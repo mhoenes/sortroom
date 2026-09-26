@@ -66,6 +66,24 @@
         </label>
       </div>
     </section>
+    <section class="card stack">
+      <h2>Zeitplan</h2>
+      <div class="grid cols-3">
+        <div class="f"><span class="lt">Automatisch einsortieren {{ help('Sortroom startet selbst alle paar Minuten einen Lauf für dieses Postfach. Aus: Läufe nur von Hand unter „Wartung“ oder über die API.') }}</span>
+          <label class="check"><input type="checkbox" name="schedule_enabled" value="1" {% if form.schedule_enabled in (true, 'on', '1') %}checked{% endif %}>Zeitplan an</label>
+        </div>
+        <label class="f"><span class="lt">Abstand in Minuten {{ help('Zeit zwischen zwei Läufen. Läuft gerade etwas für das Postfach, wird der Lauf übersprungen und zum nächsten Termin nachgeholt.') }}</span>
+          <input type="text" name="schedule_minutes" value="{{ form.schedule_minutes }}" inputmode="numeric" required>
+        </label>
+        <div class="f"><span class="lt">Status</span>
+          <span class="static">{% if not schedule.active %}Zeitplan in diesem Prozess abgeschaltet (SORTROOM_SCHEDULER)
+            {% elif not schedule.enabled %}aus
+            {% elif schedule.running %}Lauf läuft gerade
+            {% elif schedule.next %}nächster Lauf {{ schedule.next.strftime('%H:%M') }}
+            {% else %}startet in Kürze{% endif %}</span>
+        </div>
+      </div>
+    </section>
     {% if editable %}<div class="actions"><button class="btn primary" type="submit">Einstellungen speichern</button></div>{% endif %}
   </fieldset>
 </form>

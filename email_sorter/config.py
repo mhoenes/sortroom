@@ -58,6 +58,8 @@ class Config:
     imap_password_env: str = "IMAP_PASSWORD"  # mailbox's login, so several mailboxes can coexist
     sender_rules: tuple[SenderRule, ...] = ()  # checked in order, first match wins
     sort_read_at_once: bool = False  # mail already read skips the min_age_hours wait
+    schedule_enabled: bool = True    # built-in schedule: a normal run every schedule_minutes
+    schedule_minutes: int = 10
 
     def rule_for(self, sender: str) -> SenderRule | None:
         """The first sender rule matching this sender address, if any (case-insensitive)."""
@@ -142,12 +144,16 @@ def config_from_raw(raw: dict, where: str) -> Config:
             imap_password_env=imap.get("password_env", "IMAP_PASSWORD"),
             sender_rules=_sender_rules(raw, categories, where),
             sort_read_at_once=bool(rules.get("sort_read_at_once", False)),
+            schedule_enabled=bool(raw.get("schedule", {}).get("enabled", True)),
+            schedule_minutes=int(raw.get("schedule", {}).get("interval_minutes", 10)),
         )
     except KeyError as e:
         raise ConfigError(f"{where}: missing setting {e}") from None
 
     if len(cfg.categories) < 2:
         raise ConfigError(f"{where}: at least two categories are required")
+    if not 1 <= cfg.schedule_minutes <= 1440:
+        raise ConfigError(f"{where}: schedule.interval_minutes must be between 1 and 1440")
     if cfg.min_age_hours < 0:
         raise ConfigError(f"{where}: min_age_hours must not be negative")
     for name in ("min_confidence", "action_flag_threshold", "expiry_threshold"):

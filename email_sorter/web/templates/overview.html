@@ -25,6 +25,11 @@
     {% else %}
       <span class="v">–</span><span class="d">Noch kein Lauf protokolliert</span>
     {% endif %}
+    <span class="d">{% if schedule.running %}Lauf läuft gerade
+      {% elif schedule.enabled and schedule.active and schedule.next %}Nächster Lauf {{ schedule.next.strftime('%H:%M') }} · alle {{ schedule.minutes }} Min
+      {% elif schedule.enabled and schedule.active %}Zeitplan startet in Kürze
+      {% elif schedule.enabled %}Zeitplan in diesem Prozess abgeschaltet
+      {% else %}Zeitplan aus{% endif %}</span>
   </div>
   <div class="card kpi">
     <span class="k">Heute einsortiert</span>

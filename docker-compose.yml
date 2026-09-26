@@ -1,10 +1,7 @@
-# Sortroom as a service next to n8n.
+# Sortroom: admin UI, built-in schedule and HTTP API in one container.
 #
-# n8n reaches the API over the shared Docker network at http://sortroom:8765.
-# The admin UI is published on the host (http://<host>:8765, login with ADMIN_PASSWORD);
-# set UI_PORT in .env to use another port, or remove `ports` to keep it internal.
-# Set N8N_NETWORK in .env to the network your n8n container uses
-# (docker inspect <n8n-container> --format '{{json .NetworkSettings.Networks}}').
+# The UI is published on the host (http://<host>:8765, login with ADMIN_PASSWORD);
+# set UI_PORT in .env to use another port. Runs start by themselves (Einstellungen -> Zeitplan).
 
 services:
   sortroom:
@@ -27,10 +24,3 @@ services:
       - ./logs:/app/logs
       - ./reports:/app/reports    # dry-run CSV reports
       - ./config.toml:/app/config.toml:ro
-    networks:
-      - n8n
-
-networks:
-  n8n:
-    external: true
-    name: ${N8N_NETWORK:-n8n_default}
