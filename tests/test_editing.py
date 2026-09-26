@@ -233,10 +233,12 @@ def test_category_error_is_shown(client):
 def test_settings_page_and_rules(client, setup):
     html = client.get("/ui/m/privat/settings").text
     assert "imap.example.de" in html and "scanner@brother.com" in html and "IMAP_PASSWORD" in html
+    assert html.count('name="match_') == 2  # the one rule plus the row template, no blank rows
+    assert '<template id="rule-row">' in html and 'name="match___i__"' in html
     token = _csrf(html)
-    r = client.post("/ui/m/privat/settings/sender-rules", data={
-        "csrf": token, "rows": "3", "match_0": "scanner@brother.com", "action_0": "inbox", "remove_0": "1",
-        "match_1": "@shop.de", "action_1": "werbung", "match_2": "", "action_2": "inbox"}, follow_redirects=False)
+    r = client.post("/ui/m/privat/settings/sender-rules", data={  # row 0 removed in the page, row 2 added
+        "csrf": token, "rows": "3", "match_1": "@shop.de", "action_1": "werbung",
+        "match_2": "", "action_2": "inbox"}, follow_redirects=False)
     assert r.status_code == 303
     assert [(x.match, x.action) for x in _box(setup).cfg.sender_rules] == [("@shop.de", "werbung")]
 

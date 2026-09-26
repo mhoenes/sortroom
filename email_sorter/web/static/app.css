@@ -246,6 +246,12 @@ div.f { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-w
 tr.changed td { background: #FBF7EC; }
 table.rules input[type=text], table.rules select { width: 100%; }
 table.rules td { padding: 6px 8px; }
+table.rules td.rule-del { width: 44px; }
+.rules-box:has(tbody tr) .no-rules, .rules-box:not(:has(tbody tr)) .scroll-x { display: none; }
+.no-rules { margin: 0; }
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px;
+  border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
+.icon-btn:hover { background: var(--err-bg); color: var(--err); }
 
 pre.log { margin: 0; max-height: 520px; overflow: auto; padding: 14px 16px; border-radius: 8px; background: var(--side);
   color: var(--side-ink); font-family: var(--mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; }

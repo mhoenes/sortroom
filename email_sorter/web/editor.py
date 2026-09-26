@@ -225,7 +225,7 @@ def _settings_page(request: Request, box_id: str, form: dict | None = None, erro
     return _page(request, "settings.html", {
         **_sidebar(request, boxes, box, "settings"), "box": box, "cfg": cfg, "form": form, "error": error,
         "schedule": request.app.state.scheduler.status(box),
-        "rules": rules + [("", INBOX_ACTION)] * 3, "editable": writable(box),
+        "rules": rules, "editable": writable(box),
         "config_name": box.config_file.name if box.config_file else "–"}, status)
 
 
@@ -252,9 +252,7 @@ async def sender_rules_save(request: Request, box_id: str):
     form = await _form(request)
     _, box = _box(request, box_id)
     rules = []
-    for i in range(int(form.get("rows") or 0)):
-        if form.get(f"remove_{i}"):
-            continue
+    for i in range(int(form.get("rows") or 0)):  # removed rows leave gaps: empty, skipped when saving
         rules.append((str(form.get(f"match_{i}") or ""), str(form.get(f"action_{i}") or INBOX_ACTION)))
     try:
         save_sender_rules(box, _shared_path(request), rules)
