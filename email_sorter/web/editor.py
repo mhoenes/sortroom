@@ -68,12 +68,10 @@ def _shared_path(request: Request):
     return request.app.state.config_path
 
 
-def de_plain(value) -> str:
-    """0.7 -> '0,7', 24.0 -> '24' (form fields)."""
-    return "" if value is None else f"{value:g}".replace(".", ",")
-
-
-templates.env.filters["de_plain"] = de_plain
+def form_number(value) -> str:
+    """0.7 -> '0.7', 24.0 -> '24': the value of an <input type=number>, which the browser
+    shows with the local decimal comma."""
+    return "" if value is None else f"{value:g}"
 
 
 # ---------------------------------------------------------------- categories
@@ -215,9 +213,9 @@ def _settings_page(request: Request, box_id: str, form: dict | None = None, erro
     cfg = box.cfg
     if form is None:
         form = {"name": box.name, "imap_host": cfg.imap_host, "imap_port": cfg.imap_port,
-                "source_folder": cfg.source_folder, "min_confidence": de_plain(cfg.min_confidence),
-                "action_flag_threshold": de_plain(cfg.action_flag_threshold),
-                "expiry_threshold": de_plain(cfg.expiry_threshold), "min_age_hours": de_plain(cfg.min_age_hours),
+                "source_folder": cfg.source_folder, "min_confidence": form_number(cfg.min_confidence),
+                "action_flag_threshold": form_number(cfg.action_flag_threshold),
+                "expiry_threshold": form_number(cfg.expiry_threshold), "min_age_hours": form_number(cfg.min_age_hours),
                 "sort_read_at_once": cfg.sort_read_at_once,
                 "schedule_enabled": cfg.schedule_enabled, "schedule_minutes": cfg.schedule_minutes,
                 "lookback_days": cfg.lookback_days, "max_per_run": cfg.max_per_run,

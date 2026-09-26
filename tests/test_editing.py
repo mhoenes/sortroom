@@ -276,9 +276,11 @@ def test_trial_job_page(client, monkeypatch):
 
 def test_schedule_settings_saved(client, setup):
     html = client.get("/ui/m/privat/settings").text
-    assert "Zeitplan" in html and 'name="schedule_minutes" value="10"' in html
+    assert "Zeitplan" in html and 'name="schedule_minutes" min="1" max="1440" step="1" value="10"' in html
+    # number inputs take a dot in value=; the browser shows the local decimal comma
+    assert re.search(r'type="number" name="min_confidence" [^>]*value="0\.7"', html)
     form = {"csrf": _csrf(html), "name": "Privat", "imap_host": "imap.example.de", "imap_port": "993",
-            "source_folder": "INBOX", "min_confidence": "0,7", "action_flag_threshold": "0,8",
+            "source_folder": "INBOX", "min_confidence": "0.7", "action_flag_threshold": "0,8",
             "expiry_threshold": "0,7", "min_age_hours": "24", "lookback_days": "7", "max_per_run": "200",
             "expired_folder": "", "schedule_minutes": "30"}          # checkbox not sent: off
     assert client.post("/ui/m/privat/settings", data=form, follow_redirects=False).status_code == 303

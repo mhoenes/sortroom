@@ -26,11 +26,11 @@
           <input type="text" name="api_key_env" value="{{ form.api_key_env }}" required class="mono" aria-label="Variable für den API-Schlüssel">
           <span class="muted" style="font-weight:400">{% if key_set %}<span class="pill ok">in .env gesetzt</span>{% else %}<span class="pill err">fehlt in .env</span>{% endif %}</span></div>
         <label class="f"><span class="lt">Mailtext-Länge {{ help('So viele Zeichen des Mailtextes bekommt Jev. Mehr Text kann genauer sein, kostet aber etwas mehr.') }}</span>
-          <input type="text" name="max_body_chars" value="{{ form.max_body_chars }}" inputmode="numeric" required></label>
+          <input type="number" name="max_body_chars" min="200" max="20000" step="1" value="{{ form.max_body_chars }}" required></label>
         <label class="f"><span class="lt">Zeitlimit in Sekunden {{ help('So lange wird auf eine Antwort von Jev gewartet.') }}</span>
-          <input type="text" name="timeout_seconds" value="{{ form.timeout_seconds }}" inputmode="decimal" required></label>
+          <input type="number" name="timeout_seconds" min="1" max="300" step="any" value="{{ form.timeout_seconds }}" required></label>
         <label class="f"><span class="lt">Mindestabstand in Sekunden {{ help('Pause zwischen zwei Anfragen. Bei OpenRouter 0; über das Vercel-Gateway etwa 2.') }}</span>
-          <input type="text" name="min_interval_seconds" value="{{ form.min_interval_seconds }}" inputmode="decimal" required></label>
+          <input type="number" name="min_interval_seconds" min="0" max="60" step="any" value="{{ form.min_interval_seconds }}" required></label>
       </div>
     </section>
     {% if editable %}<div class="actions"><button class="btn primary" type="submit">Speichern</button></div>{% endif %}

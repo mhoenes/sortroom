@@ -24,7 +24,7 @@ from ..store import Store
 from . import _box, _boxes, _sidebar, queries, require_login, router
 from .editing import (EditError, add_sender_rule, can_add_mailbox, create_mailbox, rename_category_key,
                       rename_folder_refs, save_shared, shared_writable, writable)
-from .editor import _flash, _form, _page, _shared_path, de_plain
+from .editor import _flash, _form, _page, _shared_path, form_number
 
 log = logging.getLogger(__name__)
 
@@ -307,8 +307,8 @@ def _shared_page(request: Request, form: dict | None = None, error: str | None =
         form = {"endpoint": jev.get("endpoint", ""), "model": jev.get("model", ""),
                 "api_key_env": jev.get("api_key_env", "AI_GATEWAY_API_KEY"),
                 "max_body_chars": jev.get("max_body_chars", 3000),
-                "timeout_seconds": de_plain(float(jev.get("timeout_seconds", 20))),
-                "min_interval_seconds": de_plain(float(jev.get("min_interval_seconds", 0)))}
+                "timeout_seconds": form_number(float(jev.get("timeout_seconds", 20))),
+                "min_interval_seconds": form_number(float(jev.get("min_interval_seconds", 0)))}
     return _page(request, "shared.html", {
         **_sidebar(request, boxes, None, "shared"), "form": form, "error": error, "editable": shared_writable(path),
         "config_name": path.name, "key_set": bool(os.environ.get(str(form.get("api_key_env") or "")))}, status)
