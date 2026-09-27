@@ -25,21 +25,29 @@
         <h2 style="font-size:18px">{{ c.box.name }}</h2>
         <span class="muted" style="font-size:13px">{{ c.box.cfg.imap_host }}</span>
       </div>
+      {% set last = st.last_run %}
+      {% set when = _('Last run: %(when)s', when=last.started|dt(true)) if last else '' %}
       {% if c.busy %}<span class="pill info">{{ _('Running') }}</span>
-      {% elif st.last_run and st.last_run.exit_code %}<span class="pill warn">{{ _('Errors') }}</span>
-      {% elif st.last_run %}<span class="pill ok">OK</span>
+      {% elif st.errors_today %}<span class="pill warn" title="{{ when }}">{{ ngettext('%(num)s failed run today', '%(num)s failed runs today', st.errors_today) }}</span>
+      {% elif last and last.exit_code %}<span class="pill warn" title="{{ when }}">{{ _('Errors · %(when)s', when=last.started|ago) }}</span>
+      {% elif last %}<span class="pill ok" title="{{ when }}">{{ _('OK · %(when)s', when=last.started|ago) }}</span>
       {% else %}<span class="pill">{{ _('No run yet') }}</span>{% endif %}
     </div>
+    {# linked figures open exactly the list they count; "today" counts sorting, the list filters by arrival #}
     <div class="stats">
       <div><span>{{ _('Today') }}</span><b>{{ st.sorted_today|num }}</b></div>
-      <div><span>{{ _('To review') }}</span><b>{{ st.uncertain|num }}</b></div>
-      <div><span>{{ _('Starred (7 days)') }}</span><b>{{ st.flagged_7d|num }}</b></div>
+      <a class="stat" href="/ui/m/{{ c.box.id }}/mails?uncertain=1&amp;period=30d"><span>{{ _('To review') }}</span><b>{{ st.uncertain|num }}</b></a>
+      <a class="stat" href="/ui/m/{{ c.box.id }}/mails?flagged=1&amp;period=7d"><span>{{ _('Starred (7 days)') }}</span><b>{{ st.flagged_7d|num }}</b></a>
       <div><span>{{ _('Cost this month') }}</span><b class="mono">{{ st.cost_month|usd }}</b></div>
     </div>
-    <div class="muted" style="font-size:13px">{{ ngettext('%(num)s category', '%(num)s categories', c.categories) }} · {{ _('last run %(when)s', when=st.last_run.started|ago if st.last_run else _('never')) }}{% if st.errors_today %} · {{ ngettext('%(num)s error today', '%(num)s errors today', st.errors_today) }}{% endif %}</div>
+    {% set s = c.schedule %}
+    <div class="muted" style="font-size:13px">{% if s.running %}{{ _('A run is in progress') }}
+      {% elif s.enabled and s.active and s.next %}{{ _('Next run %(time)s · every %(minutes)s min', time=s.next.strftime('%H:%M'), minutes=s.minutes) }}
+      {% elif s.enabled and s.active %}{{ _('Schedule starts shortly') }}
+      {% elif s.enabled %}{{ _('Schedule switched off in this process') }}
+      {% else %}{{ _('Schedule off') }}{% endif %}</div>
     <div class="actions">
       <a class="btn primary" href="/ui/m/{{ c.box.id }}">{{ _('Open') }}</a>
-      <a class="btn" href="/ui/m/{{ c.box.id }}/mails">{{ _('Mails') }}</a>
     </div>
   </section>
 {% else %}

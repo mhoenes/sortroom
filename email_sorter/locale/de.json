@@ -34,9 +34,9 @@
   "%(num)s Fehler",
   "%(num)s Fehler"
  ],
- "%(num)s error today": [
-  "%(num)s Fehler heute",
-  "%(num)s Fehler heute"
+ "%(num)s failed run today": [
+  "%(num)s Lauf mit Fehlern heute",
+  "%(num)s Läufe mit Fehlern heute"
  ],
  "%(num)s run with errors today.": [
   "%(num)s Lauf mit Fehlern heute.",
@@ -128,6 +128,7 @@
  "Endpoint": "Endpunkt",
  "Endpoint: please enter an https address.": "Endpunkt: bitte eine https-Adresse angeben.",
  "Errors": "Fehler",
+ "Errors · %(when)s": "Fehler · %(when)s",
  "Every mail of this category gets a star (e.g. security).": "Jede Mail dieser Kategorie bekommt einen Stern (z. B. Sicherheit).",
  "Every mailbox has its own categories, rules and log": "Jedes Postfach hat eigene Kategorien, Regeln und ein eigenes Protokoll",
  "Expired": "Abgelaufen",
@@ -169,6 +170,7 @@
  "Language of this interface for everybody who uses it.": "Sprache dieser Oberfläche für alle, die sie benutzen.",
  "Last 24 h": "Letzte 24 h",
  "Last run": "Letzter Lauf",
+ "Last run: %(when)s": "Letzter Lauf: %(when)s",
  "Leave in the inbox": "Im Posteingang lassen",
  "Location": "Ort",
  "Log": "Protokoll",
@@ -232,6 +234,7 @@
  "Nothing is sorted yet: the next scheduled run picks up the mailbox automatically as soon as the login works.": "Es wird noch nichts sortiert: Der nächste geplante Lauf nimmt das Postfach automatisch mit, sobald die Zugangsdaten stimmen.",
  "Nothing to do": "Nichts zu tun",
  "Now in the inbox.": "Liegt jetzt im Posteingang.",
+ "OK · %(when)s": "OK · %(when)s",
  "Old name": "Alter Name",
  "Only for this category. Empty: the default folder from the settings (%(folder)s).": "Nur für diese Kategorie. Leer: der Standard-Ordner aus den Einstellungen (%(folder)s).",
  "Only for this category. Empty: the default folder from the settings.": "Nur für diese Kategorie. Leer: der Standard-Ordner aus den Einstellungen.",
@@ -438,7 +441,6 @@
  "from %(category)s to another one": "aus %(category)s in eine andere",
  "from other categories": "aus anderen Kategorien",
  "just now": "gerade eben",
- "last run %(when)s": "letzter Lauf %(when)s",
  "leave in the inbox": "im Posteingang lassen",
  "missing in .env": "fehlt in .env",
  "moved to \"expired\"": "nach „Abgelaufen“ verschoben",
