@@ -32,41 +32,39 @@
   </div>
 
   {% if sidebar_boxes %}
-  <div style="display:flex;flex-direction:column;gap:8px">
-    <div class="side-label">{{ _('Mailbox') }}</div>
-    <details class="switcher">
-      <summary aria-label="{{ _('Switch mailbox, current: %(name)s', name=current.name) if current else _('Switch mailbox') }}">
-        {% set cur = current or sidebar_boxes[0] %}
-        <span class="dot {{ cur.tone }}"></span>
-        <span class="who"><b>{{ cur.name if current else _('Choose a mailbox') }}</b><small>{{ cur.host if current else ngettext('%(num)s configured', '%(num)s configured', sidebar_boxes|length) }}</small></span>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 9l4-4 4 4"/><path d="M16 15l-4 4-4-4"/></svg>
-      </summary>
-      <div class="menu">
-        {% for b in sidebar_boxes %}
-        <a href="/ui/m/{{ b.id }}" {% if current and current.id == b.id %}aria-current="true"{% endif %}><span class="dot {{ b.tone }}"></span>{{ b.name }}</a>
-        {% endfor %}
+  <div class="side-section">
+    <div class="side-label">{{ _('Mailboxes') }}</div>
+    <div class="nav boxlist">
+      {% for b in sidebar_boxes %}
+      {% set here = current and current.id == b.id %}
+      <div class="boxrow">
+        <a class="boxlink {% if here %}here{% endif %}" href="{{ '/ui/m/' ~ b.id if here else b.href }}" title="{{ b.status }}">
+          <span class="dot {{ b.tone }}" aria-hidden="true"></span><span class="name">{{ b.name }}</span><span class="sr-only"> – {{ b.status }}</span></a>
+        {% if b.uncertain %}<a class="badge" href="/ui/m/{{ b.id }}/mails?uncertain=1&amp;period=30d"
+          title="{{ ngettext('%(num)s mail to review', '%(num)s mails to review', b.uncertain) }}"
+          aria-label="{{ ngettext('%(num)s mail to review', '%(num)s mails to review', b.uncertain) }}">{{ b.uncertain }}</a>{% endif %}
       </div>
-    </details>
-  </div>
-  {% endif %}
-
-  {% if current %}
-  <div class="nav">
-    <a href="/ui/m/{{ current.id }}" {% if active == 'overview' %}aria-current="page"{% endif %}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
-      {{ _('Overview') }}</a>
-    <a href="/ui/m/{{ current.id }}/mails" {% if active == 'mails' %}aria-current="page"{% endif %}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
-      {{ _('Mails') }}</a>
-    <a href="/ui/m/{{ current.id }}/categories" {% if active == 'categories' %}aria-current="page"{% endif %}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
-      {{ _('Categories') }}</a>
-    <a href="/ui/m/{{ current.id }}/maintenance" {% if active == 'maintenance' %}aria-current="page"{% endif %}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg>
-      {{ _('Maintenance') }}</a>
-    <a href="/ui/m/{{ current.id }}/settings" {% if active == 'settings' %}aria-current="page"{% endif %}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/></svg>
-      {{ _('Settings') }}</a>
+      {% if here %}
+      <div class="nav subnav">
+        <a href="/ui/m/{{ current.id }}" {% if active == 'overview' %}aria-current="page"{% endif %}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+          {{ _('Overview') }}</a>
+        <a href="/ui/m/{{ current.id }}/mails" {% if active == 'mails' %}aria-current="page"{% endif %}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+          {{ _('Mails') }}</a>
+        <a href="/ui/m/{{ current.id }}/categories" {% if active == 'categories' %}aria-current="page"{% endif %}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
+          {{ _('Categories') }}</a>
+        <a href="/ui/m/{{ current.id }}/maintenance" {% if active == 'maintenance' %}aria-current="page"{% endif %}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg>
+          {{ _('Maintenance') }}</a>
+        <a href="/ui/m/{{ current.id }}/settings" {% if active == 'settings' %}aria-current="page"{% endif %}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/></svg>
+          {{ _('Settings') }}</a>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
   </div>
   {% endif %}
 
@@ -76,8 +74,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
         {{ _('Global settings') }}</a>
     </div>
-    <form method="post" action="/logout"><button type="submit">{{ _('Log out') }}</button></form>
-    <a class="source" href="{{ source_url }}" target="_blank" rel="noopener">v{{ version }} · {{ _('Source code') }} · AGPL-3.0</a>
+    <div class="side-meta">
+      <a class="source" href="{{ source_url }}" target="_blank" rel="noopener">v{{ version }} · {{ _('Source code') }} · AGPL-3.0</a>
+      <form method="post" action="/logout"><button type="submit">{{ _('Log out') }}</button></form>
+    </div>
   </div>
   </div>
 </nav>

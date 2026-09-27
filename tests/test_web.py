@@ -230,3 +230,12 @@ def test_all_mailboxes_subtitle_says_what_is_going_on(client, monkeypatch):
     monkeypatch.setattr(api.app.state, "is_busy", lambda box: box.id == "privat")
     html = c.get("/ui").text
     assert "Läuft gerade: Privat" in html and "Nächster Lauf" not in html.split('class="sub"')[1].split("</div>")[0]
+
+
+def test_sidebar_lists_the_mailboxes(client):
+    html = _login(client).get("/ui/m/privat/mails?period=all").text
+    assert 'class="switcher"' not in html                      # no dropdown any more
+    assert 'href="/ui/m/gmail/mails"' in html                   # switching mailboxes keeps the page
+    assert 'href="/ui/m/privat/mails?uncertain=1&amp;period=30d"' in html and "1 Mail zur Prüfung" in html  # badge
+    assert 'title="Noch kein Lauf"' in html                     # status dot explained
+    assert '<form method="post" action="/logout"><button type="submit">Abmelden</button></form>' in html
