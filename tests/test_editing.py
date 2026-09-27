@@ -283,11 +283,11 @@ def test_schedule_settings_saved(client, setup):
     form = {"csrf": _csrf(html), "name": "Privat", "imap_host": "imap.example.de", "imap_port": "993",
             "source_folder": "INBOX", "min_confidence": "0.7", "action_flag_threshold": "0,8",
             "expiry_threshold": "0,7", "min_age_hours": "24", "lookback_days": "7", "max_per_run": "200",
-            "expired_folder": "", "schedule_minutes": "30"}          # checkbox not sent: off
+            "expired_folder": "", "schedule_minutes": "30", "reconcile_hours": "12"}  # checkbox not sent: off
     assert client.post("/ui/m/privat/settings", data=form, follow_redirects=False).status_code == 303
     cfg = _box(setup).cfg
-    assert not cfg.schedule_enabled and cfg.schedule_minutes == 30
-    assert _raw(setup)["schedule"] == {"enabled": False, "interval_minutes": 30}
+    assert not cfg.schedule_enabled and cfg.schedule_minutes == 30 and cfg.reconcile_hours == 12
+    assert _raw(setup)["schedule"] == {"enabled": False, "interval_minutes": 30, "reconcile_hours": 12}
     assert "Zeitplan aus" in client.get("/ui/m/privat").text
 
 

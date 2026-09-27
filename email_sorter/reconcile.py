@@ -9,6 +9,7 @@ Reads every folder's headers; changes nothing on the server.
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from pathlib import Path
 
 from imap_tools import MailBox
@@ -85,6 +86,7 @@ def run_reconcile(cfg: Config, creds: Credentials, base_dir: Path, live: bool) -
             store.set_gone(back, False)
             for key, where in filed.items():
                 store.set_moved_to([key], where)
+            store.set_meta("last_reconcile", datetime.now().isoformat(timespec="seconds"))
         else:
             log.info("dry run - log not changed")
         summary = _("%(gone)s mail(s) no longer in the mailbox, %(back)s back again, %(filed)s filed by hand",

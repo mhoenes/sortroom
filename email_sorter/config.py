@@ -63,6 +63,7 @@ class Config:
     sort_read_at_once: bool = False  # mail already read skips the min_age_hours wait
     schedule_enabled: bool = True    # built-in schedule: a normal run every schedule_minutes
     schedule_minutes: int = 10
+    reconcile_hours: int = 24        # built-in schedule: reconcile the log with the mailbox; 0 = off
 
     def rule_for(self, sender: str) -> SenderRule | None:
         """The first sender rule matching this sender address, if any (case-insensitive)."""
@@ -146,6 +147,7 @@ def config_from_raw(raw: dict, where: str) -> Config:
             sort_read_at_once=bool(rules.get("sort_read_at_once", False)),
             schedule_enabled=bool(raw.get("schedule", {}).get("enabled", True)),
             schedule_minutes=int(raw.get("schedule", {}).get("interval_minutes", 10)),
+            reconcile_hours=int(raw.get("schedule", {}).get("reconcile_hours", 24)),
         )
     except KeyError as e:
         raise ConfigError(f"{where}: missing setting {e}") from None
@@ -154,6 +156,8 @@ def config_from_raw(raw: dict, where: str) -> Config:
         raise ConfigError(f"{where}: at least two categories are required")
     if not 1 <= cfg.schedule_minutes <= 1440:
         raise ConfigError(f"{where}: schedule.interval_minutes must be between 1 and 1440")
+    if not 0 <= cfg.reconcile_hours <= 720:
+        raise ConfigError(f"{where}: schedule.reconcile_hours must be between 0 (off) and 720")
     if cfg.min_age_hours < 0:
         raise ConfigError(f"{where}: min_age_hours must not be negative")
     for name in ("min_confidence", "action_flag_threshold", "expiry_threshold"):

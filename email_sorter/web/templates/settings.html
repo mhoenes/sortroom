@@ -106,6 +106,10 @@
             {% elif schedule.next %}{{ _('next run %(time)s', time=schedule.next.strftime('%H:%M')) }}
             {% else %}{{ _('starts shortly') }}{% endif %}</span>
         </div>
+        <label class="f"><span class="lt">{{ _('Reconcile every … hours') }} {{ help(_('Compares the log with the mailbox, like "Reconcile the log with the mailbox" under Maintenance: deleted mails leave "To review", mails filed by hand get their folder. Free of charge, changes nothing on the server. Also runs when "Sort automatically" is off. 0 = never.')) }}</span>
+          <input type="number" name="reconcile_hours" min="0" max="720" step="1" value="{{ form.reconcile_hours }}" required>
+          <span class="hint muted" style="font-weight:400">{% if schedule.last_reconcile %}{{ _('Last reconcile %(when)s', when=schedule.last_reconcile.isoformat()|ago) }}{% else %}{{ _('Not reconciled yet') }}{% endif %}</span>
+        </label>
       </div>
     </section>
     {% if editable %}<div class="actions"><button class="btn primary" type="submit">{{ _('Save settings') }}</button></div>{% endif %}

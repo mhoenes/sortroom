@@ -48,6 +48,10 @@ CREATE TABLE IF NOT EXISTS runs (
     error           TEXT
 );
 CREATE INDEX IF NOT EXISTS runs_started ON runs (started);
+CREATE TABLE IF NOT EXISTS meta (
+    key             TEXT PRIMARY KEY,            -- last_reconcile: when the log was last reconciled for real
+    value           TEXT NOT NULL
+);
 """
 RUN_RETENTION_DAYS = 180
 
@@ -221,6 +225,10 @@ class Store:
         self.db.executemany("UPDATE processed SET moved_to = ? WHERE message_key = ?", [(folder, k) for k in keys])
         self.db.commit()
 
+    def set_meta(self, key: str, value: str) -> None:
+        self.db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, value))
+        self.db.commit()
+
     def close(self) -> None:
         self.db.close()
 
@@ -229,3 +237,18 @@ def _like_prefix(folder: str) -> str:
     """LIKE pattern for subfolders of `folder`, with LIKE wildcards in the name escaped by '!'."""
     escaped = folder.replace("!", "!!").replace("%", "!%").replace("_", "!_")
     return escaped + "/%"
+
+
+def last_reconcile(workspace: Path) -> datetime | None:
+    """When the mailbox's log was last reconciled for real; None if never. Opens the log read-only."""
+    path = workspace / "data" / "state.db"
+    if not path.exists():
+        return None
+    db = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
+    try:
+        row = db.execute("SELECT value FROM meta WHERE key = 'last_reconcile'").fetchone()
+    except sqlite3.OperationalError:  # a log from before the meta table
+        return None
+    finally:
+        db.close()
+    return datetime.fromisoformat(row[0]) if row else None
