@@ -283,11 +283,13 @@ def test_schedule_settings_saved(client, setup):
     form = {"csrf": _csrf(html), "name": "Privat", "imap_host": "imap.example.de", "imap_port": "993",
             "source_folder": "INBOX", "min_confidence": "0.7", "action_flag_threshold": "0,8",
             "expiry_threshold": "0,7", "min_age_hours": "24", "lookback_days": "7", "max_per_run": "200",
-            "expired_folder": "", "schedule_minutes": "30"}          # checkbox not sent: off
+            "expired_folder": "", "schedule_minutes": "30", "reconcile_hours": "12"}  # checkboxes not sent: off
     assert client.post("/ui/m/privat/settings", data=form, follow_redirects=False).status_code == 303
     cfg = _box(setup).cfg
     assert not cfg.schedule_enabled and cfg.schedule_minutes == 30
-    assert _raw(setup)["schedule"] == {"enabled": False, "interval_minutes": 30}
+    assert not cfg.reconcile_enabled and cfg.reconcile_hours == 12
+    assert _raw(setup)["schedule"] == {"enabled": False, "interval_minutes": 30, "reconcile_enabled": False,
+                                       "reconcile_hours": 12}
     assert "Zeitplan aus" in client.get("/ui/m/privat").text
 
 
@@ -333,3 +335,19 @@ def test_rename_is_refused_while_the_mailbox_is_busy(client, setup):
     assert (setup / "mailboxes" / "privat").exists() and not (setup / "mailboxes" / "arbeit").exists()
     assert load_mailboxes(setup, setup / "config.toml")["privat"].name == "Privat"  # nothing saved
     lock.unlink()
+
+
+def test_reconcile_status_in_the_settings(client, setup, monkeypatch):
+    from datetime import datetime, timedelta
+    from email_sorter.scheduler import Scheduler
+    from email_sorter.store import Store
+    monkeypatch.setattr(Scheduler, "active", property(lambda s: True))
+    html = client.get("/ui/m/privat/settings").text
+    assert 'name="reconcile_enabled" value="1" checked' in html and 'name="reconcile_hours"' in html
+    assert "startet in Kürze" in html.split("Automatisch abgleichen", 1)[1]  # never reconciled yet
+    last = datetime.now() - timedelta(hours=3)
+    store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
+    store.set_meta("last_reconcile", last.isoformat(timespec="seconds"))
+    store.close()
+    html = client.get("/ui/m/privat/settings").text
+    assert "zuletzt vor 3 Std · nächster" in html

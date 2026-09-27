@@ -1,9 +1,11 @@
-"""Built-in schedule: every mailbox with [schedule] enabled gets a normal run every N minutes.
+"""Built-in schedule: every mailbox with [schedule] enabled gets a normal run every N minutes, and
+with reconcile_enabled its log is reconciled with the mailbox every reconcile_hours (independent of `enabled`).
 
 Runs in a background thread of the API/UI process. Each run takes the mailbox's lock like any
 other run, so a run started by hand (or from outside via the API) is never doubled: the
 scheduled one is skipped and tried again at its next slot. Settings are re-read on every tick,
-so changes in the UI apply without a restart.
+so changes in the UI apply without a restart. When the log was last reconciled is kept in the
+mailbox's state.db, so a restart doesn't cause an extra reconcile and one started by hand counts.
 """
 from __future__ import annotations
 
@@ -13,9 +15,10 @@ import threading
 from datetime import datetime, timedelta
 from typing import Callable
 
-from .config import ConfigError, Mailbox, load_credentials
+from .config import ConfigError, Credentials, Mailbox, load_credentials, stored_credentials
 from .runtime import single_instance
 from .sorter import run
+from .store import last_reconcile
 
 log = logging.getLogger(__name__)
 
@@ -30,9 +33,15 @@ def enabled_by_env() -> bool:
 
 class Scheduler:
     def __init__(self, load_boxes: Callable[[], dict[str, Mailbox]],
-                 run_box: Callable[[Mailbox], None] | None = None):
+                 run_box: Callable[[Mailbox], None] | None = None,
+                 reconcile_box: Callable[[Mailbox], bool] | None = None,
+                 last_reconciled: Callable[[Mailbox], datetime | None] | None = None):
         self._load_boxes = load_boxes
         self._run_box = run_box or run_scheduled
+        self._reconcile_box = reconcile_box or reconcile_scheduled
+        self._last_reconciled = last_reconciled or (lambda box: last_reconcile(box.workspace))
+        self.reconciled: dict[str, datetime | None] = {}  # mailbox id -> last reconcile, as last read
+        self._first_seen: dict[str, datetime] = {}
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
@@ -69,7 +78,8 @@ class Scheduler:
 
     # ------------------------------------------------------------ work
     def tick(self, now: datetime | None = None) -> list[str]:
-        """Start the runs that are due. Returns the ids started (for tests)."""
+        """Start the runs and reconciles that are due. Returns the ids started, a reconcile as
+        "<id>:reconcile" (for tests)."""
         now = now or datetime.now()
         try:
             boxes = self._load_boxes()
@@ -82,7 +92,11 @@ class Scheduler:
                 if box_id not in boxes or not boxes[box_id].cfg.schedule_enabled:
                     del self.next_run[box_id]  # removed or switched off
             for box in boxes.values():
+                if box.id in self.running:
+                    continue
                 if not box.cfg.schedule_enabled:
+                    if self._reconcile_due(box, now):
+                        started.append(self._start_reconcile(box, now))
                     continue
                 interval = timedelta(minutes=box.cfg.schedule_minutes)
                 due = self.next_run.get(box.id)
@@ -90,13 +104,46 @@ class Scheduler:
                     due = self.next_run[box.id] = now + min(FIRST_RUN_DELAY, interval)
                 elif due > now + interval:  # interval shortened in the UI
                     due = self.next_run[box.id] = now + interval
-                if due > now or box.id in self.running:
+                if due > now:
+                    if self._reconcile_due(box, now):  # a normal run comes first
+                        started.append(self._start_reconcile(box, now))
                     continue
                 self.next_run[box.id] = now + interval
                 self.running.add(box.id)
                 started.append(box.id)
                 threading.Thread(target=self._run, args=(box,), name=f"scheduled-{box.id}", daemon=True).start()
         return started
+
+    def _reconcile_due(self, box: Mailbox, now: datetime) -> bool:
+        if not box.cfg.reconcile_enabled:
+            return False
+        hours = box.cfg.reconcile_hours
+        first = self._first_seen.setdefault(box.id, now)
+        last = self.reconciled.get(box.id)
+        if last is not None and now < last + timedelta(hours=hours):
+            return False
+        last = self.reconciled[box.id] = self._last_reconciled(box)  # also counts one started by hand
+        if last is None:
+            return now >= first + FIRST_RUN_DELAY  # never reconciled: soon after startup
+        return now >= last + timedelta(hours=hours)
+
+    def _start_reconcile(self, box: Mailbox, now: datetime) -> str:
+        self.reconciled[box.id] = now  # not again before the interval, unless it is skipped
+        self.running.add(box.id)
+        threading.Thread(target=self._reconcile, args=(box,), name=f"reconcile-{box.id}", daemon=True).start()
+        return f"{box.id}:reconcile"
+
+    def _reconcile(self, box: Mailbox) -> None:
+        done = True
+        try:
+            done = self._reconcile_box(box)
+        except Exception:
+            log.exception("[%s] scheduled reconcile failed", box.id)
+        finally:
+            with self._lock:
+                if not done:  # the mailbox was busy: try again at the next tick
+                    self.reconciled.pop(box.id, None)
+                self.running.discard(box.id)
 
     def _run(self, box: Mailbox) -> None:
         try:
@@ -110,7 +157,13 @@ class Scheduler:
     def status(self, box: Mailbox) -> dict:
         """What the UI shows about a mailbox's schedule."""
         return {"enabled": box.cfg.schedule_enabled, "minutes": box.cfg.schedule_minutes,
-                "active": self.active, "next": self.next_run.get(box.id), "running": box.id in self.running}
+                "active": self.active, "next": self.next_run.get(box.id), "running": box.id in self.running,
+                **self._reconcile_status(box)}
+
+    def _reconcile_status(self, box: Mailbox) -> dict:
+        last = last_reconcile(box.workspace)
+        due = last + timedelta(hours=box.cfg.reconcile_hours) if last else None
+        return {"reconcile_enabled": box.cfg.reconcile_enabled, "last_reconcile": last, "next_reconcile": due}
 
 
 def run_scheduled(box: Mailbox) -> None:
@@ -126,3 +179,23 @@ def run_scheduled(box: Mailbox) -> None:
             return
         log.info("[%s] starting scheduled run", box.id)
         run(box.cfg, creds, box.workspace, live=True, limit=None)
+
+
+def reconcile_scheduled(box: Mailbox) -> bool:
+    """Reconcile the log with the mailbox for real (it changes only the log). False when the
+    mailbox was busy, so it is tried again soon."""
+    from .reconcile import run_reconcile
+
+    stored = stored_credentials(box)
+    if not stored["imap_user"] or not stored["imap_password"]:
+        log.error("[%s] scheduled reconcile skipped: the login is not set", box.id)
+        return True
+    with single_instance(box.lock_path) as acquired:
+        if not acquired:
+            log.info("[%s] scheduled reconcile postponed, another run is active", box.id)
+            return False
+        log.info("[%s] starting scheduled reconcile", box.id)
+        result = run_reconcile(box.cfg, Credentials(stored["imap_user"], stored["imap_password"], ""),
+                               box.workspace, live=True)
+        log.info("[%s] reconcile: %s", box.id, result["summary"])
+    return True

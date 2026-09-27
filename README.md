@@ -353,7 +353,15 @@ every 10 minutes):
 [schedule]
 enabled = true
 interval_minutes = 10
+reconcile_enabled = true
+reconcile_hours = 24   # reconcile the log with the mailbox every N hours
 ```
+
+Once a day (`reconcile_enabled`, `reconcile_hours`; independent of `enabled`) the log is reconciled
+with the mailbox like Maintenance → "Reconcile the log with the mailbox": mails you
+deleted leave "To review", mails you filed by hand get their folder. It reads only
+and takes the mailbox lock like a run, so it waits for a run in progress. When it
+last happened is kept in `state.db`; one started by hand counts too.
 
 The first run comes a minute after the container starts. A run that finds
 the mailbox busy (manual run, backfill, maintenance job) is skipped and comes

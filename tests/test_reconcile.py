@@ -86,13 +86,16 @@ def test_reconcile_marks_deleted_and_filed(tmp_path, monkeypatch):
 
 
 def test_reconcile_dry_run_and_reappearing_mail(tmp_path, monkeypatch):
+    from email_sorter.store import last_reconcile
     _setup(tmp_path, monkeypatch, MAILS)
     assert reconcile.run_reconcile(CFG, CREDS, tmp_path, live=False)["gone"] == 2  # "Trash" skipped by name, too
+    assert last_reconcile(tmp_path) is None  # a dry run doesn't count for the schedule
     store = Store(tmp_path / "data" / "state.db")
     assert not any(g for _, _, g in store.locations())
     store.set_gone(["<kept@x>"], True)
     store.close()
     assert reconcile.run_reconcile(CFG, CREDS, tmp_path, live=True)["back"] == 1
+    assert last_reconcile(tmp_path) is not None
 
 
 def test_gmail_all_mail_counts_as_kept_but_not_as_place(tmp_path, monkeypatch):

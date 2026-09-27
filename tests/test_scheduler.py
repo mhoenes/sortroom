@@ -14,7 +14,7 @@ T0 = datetime(2026, 9, 26, 12, 0)
 
 
 def _box(box_id, enabled=True, minutes=10, tmp=None):
-    cfg = SimpleNamespace(schedule_enabled=enabled, schedule_minutes=minutes)
+    cfg = SimpleNamespace(schedule_enabled=enabled, schedule_minutes=minutes, reconcile_enabled=False, reconcile_hours=24)
     return SimpleNamespace(id=box_id, cfg=cfg, lock_path=(tmp / box_id / "run.lock") if tmp else None)
 
 
@@ -142,3 +142,68 @@ def test_app_starts_and_stops_the_schedule(monkeypatch):
     with TestClient(api.app):
         pass
     assert calls == ["stop"]
+
+
+# ---------------------------------------------------------------- reconcile
+
+def _reconciler(result=True):
+    calls = []
+
+    def reconcile(box):
+        calls.append(box.id)
+        return result
+    return calls, reconcile
+
+
+def test_reconcile_once_a_day_after_the_last_one():
+    box = _box("privat", enabled=False)
+    box.cfg.reconcile_enabled = True
+    last = {"privat": None}
+    calls, reconcile = _reconciler()
+    s = scheduler.Scheduler(lambda: {"privat": box}, Recorder(), reconcile, lambda b: last[b.id])
+    assert s.tick(T0) == []                                   # never reconciled: soon after startup
+    assert s.tick(T0 + scheduler.FIRST_RUN_DELAY) == ["privat:reconcile"]
+    _wait_idle(s)
+    assert calls == ["privat"]
+    last["privat"] = T0 + scheduler.FIRST_RUN_DELAY            # what the reconcile wrote into state.db
+    assert s.tick(T0 + timedelta(hours=23)) == []
+    last["privat"] = T0 + timedelta(hours=20)                   # started by hand meanwhile: counts too
+    assert s.tick(T0 + timedelta(hours=25)) == []
+    assert s.tick(T0 + timedelta(hours=44)) == ["privat:reconcile"]
+    box.cfg.reconcile_enabled = False                           # switched off
+    assert s.tick(T0 + timedelta(days=5)) == []
+
+
+def test_a_busy_reconcile_is_retried_and_a_run_goes_first():
+    box = _box("privat", minutes=10)
+    box.cfg.reconcile_enabled = True
+    calls, reconcile = _reconciler(result=False)                # mailbox busy
+    rec = Recorder()
+    s = scheduler.Scheduler(lambda: {"privat": box}, rec, reconcile, lambda b: T0 - timedelta(days=2))
+    assert s.tick(T0) == ["privat:reconcile"]                   # the run is not due before the first delay
+    _wait_idle(s)
+    assert s.tick(T0 + timedelta(seconds=20)) == ["privat:reconcile"]  # skipped, so tried again
+    _wait_idle(s)
+    assert s.tick(T0 + scheduler.FIRST_RUN_DELAY) == ["privat"]  # both due: the normal run first
+    _wait_idle(s)
+    assert rec.calls == ["privat"] and calls == ["privat", "privat"]
+
+
+def test_last_reconcile_is_kept_in_the_log(tmp_path):
+    from email_sorter.store import Store, last_reconcile
+    assert last_reconcile(tmp_path) is None                     # no log yet
+    store = Store(tmp_path / "data" / "state.db")
+    assert last_reconcile(tmp_path) is None
+    store.set_meta("last_reconcile", "2026-09-27T03:00:00")
+    store.close()
+    assert last_reconcile(tmp_path) == datetime(2026, 9, 27, 3, 0)
+
+
+def test_reconcile_hours_in_the_settings(tmp_path):
+    raw = _read_toml(EXAMPLE_MAILBOXES["en"])
+    raw["classifier"] = {"endpoint": "https://x.invalid", "model": "m"}
+    cfg = config_from_raw(raw, "x")
+    assert cfg.reconcile_enabled and cfg.reconcile_hours == 24
+    raw["schedule"]["reconcile_hours"] = 0
+    with pytest.raises(ConfigError, match="reconcile_hours"):
+        config_from_raw(raw, "x")
