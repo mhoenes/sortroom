@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ _('Maintenance') }} · {{ box.name }}{% endblock %}
 {% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text }}" data-tip="{{ text }}">?</span>{% endmacro %}
+{% from "_secret.html" import source with context %}
 {% macro hidden() %}<input type="hidden" name="csrf" value="{{ csrf }}">{% endmacro %}
 {% block content %}
 <div class="head">
@@ -15,14 +16,15 @@
 <div class="grid split">
   <section class="card stack">
     <h2>{{ _('Access') }}</h2>
+    {% if login_error %}<div class="banner err" role="alert">{{ login_error }}</div>{% endif %}
     <div class="scroll-x"><table>
       <tbody>
-      {% for name, ok in env %}
-        <tr><td class="mono">{{ name }}</td><td>{% if ok %}<span class="pill ok">{{ _('set') }}</span>{% else %}<span class="pill err">{{ _('missing in .env') }}</span>{% endif %}</td></tr>
-      {% endfor %}
+        <tr><td>{{ _('IMAP user') }}</td><td>{{ source(login.imap_user) }}</td></tr>
+        <tr><td>{{ _('IMAP password') }}</td><td>{{ source(login.imap_password) }}</td></tr>
+        <tr><td>{{ _('API key') }}</td><td>{{ source(login.classifier_api_key) }}</td></tr>
       </tbody>
     </table></div>
-    <p class="muted hint">{{ _('Credentials live only in .env. Restart the container after changing them there.') }}</p>
+    <p class="muted hint">{{ _('Set the login under <a href="/ui/m/%(id)s/settings">Settings</a> and the API key under <a href="/ui/settings">Global settings</a>.', id=box.id) }}</p>
     <form method="post" action="/ui/m/{{ box.id }}/maintenance/check">{{ hidden() }}
       <button class="btn" type="submit">{{ _('Check connection') }}</button>
       {{ help(_('Logs in to the IMAP server, lists the target folders and sends the model a sample mail. Moves nothing; costs a fraction of a cent.')) }}

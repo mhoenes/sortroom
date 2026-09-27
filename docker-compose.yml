@@ -19,6 +19,6 @@ services:
     environment:
       TZ: Europe/Berlin  # expiry dates and "today" follow local time
     volumes:
-      - ./config:/app/config        # config.toml: shared settings ([classifier]), editable under "Globale Einstellungen"
+      - ./config:/app/config        # config.toml (shared settings) and secrets.toml (API key), editable under "Global settings"
       - ./mailboxes:/app/mailboxes  # one folder per mailbox: mailbox.toml, data/state.db, reports/
       - ./logs:/app/logs

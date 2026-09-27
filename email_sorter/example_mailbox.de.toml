@@ -1,7 +1,7 @@
 # German standard categories: "Add mailbox" offers these categories and rules as
 # "Standard categories, Deutsch" (example_mailbox.en.toml has the English ones). The wizard sets
 # name and [imap]; everything can be changed in the UI afterwards.
-# Secrets (IMAP login) live in .env, never here.
+# The IMAP login is set in the admin UI and kept in secrets.toml, never here.
 
 name = "Postfach"
 

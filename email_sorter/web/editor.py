@@ -18,13 +18,13 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from .. import jobs
-from ..config import INBOX_ACTION, ConfigError, Mailbox, load_credentials
+from ..config import INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, load_credentials, stored_credentials
 from ..classifier import ClassifierAuthError
 from ..i18n import _
 from ..trial import OTHER_SAMPLE, OWN_SAMPLE, run_trial
 from . import _box, _sidebar, queries, require_login, router, templates
 from .editing import (EditError, delete_category, save_category, save_sender_rules,
-                      save_settings, writable)
+                      save_settings, secrets_writable, writable)
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +69,22 @@ def _page(request: Request, name: str, ctx: dict, status: int = 200):
 
 def _shared_path(request: Request):
     return request.app.state.config_path
+
+
+def credential_view(box: Mailbox) -> tuple[dict, str | None]:
+    """For the pages: whether each credential of a mailbox is set - never a password or key -
+    plus the stored user; and an error, if any."""
+    try:
+        found = stored_credentials(box)
+    except ConfigError as e:
+        return {"imap_user": False, "imap_password": False, "classifier_api_key": False, "stored_user": ""}, str(e)
+    return {**{k: bool(v) for k, v in found.items()}, "stored_user": found["imap_user"]}, None
+
+
+def without_secrets(form: dict, *names: str) -> tuple[dict, bool]:
+    """The form to show again after an error: write-only fields are never echoed back.
+    The flag says whether one of them had been filled in (so it has to be entered again)."""
+    return {k: v for k, v in form.items() if k not in names}, any(form.get(n) for n in names)
 
 
 def form_number(value) -> str:
@@ -153,7 +169,7 @@ async def categories_test(request: Request, box_id: str):
         _flash(request, _("A test is already running for this mailbox."), "warn")
         return RedirectResponse(f"/ui/m/{box.id}/categories?cat={quote(key)}", status_code=303)
     try:
-        creds = load_credentials(box.cfg)
+        creds = load_credentials(box)
     except ConfigError as e:
         raise HTTPException(500, str(e)) from None
     job = {"id": uuid.uuid4().hex[:12], "box": box.id, "key": key, "new": new, "description": description,
@@ -212,9 +228,10 @@ def categories_test_result(request: Request, box_id: str, job_id: str):
 # ---------------------------------------------------------------- settings
 
 def _settings_page(request: Request, box_id: str, form: dict | None = None, error: str | None = None,
-                   rules: list[tuple[str, str]] | None = None, status: int = 200):
+                   rules: list[tuple[str, str]] | None = None, status: int = 200, retype: bool = False):
     boxes, box = _box(request, box_id)
     cfg = box.cfg
+    login, login_error = credential_view(box)
     if form is None:
         form = {"name": box.name, "imap_host": cfg.imap_host, "imap_port": cfg.imap_port,
                 "source_folder": cfg.source_folder, "min_confidence": form_number(cfg.min_confidence),
@@ -223,13 +240,15 @@ def _settings_page(request: Request, box_id: str, form: dict | None = None, erro
                 "sort_read_at_once": cfg.sort_read_at_once,
                 "schedule_enabled": cfg.schedule_enabled, "schedule_minutes": cfg.schedule_minutes,
                 "lookback_days": cfg.lookback_days, "max_per_run": cfg.max_per_run,
-                "expired_folder": cfg.expired_folder or ""}
+                "expired_folder": cfg.expired_folder or "", "imap_user": login["stored_user"]}
     if rules is None:
         rules = [(r.match, r.action) for r in cfg.sender_rules]
     return _page(request, "settings.html", {
         **_sidebar(request, boxes, box, "settings"), "box": box, "cfg": cfg, "form": form, "error": error,
         "schedule": request.app.state.scheduler.status(box),
         "rules": rules, "editable": writable(box),
+        "login": login, "login_error": login_error, "login_writable": secrets_writable(box.secrets_path),
+        "secrets_file": SECRETS_FILE, "retype": retype,
         "config_name": box.config_file.name if box.config_file else "–",
         "taken_ids": sorted(p.name for p in box.workspace.parent.iterdir() if p.is_dir() and p.name != box.id)},
         status)
@@ -249,7 +268,8 @@ async def settings_save(request: Request, box_id: str):
     try:
         new_id = save_settings(box, _shared_path(request), form, busy=busy)
     except EditError as e:
-        return _settings_page(request, box_id, form=form, error=str(e), status=422)
+        form, retype = without_secrets(form, "imap_password")
+        return _settings_page(request, box_id, form=form, error=str(e), status=422, retype=retype)
     if new_id != box.id:
         _flash(request, _("Settings saved. The mailbox folder is now mailboxes/%(id)s.", id=new_id))
     else:

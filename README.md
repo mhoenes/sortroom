@@ -36,9 +36,9 @@ Language (`[ui] language = "de"` in `config/config.toml`; default `en`).
   **Test with the model** classifies the category's last 10 mails and 15 others with
   the draft description (read-only, nothing is moved; about $0.002) and shows
   what would change
-- **Settings** – display name, IMAP server/port/inbox, thresholds, waiting
-  time, look-back, max per run, default folder for expired offers, and the
-  sender rules table
+- **Settings** – display name, IMAP server/port/inbox, the login (user and
+  password), thresholds, waiting time, look-back, max per run, default folder for
+  expired offers, and the sender rules table
 
 Edits are written to the mailbox's `mailbox.toml` (comments are kept), checked
 exactly like the sorter loads them, and the previous version is kept as
@@ -53,19 +53,33 @@ uid 1000. Forms carry a CSRF token.
   uncertain mails you filed by hand; reads only, trash/spam/sent/drafts don't
   count), check the connection. Each job runs in the background
   under the mailbox lock ("Dry run" changes nothing, "Run" is the real thing) and shows
-  its log; also shows whether the mailbox's .env variables are set
+  its log; also shows whether the login and the API key are set
 - **Mails** detail – accept the model's suggestion for an uncertain mail, move a mail
   to another category (logged as "by hand"), or create a sender rule from it
 - **Add mailbox** – creates `mailboxes/<id>/mailbox.toml` with the
   categories, thresholds and schedule of an existing mailbox or the built-in
   standard categories in English or German (`email_sorter/example_mailbox.en.toml`,
-  `example_mailbox.de.toml`); credentials go
-  into `.env` under the variable names you choose (restart the container
-  afterwards). This is also how the first mailbox is created. For Gmail (`imap.gmail.com`) the
+  `example_mailbox.de.toml`) and asks for the login. This is also how the first
+  mailbox is created. For Gmail (`imap.gmail.com`) the
   copied folders lose their `INBOX/` prefix: Gmail only has top-level labels
   (`Promotions`, not `INBOX/Promotions`); Outlook still shows them under the inbox
-- **Global settings** (bottom of the sidebar) – UI language and the shared `[classifier]` settings
-  (endpoint, model, text length) in `config/config.toml`
+- **Global settings** (bottom of the sidebar) – UI language, the shared `[classifier]` settings
+  (endpoint, model, text length) in `config/config.toml`, and the API key
+
+### Logins and the API key
+
+Set in the UI, they are stored in plain text, readable only by the container user (mode
+`0600`), and never shown again – the fields are write-only, leave them empty to keep
+the current value:
+
+- `mailboxes/<id>/secrets.toml` – the mailbox's IMAP user and password (it moves and
+  goes with its folder)
+- `config/secrets.toml` – the API key of the classification endpoint
+
+They are read at the start of every run, so a change needs no restart. **Include both
+files in your backup** – they are not copied as `.bak` and are excluded from git and
+the Docker build. They are the only place Sortroom takes a login or key from; `.env`
+holds only `ADMIN_PASSWORD`, `API_TOKEN` and the Docker settings.
 
 Jobs are kept in memory until the container restarts; backfills started via
 `POST /backfill` show up there too. The API endpoints keep their bearer-token
@@ -93,9 +107,8 @@ follows its display name: "mh@hoenes.de" lives in `mailboxes/mh-hoenes-de/`, "B�
 folder too – refused while a run or job is active – so scripts using the old id need the new
 one. A folder renamed by hand also works; the id is always the folder name.
 
-`mailbox.toml` starts with `name = "Privat"`; in `[imap]`, `user_env` and
-`password_env` name the `.env` variables with that mailbox's login (default
-`IMAP_USER` / `IMAP_PASSWORD`), e.g. `GMAIL_USER` / `GMAIL_PASSWORD`.
+`mailbox.toml` starts with `name = "Privat"`. The login is in `secrets.toml` next to it
+(see [Logins and the API key](#logins-and-the-api-key)).
 
 Normal runs and `--check` cover every mailbox; `--mailbox privat` limits to
 one. Maintenance commands (`--since`, `--resort-folder`, `--rename-*`,
@@ -110,12 +123,13 @@ take `"mailbox"`; `GET /mailboxes` lists them.
 cd C:\Projekte\sortroom
 py -3.13 -m venv .venv
 .venv\Scripts\python -m pip install -r requirements-api.txt
-copy .env.example .env      # then fill in IMAP_USER, IMAP_PASSWORD, CLASSIFIER_API_KEY, ADMIN_PASSWORD
+copy .env.example .env      # then fill in ADMIN_PASSWORD
 .venv\Scripts\python -m uvicorn email_sorter.api:app --port 8765
 ```
 
-Open `http://localhost:8765`, log in and create the first mailbox under
-"Add mailbox". The CLI below works on the same `mailboxes/`.
+Open `http://localhost:8765`, log in, enter the API key under "Global settings" and
+create the first mailbox under "Add mailbox". The CLI below works on the same
+`mailboxes/` and secrets.
 
 ## Usage
 
@@ -195,11 +209,11 @@ Docker host with a personal access token that has `read:packages`:
 2. `mkdir -p config logs mailboxes && sudo chown -R 1000:1000 config logs mailboxes`
    (the container runs as uid 1000), then copy `config/config.toml` of this
    repository into `config/`.
-3. Create `.env` (see `.env.example`): IMAP, `CLASSIFIER_API_KEY` and
-   `ADMIN_PASSWORD`; `API_TOKEN` only if you want to use the HTTP API.
-4. `docker compose pull && docker compose up -d`, open the UI and create the
-   first mailbox under "Add mailbox". Check it with Maintenance →
-   "Check connection", or `docker compose logs -f sortroom`.
+3. Create `.env` (see `.env.example`) with `ADMIN_PASSWORD`; `API_TOKEN` only if
+   you want to use the HTTP API.
+4. `docker compose pull && docker compose up -d`, open the UI, enter the API key
+   under "Global settings" and create the first mailbox under "Add mailbox". Check
+   it with Maintenance → "Check connection", or `docker compose logs -f sortroom`.
 
 **Don't run two sorters on the same mailbox** (e.g. the container and a local
 copy): each installation has its own `state.db` and they would not know about
@@ -384,20 +398,17 @@ catalog; the tests fail on a missing one. A new language needs a catalog, an ent
   `parse_response()` in `email_sorter/classifier.py` need updating.
 - Mail content (first 3000 chars) is sent to the configured endpoint and whoever runs the
   model behind it.
-- Switching provider only needs `endpoint` and `model` in `config.toml` (or under Global
-  settings) and its key in `CLASSIFIER_API_KEY`. The cost per mail is shown when the
+- Switching provider only needs `endpoint`, `model` and its API key under Global
+  settings. The cost per mail is shown when the
   provider reports it in `usage.cost` (OpenRouter does); otherwise it stays at 0.
 - Exit codes: `0` ok, `1` some mails failed (retried next run), `2` config or
   API-key/credit problem.
 
-## Upgrading from 0.7.x
+## Upgrading from 0.9.x
 
-The model settings are no longer named after one model, and there is only one key:
-
-1. In `config/config.toml` rename `[jev]` to `[classifier]` and delete its `api_key_env` line.
-2. In `.env` rename the key variable (e.g. `OPENROUTER_API_KEY`) to `CLASSIFIER_API_KEY`.
-3. Restart the container. Until step 1 is done it refuses to start with a message saying
-   exactly this. The mail log in `state.db` is updated by itself.
+Logins and the API key are no longer read from `.env`. After the update, enter the API key
+under Global settings and each mailbox's user and password under its Settings, then delete
+`IMAP_*` and `CLASSIFIER_API_KEY` from `.env`. Until then runs stop with "not set: …".
 
 ## License
 

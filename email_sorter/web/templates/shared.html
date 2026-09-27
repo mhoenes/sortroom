@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ _('Global settings') }}{% endblock %}
 {% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text }}" data-tip="{{ text }}">?</span>{% endmacro %}
+{% from "_secret.html" import source with context %}
 {% block content %}
 <div class="head">
   <div class="title">
@@ -11,6 +12,7 @@
 
 {% if not editable %}<div class="banner" role="status">{{ _('Read only: %(file)s is mounted read-only. Please make changes in the file.', file=config_name) }}</div>{% endif %}
 {% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
+{% if key_error %}<div class="banner err" role="alert">{{ key_error }}</div>{% endif %}
 
 <form method="post" action="/ui/settings">
   <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -30,8 +32,11 @@
           <input type="text" name="endpoint" value="{{ form.endpoint }}" required class="mono"></label>
         <label class="f"><span class="lt">{{ _('Model') }} {{ help(_('Name of the model as the provider of the endpoint expects it.')) }}</span>
           <input type="text" name="model" value="{{ form.model }}" required class="mono"></label>
-        <div class="f"><span class="lt">{{ _('API key') }} {{ help(_('For security it lives only in the .env file. Restart the container after changing it there.')) }}</span>
-          <span class="static"><span class="mono">{{ key_env }}</span>&nbsp;{% if key_set %}<span class="pill ok">{{ _('set in .env') }}</span>{% else %}<span class="pill err">{{ _('missing in .env') }}</span>{% endif %}</span></div>
+        <label class="f" style="grid-column:span 2"><span class="lt">{{ _('API key') }} {{ help(_('Stored in %(file)s next to %(config)s, readable only by Sortroom, and never shown again. Leave empty to keep the current one.', file=secrets_file, config=config_name)) }}</span>
+          <input type="password" name="api_key" autocomplete="new-password" spellcheck="false" {% if not key_writable %}disabled{% endif %}
+            {% if key_set %}placeholder="{{ _('unchanged') }}"{% endif %}>
+          <span class="hint">{% if retype %}<span class="pill warn">{{ _('Please enter it again') }}</span>{% else %}{{ source(key_set) }}{% endif %}</span>
+        </label>
         <label class="f"><span class="lt">{{ _('Mail text length') }} {{ help(_('This many characters of the mail text are sent to the model. More text can be more accurate but costs a bit more.')) }}</span>
           <input type="number" name="max_body_chars" min="200" max="20000" step="1" value="{{ form.max_body_chars }}" required></label>
         <label class="f"><span class="lt">{{ _('Timeout in seconds') }} {{ help(_('How long to wait for an answer from the endpoint.')) }}</span>

@@ -249,6 +249,8 @@ div.f { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-w
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .hint { font-size: 13px; margin: 0; }
 .rename-note { color: var(--warn); font-weight: 400; }
+.f .hint:has(.pill) { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-weight: 400; }
+.login-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .btn.danger { color: var(--err); border-color: #E3B5AE; }
 .btn.danger:hover { background: var(--err-bg); color: var(--err); }
 .banner.ok { background: var(--ok-bg); color: var(--ok); }

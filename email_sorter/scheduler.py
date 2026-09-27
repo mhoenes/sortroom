@@ -116,7 +116,7 @@ class Scheduler:
 def run_scheduled(box: Mailbox) -> None:
     """A normal live run, the same as POST /run, skipped when the mailbox is busy."""
     try:
-        creds = load_credentials(box.cfg)
+        creds = load_credentials(box)
     except ConfigError as e:
         log.error("[%s] scheduled run skipped: %s", box.id, e)
         return
