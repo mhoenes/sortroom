@@ -56,9 +56,9 @@
             {% if login.imap_password %}placeholder="{{ _('unchanged') }}"{% endif %}>
           <span class="hint">{% if retype %}<span class="pill warn">{{ _('Please enter it again') }}</span>{% else %}{{ source(login.imap_password) }}{% endif %}</span>
         </label>
-        {% if editable %}<div class="f"><span class="lt">{{ _('Test') }} {{ help(_('Saves the settings, then logs in, lists the target folders and sends the model a sample mail. Moves nothing.')) }}</span>
+        {% if editable %}<div class="f"><span class="lt">{{ _('Test') }} {{ help(_('Saves the settings, then logs in to the IMAP server and lists the target folders. Moves nothing. The model is checked under Global settings.')) }}</span>
           <div class="login-actions">
-            <button class="btn" type="submit" name="then" value="check">{{ _('Save and check connection') }}</button>
+            <button class="btn" type="submit" name="then" value="check">{{ _('Save & check') }}</button>
           </div>
         </div>{% endif %}
       </div>

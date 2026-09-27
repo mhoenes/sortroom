@@ -136,7 +136,7 @@ def test_maintenance_page_and_run_job(client, monkeypatch):
 
     monkeypatch.setattr(admin, "run", fake_run)
     html = client.get("/ui/m/privat/maintenance").text
-    assert "Wartung · Privat" in html and "IMAP-Passwort" in html and "gesetzt" in html
+    assert "Wartung · Privat" in html and "Verbindung prüfen" not in html  # checked under the settings now
     r = client.post("/ui/m/privat/maintenance/run", data={"csrf": _csrf(html), "limit": "20"}, follow_redirects=False)
     assert r.status_code == 303 and "/ui/m/privat/jobs/" in r.headers["location"]
     _wait(r.headers["location"].rsplit("/", 1)[1])
@@ -212,7 +212,7 @@ def test_add_mailbox(client, setup):
     form = {"csrf": _csrf(html), "name": "Gmail", "imap_host": "imap.gmail.com", "imap_port": "993",
             "source_folder": "INBOX", "imap_user": "me@gmail.com", "imap_password": "app-pw", "template": "privat"}
     r = client.post("/ui/mailboxes/new", data=form, follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == "/ui/m/gmail/maintenance"
+    assert r.status_code == 303 and r.headers["location"] == "/ui/m/gmail/settings"
     raw = tomllib.loads((setup / "mailboxes" / "gmail" / "mailbox.toml").read_text(encoding="utf-8"))
     assert set(raw["imap"]) == {"host", "port", "source_folder"} and set(raw["categories"]) == {"finanzen", "werbung"}
     secrets = tomllib.loads((setup / "mailboxes" / "gmail" / "secrets.toml").read_text(encoding="utf-8"))
@@ -220,7 +220,7 @@ def test_add_mailbox(client, setup):
     html = client.get(r.headers["location"]).text
     assert "Postfach angelegt" in html and "gesetzt" in html and "app-pw" not in html
     r = client.post("/ui/mailboxes/new", data=form, follow_redirects=False)  # same name again: next free folder
-    assert r.status_code == 303 and r.headers["location"] == "/ui/m/gmail-2/maintenance"
+    assert r.status_code == 303 and r.headers["location"] == "/ui/m/gmail-2/settings"
 
 
 def test_shared_settings(client, setup):
