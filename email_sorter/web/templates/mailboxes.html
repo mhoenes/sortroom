@@ -33,8 +33,8 @@
     <div class="stats">
       <div><span>{{ _('Today') }}</span><b>{{ st.sorted_today|num }}</b></div>
       <div><span>{{ _('To review') }}</span><b>{{ st.uncertain|num }}</b></div>
-      <div><span>{{ _('Starred, 7 d') }}</span><b>{{ st.flagged_7d|num }}</b></div>
-      <div><span>{{ _('Cost, month') }}</span><b class="mono" style="font-size:18px">{{ st.cost_month|usd }}</b></div>
+      <div><span>{{ _('Starred (7 days)') }}</span><b>{{ st.flagged_7d|num }}</b></div>
+      <div><span>{{ _('Cost this month') }}</span><b class="mono">{{ st.cost_month|usd }}</b></div>
     </div>
     <div class="muted" style="font-size:13px">{{ ngettext('%(num)s category', '%(num)s categories', c.categories) }} · {{ _('last run %(when)s', when=st.last_run.started|ago if st.last_run else _('never')) }}{% if st.errors_today %} · {{ ngettext('%(num)s error today', '%(num)s errors today', st.errors_today) }}{% endif %}</div>
     <div class="actions">
