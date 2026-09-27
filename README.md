@@ -221,7 +221,7 @@ descriptions the model reads are English in both.
 | documents / unterlagen | INBOX/Documents / INBOX/Unterlagen | to keep for years: contracts, official letters, tax certificates |
 | promotions / werbung | INBOX/Promotions / INBOX/Werbung | expiry tracking; expired offers → …/Expired, …/Abgelaufen |
 | updates / benachrichtigungen | INBOX/Updates / INBOX/Benachrichtigungen | |
-| portal | same folder as updates | "new document in your customer portal" notices |
+| portal | – (inbox) | "new document in your customer portal" notices |
 | personal / persoenlich | – (inbox) | |
 | security / sicherheit | – (inbox) | always starred |
 | suspicious / verdaechtig | INBOX/Suspicious / INBOX/Verdächtig | phishing and scams, never starred |
