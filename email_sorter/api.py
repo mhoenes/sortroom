@@ -29,8 +29,9 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from . import __version__, jobs
+from . import __version__, i18n, jobs
 from .config import ConfigError, Mailbox, load_credentials, load_mailboxes
+from .i18n import _
 from .runtime import BASE_DIR, _lock_is_stale, default_config_path, setup_logging, single_instance
 from .scheduler import Scheduler, enabled_by_env
 from .sorter import run, run_backfill, run_recheck_expiry
@@ -184,7 +185,9 @@ def backfill(req: BackfillRequest) -> dict:
     if _busy(box):
         raise HTTPException(409, f"[{box.id}] another run is active")
     creds = _credentials(box)
-    job = jobs.start(box, "backfill", f"Backfill seit {req.since:%d.%m.%Y}",
+    # the label shows in the admin UI's job list, in its language (set by the language middleware)
+    label = _("Backfill since %(date)s", date=i18n.date(req.since.isoformat())) + ("" if req.live else f" ({_('dry run')})")
+    job = jobs.start(box, "backfill", label,
                      lambda: run_backfill(box.cfg, creds, box.workspace, live=req.live, since=req.since, limit=req.limit),
                      request=req.model_dump(mode="json"))
     return jobs.public(job)

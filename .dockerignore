@@ -12,3 +12,4 @@ mailboxes/
 tools/
 secrets.toml
 **/secrets.toml
+docs/

@@ -112,7 +112,9 @@ def test_mailboxes_listing(make_client):
         {"id": "gmail", "name": "Gmail", "busy": False}, {"id": "privat", "name": "Privat", "busy": False}]
 
 
-def test_backfill_runs_in_background_and_reports_via_job(client):
+def test_backfill_runs_in_background_and_reports_via_job(client, monkeypatch):
+    from email_sorter import i18n
+    monkeypatch.setattr(i18n, "DEFAULT_LANGUAGE", "en")
     r = client.post("/backfill", headers=AUTH, json={"since": "2025-01-01", "live": True})
     assert r.status_code == 202
     job_id = r.json()["id"]
@@ -123,6 +125,7 @@ def test_backfill_runs_in_background_and_reports_via_job(client):
         time.sleep(0.05)
     assert job["status"] == "done" and job["result"]["classified"] == 10 and job["mailbox"] == "privat"
     assert client.calls == [("backfill", "privat", True, date(2025, 1, 1), None)]
+    assert job["label"] == "Backfill since 1 Jan 2025"  # in the UI language, like the maintenance page's own
 
 
 def test_backfill_needs_mailbox_when_several(make_client):
