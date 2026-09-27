@@ -55,7 +55,7 @@
       <select name="template">{% for id, b in boxes.items() %}<option value="{{ id }}" {% if form.template == id %}selected{% endif %}>{{ b.name }} ({{ ngettext('%(num)s category', '%(num)s categories', b.cfg.categories|length) }})</option>{% endfor %}
         {% for code, n in example_categories.items() %}<option value="_example_{{ code }}" {% if form.template == '_example_' ~ code %}selected{% endif %}>{{ _('Standard categories, %(language)s', language=languages[code]) }} ({{ ngettext('%(num)s category', '%(num)s categories', n) }})</option>{% endfor %}</select>
     </label>
-    <p class="muted hint">{{ _('With Gmail (imap.gmail.com) the target folders are created as top-level labels, i.e. "Advertising" instead of "INBOX/Advertising". Outlook still shows them under the inbox.') }}</p>
+    <p class="muted hint">{{ _('With Gmail (imap.gmail.com) the target folders are created as top-level labels, i.e. "Promotions" instead of "INBOX/Promotions". Outlook still shows them under the inbox.') }}</p>
   </section>
 
   <div class="actions"><button class="btn primary" type="submit">{{ _('Create mailbox') }}</button>

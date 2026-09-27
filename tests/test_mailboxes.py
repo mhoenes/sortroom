@@ -115,7 +115,7 @@ def test_shipped_files():
     for (_k, d), (_e, e) in zip(de["categories"].items(), en["categories"].items()):
         assert {k: v for k, v in d.items() if k != "folder"} == {k: v for k, v in e.items() if k != "folder"}             or d["description"].replace("finanzen", "finance") == e["description"]
         assert ("folder" in d) == ("folder" in e)
-    assert "werbung" in de["categories"] and en["categories"]["advertising"]["track_expiry"]
+    assert "werbung" in de["categories"] and en["categories"]["promotions"]["track_expiry"]
 
 
 # ---------------------------------------------------------------- CLI mailbox selection

@@ -57,7 +57,7 @@
           <label class="check"><input type="checkbox" name="flag" {% if form.flag %}checked{% endif %}>{{ _('Always star') }}
             {{ help(_('Every mail of this category gets a star (e.g. security).')) }}</label>
           <label class="check"><input type="checkbox" name="flag_on_action" {% if form.flag_on_action %}checked{% endif %}>{{ _('Star when action is needed') }}
-            {{ help(_('A star only when the model thinks you need to do something (threshold in the settings). Usually off for advertising and notifications.')) }}</label>
+            {{ help(_('A star only when the model thinks you need to do something (threshold in the settings). Usually off for promotions and updates.')) }}</label>
           <label class="check"><input type="checkbox" name="track_expiry" id="track_expiry" {% if form.track_expiry %}checked{% endif %}>{{ _('Track expiry date') }}
             {{ help(_('The model recognises time-limited offers. After the last valid day the mail is moved to the folder for expired mail.')) }}</label>
         </div>

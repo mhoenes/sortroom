@@ -63,7 +63,7 @@ uid 1000. Forms carry a CSRF token.
   into `.env` under the variable names you choose (restart the container
   afterwards). This is also how the first mailbox is created. For Gmail (`imap.gmail.com`) the
   copied folders lose their `INBOX/` prefix: Gmail only has top-level labels
-  (`Advertising`, not `INBOX/Advertising`); Outlook still shows them under the inbox
+  (`Promotions`, not `INBOX/Promotions`); Outlook still shows them under the inbox
 - **Global settings** (bottom of the sidebar) – UI language and the shared `[classifier]` settings
   (endpoint, model, text length) in `config/config.toml`
 
@@ -302,18 +302,19 @@ Mails sorted before this feature existed can be checked once:
 
 "Add mailbox" offers the same twelve categories in English (`email_sorter/example_mailbox.en.toml`)
 and German (`example_mailbox.de.toml`); only keys, folders and the mailbox's default name differ.
+The English names follow Gmail's tabs where they overlap (Purchases, Promotions, Updates).
 The descriptions the model reads are English in both.
 
 | Key (en / de) | Folder (en / de) | Notes |
 |---|---|---|
 | finance / finanzen | INBOX/Finance / INBOX/Finanzen | routine bills, receipts, statements |
-| orders / bestellungen | INBOX/Orders / INBOX/Bestellungen | |
+| purchases / bestellungen | INBOX/Purchases / INBOX/Bestellungen | |
 | travel / reisen | INBOX/Travel / INBOX/Reisen | travel only |
 | appointments / termine | INBOX/Appointments / INBOX/Termine | booked events and appointments |
 | documents / unterlagen | INBOX/Documents / INBOX/Unterlagen | documents to keep for years: contracts, official letters, tax certificates |
-| advertising / werbung | INBOX/Advertising / INBOX/Werbung | expired offers → …/Expired, …/Abgelaufen |
-| notifications / benachrichtigungen | INBOX/Notifications / INBOX/Benachrichtigungen | |
-| portal | same folder as notifications | "new document in your customer portal" notices |
+| promotions / werbung | INBOX/Promotions / INBOX/Werbung | expired offers → …/Expired, …/Abgelaufen |
+| updates / benachrichtigungen | INBOX/Updates / INBOX/Benachrichtigungen | |
+| portal | same folder as updates / benachrichtigungen | "new document in your customer portal" notices |
 | personal / persoenlich | – (inbox) | |
 | security / sicherheit | – (inbox) | always flagged |
 | suspicious / verdaechtig | INBOX/Suspicious / INBOX/Verdächtig | phishing/scams, never flagged |

@@ -85,8 +85,9 @@ def test_mailbox_from_the_english_standard_categories(client, setup, monkeypatch
             "template": "_example_en"}
     assert client.post("/ui/mailboxes/new", data=form, follow_redirects=False).status_code == 303
     box = load_mailboxes(setup, setup / "config.toml")["work"]
-    assert "advertising" in box.cfg.categories and box.cfg.categories["finance"].folder == "INBOX/Finance"
-    assert box.cfg.expired_folder == "INBOX/Advertising/Expired"
+    assert {"purchases", "promotions", "updates"} <= box.cfg.categories.keys()
+    assert box.cfg.categories["finance"].folder == "INBOX/Finance" and box.cfg.categories["portal"].folder == "INBOX/Updates"
+    assert box.cfg.expired_folder == "INBOX/Promotions/Expired"
 
 
 def test_english_formatting():
