@@ -163,6 +163,12 @@ async def maintenance_start(request: Request, box_id: str, task: str):
     return RedirectResponse(f"/ui/m/{box.id}/jobs/{job['id']}", status_code=303)
 
 
+def start_check(request: Request, box: Mailbox) -> dict:
+    """Start "Check connection" in the background, e.g. right after the settings were saved."""
+    label, fn, needs_lock = _job_for(request, box, "check", {})
+    return jobs.start(box, "check", label, fn, request={}, needs_lock=needs_lock)
+
+
 @router.get("/ui/m/{box_id}/jobs/{job_id}", response_class=HTMLResponse, dependencies=[Depends(require_login)])
 def job_page(request: Request, box_id: str, job_id: str):
     boxes, box = _box(request, box_id)

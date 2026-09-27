@@ -160,3 +160,26 @@ def test_read_only_secrets(client, setup, monkeypatch):
     assert r.status_code == 422 and "nicht beschreibbar" in r.text
     html = client.get("/ui/settings").text
     assert 'name="api_key" autocomplete="new-password" spellcheck="false" disabled' in html
+
+
+def test_save_and_check_tests_the_new_login(client, setup, monkeypatch):
+    import time
+    from email_sorter import jobs
+    seen = []
+    monkeypatch.setattr(admin, "check", lambda cfg, creds, out: seen.append(creds.imap_password) or 0)
+    html = client.get("/ui/m/privat/settings").text
+    assert 'name="then" value="check"' in html
+    form = {**SETTINGS, "csrf": _csrf(html), "imap_user": "u", "imap_password": "Neu-789", "then": "check"}
+    r = client.post("/ui/m/privat/settings", data=form, follow_redirects=False)
+    assert r.status_code == 303 and "/ui/m/privat/jobs/" in r.headers["location"]
+    job_id = r.headers["location"].rsplit("/", 1)[1]
+    for _ in range(100):
+        if jobs.get(job_id)["status"] != "running":
+            break
+        time.sleep(0.02)
+    assert seen == ["Neu-789"] and jobs.get(job_id)["request"] == {}  # the password is not kept with the job
+    assert "Neu-789" not in client.get(r.headers["location"]).text
+
+    # an error: nothing saved, no check started
+    r = client.post("/ui/m/privat/settings", data={**form, "imap_password": "x", "imap_port": "abc"})
+    assert r.status_code == 422 and seen == ["Neu-789"]

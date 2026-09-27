@@ -17,6 +17,8 @@
 
 <form method="post" action="/ui/m/{{ box.id }}/settings">
   <input type="hidden" name="csrf" value="{{ csrf }}">
+  {# Enter in a field only saves: the first submit button is the default one #}
+  {% if editable %}<button type="submit" class="sr-only" tabindex="-1" aria-hidden="true">{{ _('Save settings') }}</button>{% endif %}
   <fieldset {% if not editable %}disabled{% endif %} class="stack">
     <section class="card stack">
       <h2>{{ _('Mailbox') }}</h2>
@@ -54,11 +56,11 @@
             {% if login.imap_password %}placeholder="{{ _('unchanged') }}"{% endif %}>
           <span class="hint">{% if retype %}<span class="pill warn">{{ _('Please enter it again') }}</span>{% else %}{{ source(login.imap_password) }}{% endif %}</span>
         </label>
-        <div class="f"><span class="lt">{{ _('Test') }} {{ help(_('Logs in with the saved login, lists the target folders and sends the model a sample mail. Save changes first.')) }}</span>
+        {% if editable %}<div class="f"><span class="lt">{{ _('Test') }} {{ help(_('Saves the settings, then logs in, lists the target folders and sends the model a sample mail. Moves nothing.')) }}</span>
           <div class="login-actions">
-            <button class="btn" type="submit" form="login-check">{{ _('Check connection') }}</button>
+            <button class="btn" type="submit" name="then" value="check">{{ _('Save and check connection') }}</button>
           </div>
-        </div>
+        </div>{% endif %}
       </div>
     </section>
 
@@ -111,8 +113,6 @@
     {% if editable %}<div class="actions"><button class="btn primary" type="submit">{{ _('Save settings') }}</button></div>{% endif %}
   </fieldset>
 </form>
-{# target of the button in the login section, which sits inside the settings form #}
-<form method="post" action="/ui/m/{{ box.id }}/maintenance/check" id="login-check" hidden><input type="hidden" name="csrf" value="{{ csrf }}"></form>
 
 {% macro rule_row(i, match, action) %}<tr>
             <td><input type="text" name="match_{{ i }}" value="{{ match }}" aria-label="{{ _('Sender contains') }}" placeholder="{{ _('name@company.com or @company.com') }}"></td>
