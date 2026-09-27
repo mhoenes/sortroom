@@ -104,6 +104,13 @@ def running(box_id: str) -> bool:
     return any(j["mailbox"] == box_id and j["status"] == "running" for j in _jobs.values())
 
 
+def rename_mailbox(old: str, new: str) -> None:
+    """Keep the job list of a mailbox whose folder (id) was renamed."""
+    for job in _jobs.values():
+        if job["mailbox"] == old:
+            job["mailbox"] = new
+
+
 def public(job: dict) -> dict:
     """The job as the API returns it (without the log)."""
     return {k: v for k, v in job.items() if k != "log"}

@@ -20,8 +20,11 @@
     <section class="card stack">
       <h2>{{ _('Mailbox') }}</h2>
       <div class="grid cols-3">
-        <label class="f"><span class="lt">{{ _('Display name') }} {{ help(_('Name of the mailbox in the interface.')) }}</span>
-          <input type="text" name="name" value="{{ form.name }}" maxlength="60" required>
+        <label class="f"><span class="lt">{{ _('Display name') }} {{ help(_('Name of the mailbox in the interface. Its folder under mailboxes/ follows the name.')) }}</span>
+          <input type="text" name="name" value="{{ form.name }}" maxlength="60" required
+            data-id-preview="box-id" data-id-note="box-id-note" data-current="{{ box.id }}" data-taken='{{ taken_ids|tojson }}'>
+          <span class="hint muted" style="font-weight:400">{{ _('Folder') }}: <span class="mono">mailboxes/<span id="box-id">{{ box.id }}</span></span></span>
+          <span class="hint rename-note" id="box-id-note" hidden>{{ _('Saving renames the folder. Addresses in this interface and the id for the API and --mailbox change with it.') }}</span>
         </label>
         <label class="f"><span class="lt">{{ _('IMAP server') }} {{ help(_('Host name of the IMAP server, e.g. imap.example.com. The connection is always encrypted (SSL).')) }}</span>
           <input type="text" name="imap_host" value="{{ form.imap_host }}" required>
@@ -127,6 +130,7 @@
     </section>
   </fieldset>
 </form>
+<script src="{{ asset('mailbox-id.js') }}"></script>
 <script>
   // add and remove rule rows in place; nothing is saved until "Save rules"
   (() => {

@@ -15,6 +15,7 @@ from imap_tools import AND, MailBox
 
 from .config import Category, Config, Credentials
 from .classifier import ClassifierAuthError, ClassifierError
+from .i18n import _
 from .mailtext import build_state, message_key
 from .sorter import IMAP_TIMEOUT, MAX_EXPIRY_AGE_DAYS, UID_CHUNK, _delimiter, _find_uids, _group_by_folder
 
@@ -80,7 +81,7 @@ def run_trial(cfg: Config, creds: Credentials, db_path: Path, key: str, descript
                 log.warning("trial: cannot read %s: %s", folder, e)
                 uids = {}
             for k in set(wanted) - set(uids):
-                rows[k].error = "nicht mehr im Ordner"
+                rows[k].error = _("no longer in the folder")
             if not uids:
                 continue
             for msg in mb.fetch(AND(uid=list(uids.values())), mark_seen=False, bulk=UID_CHUNK):
@@ -101,5 +102,5 @@ def run_trial(cfg: Config, creds: Credentials, db_path: Path, key: str, descript
                     progress(done, len(rows))
     for r in rows.values():
         if not r.after and not r.error:
-            r.error = "vom Server nicht geliefert"
+            r.error = _("not delivered by the server")
     return list(rows.values()), cost

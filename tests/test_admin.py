@@ -210,7 +210,7 @@ def test_mail_actions(client, setup, monkeypatch):
 
 def test_add_mailbox(client, setup):
     html = client.get("/ui/mailboxes/new").text
-    form = {"csrf": _csrf(html), "name": "Gmail", "id": "gmail", "imap_host": "imap.gmail.com", "imap_port": "993",
+    form = {"csrf": _csrf(html), "name": "Gmail", "imap_host": "imap.gmail.com", "imap_port": "993",
             "source_folder": "INBOX", "user_env": "gmail_user", "password_env": "GMAIL_PASSWORD", "template": "privat"}
     r = client.post("/ui/mailboxes/new", data=form, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/ui/m/gmail/maintenance"
@@ -218,8 +218,8 @@ def test_add_mailbox(client, setup):
     assert raw["imap"]["user_env"] == "GMAIL_USER" and set(raw["categories"]) == {"finanzen", "werbung"}
     html = client.get(r.headers["location"]).text
     assert "Postfach angelegt" in html and "fehlt in .env" in html
-    r = client.post("/ui/mailboxes/new", data=form)
-    assert r.status_code == 422 and "gibt es schon" in r.text
+    r = client.post("/ui/mailboxes/new", data=form, follow_redirects=False)  # same name again: next free folder
+    assert r.status_code == 303 and r.headers["location"] == "/ui/m/gmail-2/maintenance"
 
 
 def test_shared_settings(client, setup):

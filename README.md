@@ -87,6 +87,12 @@ mailboxes/
     ...
 ```
 
+The folder name is the mailbox's id (for `--mailbox`, the API and the UI addresses) and
+follows its display name: "mh@hoenes.de" lives in `mailboxes/mh-hoenes-de/`, "Büro" in
+`mailboxes/buero/` (`-2` etc. when taken). Renaming a mailbox under Settings moves its
+folder too – refused while a run or job is active – so scripts using the old id need the new
+one. A folder renamed by hand also works; the id is always the folder name.
+
 `mailbox.toml` starts with `name = "Privat"`; in `[imap]`, `user_env` and
 `password_env` name the `.env` variables with that mailbox's login (default
 `IMAP_USER` / `IMAP_PASSWORD`), e.g. `GMAIL_USER` / `GMAIL_PASSWORD`.

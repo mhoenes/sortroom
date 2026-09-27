@@ -269,11 +269,13 @@ def _set_expiry(box: Mailbox, key: str, form: dict) -> str:
 def _new_mailbox_page(request: Request, form: dict | None = None, error: str | None = None, status: int = 200):
     boxes = _boxes(request)
     blocked = can_add_mailbox(request.app.state.base_dir)
+    root = request.app.state.base_dir / "mailboxes"
     return _page(request, "mailbox_new.html", {
         **_sidebar(request, boxes, None, "all"), "boxes": boxes, "blocked": blocked, "error": error,
         "example_categories": {code: len(tomllib.loads(path.read_text(encoding="utf-8"))["categories"])
                                for code, path in EXAMPLE_MAILBOXES.items()},
         "languages": i18n.LANGUAGES,
+        "taken_ids": sorted(p.name for p in root.iterdir() if p.is_dir()) if root.is_dir() else [],
         "form": form or {"imap_port": "993", "source_folder": "INBOX",
                          "template": next(iter(boxes), EXAMPLE + i18n.language())}},
         status)
