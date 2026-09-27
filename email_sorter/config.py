@@ -4,7 +4,7 @@ import os
 import re
 import tomllib
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 _KEY_RE = re.compile(r"^[a-z0-9_]+$")
@@ -37,8 +37,13 @@ class SenderRule:
 
 
 # The API key of the classification endpoint (any service speaking the TypeSafe API,
-# https://docs.typesafe.ai/api) always comes from this .env variable.
+# https://docs.typesafe.ai/api): set in the admin UI, else this .env variable.
 CLASSIFIER_KEY_ENV = "CLASSIFIER_API_KEY"
+
+# Logins and the API key set in the admin UI: mailboxes/<id>/secrets.toml ([imap] user, password)
+# and secrets.toml next to config.toml ([classifier] api_key). Plain text, mode 0600, never backed
+# up as .bak. They take precedence over the environment, which stays the fallback.
+SECRETS_FILE = "secrets.toml"
 
 
 @dataclass(frozen=True)
@@ -59,8 +64,8 @@ class Config:
     min_age_hours: float
     max_per_run: int
     categories: dict[str, Category]
-    imap_user_env: str = "IMAP_USER"          # names of the .env variables holding this
-    imap_password_env: str = "IMAP_PASSWORD"  # mailbox's login, so several mailboxes can coexist
+    imap_user_env: str = "IMAP_USER"          # .env variables with this mailbox's login, the fallback
+    imap_password_env: str = "IMAP_PASSWORD"  # when it is not stored in its secrets.toml
     sender_rules: tuple[SenderRule, ...] = ()  # checked in order, first match wins
     sort_read_at_once: bool = False  # mail already read skips the min_age_hours wait
     schedule_enabled: bool = True    # built-in schedule: a normal run every schedule_minutes
@@ -85,8 +90,8 @@ class Config:
 @dataclass(frozen=True)
 class Credentials:
     imap_user: str
-    imap_password: str
-    classifier_api_key: str
+    imap_password: str = field(repr=False)
+    classifier_api_key: str = field(repr=False)
 
 
 def default_label(key: str) -> str:
@@ -213,10 +218,15 @@ class Mailbox:
     workspace: Path  # data/state.db, data/run.lock and reports/ live below this
     cfg: Config
     config_file: Path | None = None  # its mailbox.toml
+    shared_secrets: Path | None = None  # the secrets.toml next to config.toml
 
     @property
     def lock_path(self) -> Path:
         return self.workspace / "data" / "run.lock"
+
+    @property
+    def secrets_path(self) -> Path:
+        return self.workspace / SECRETS_FILE
 
 
 def load_mailboxes(base_dir: Path, config_path: Path) -> dict[str, Mailbox]:
@@ -237,25 +247,76 @@ def load_mailboxes(base_dir: Path, config_path: Path) -> dict[str, Mailbox]:
         if "classifier" in raw:
             raise ConfigError(f"{file}: [classifier] belongs in {config_path.name}, it is shared by all mailboxes")
         cfg = config_from_raw({**raw, "classifier": shared["classifier"]}, str(file))
-        boxes[box_id] = Mailbox(box_id, str(raw.get("name") or box_id), file.parent, cfg, file)
+        boxes[box_id] = Mailbox(box_id, str(raw.get("name") or box_id), file.parent, cfg, file,
+                                config_path.with_name(SECRETS_FILE))
     return boxes
 
 
 def check_shared(shared: dict, config_path: Path) -> None:
     """config.toml must have [classifier]; the old [jev] section gets a hint instead of a KeyError."""
     if "jev" in shared:
-        raise ConfigError(f"{config_path}: [jev] is now called [classifier] - rename the section, drop its "
-                          f"api_key_env line and put the key into {CLASSIFIER_KEY_ENV} in .env")
+        raise ConfigError(f"{config_path}: [jev] is now called [classifier] - rename the section and drop its "
+                          f"api_key_env line; the key comes from {CLASSIFIER_KEY_ENV} in .env or Global settings")
     if "classifier" not in shared:
         raise ConfigError(f"{config_path}: missing [classifier]")
     if "api_key_env" in shared["classifier"]:
         raise ConfigError(f"{config_path}: [classifier] has no api_key_env any more - "
-                          f"the key always comes from {CLASSIFIER_KEY_ENV} in .env")
+                          f"the key comes from {CLASSIFIER_KEY_ENV} in .env or Global settings")
 
 
-def load_credentials(cfg: Config) -> Credentials:
-    names = (cfg.imap_user_env, cfg.imap_password_env, CLASSIFIER_KEY_ENV)
-    missing = [n for n in names if not os.environ.get(n)]
+# ---------------------------------------------------------------- credentials
+
+def read_secrets(path: Path | None) -> dict:
+    """A secrets.toml, {} when there is none. Its content never goes into an error message."""
+    if path is None:
+        return {}
+    try:
+        with open(path, "rb") as f:
+            return tomllib.load(f)
+    except FileNotFoundError:
+        return {}
+    except tomllib.TOMLDecodeError:
+        raise ConfigError(f"{path} is not valid TOML") from None
+
+
+@dataclass(frozen=True)
+class Secret:
+    """One credential and where it comes from: "file" (a secrets.toml), "env" or "" (missing)."""
+    value: str = field(repr=False)
+    source: str
+    env: str  # the environment variable used as the fallback
+
+
+def _secret(stored, env: str) -> Secret:
+    if isinstance(stored, str) and stored:
+        return Secret(stored, "file", env)
+    if env and os.environ.get(env):  # mailboxes added in the UI have no fallback (env "")
+        return Secret(os.environ[env], "env", env)
+    return Secret("", "", env)
+
+
+def credential_sources(box: Mailbox) -> dict[str, Secret]:
+    """imap_user, imap_password and classifier_api_key of a mailbox, file before environment.
+    Read on every call, so a change applies from the next run without a restart."""
+    imap = read_secrets(box.secrets_path).get("imap", {})
+    return {"imap_user": _secret(imap.get("user"), box.cfg.imap_user_env),
+            "imap_password": _secret(imap.get("password"), box.cfg.imap_password_env),
+            "classifier_api_key": classifier_key(box.shared_secrets)}
+
+
+def classifier_key(shared_secrets: Path | None) -> Secret:
+    """The API key shared by all mailboxes: [classifier] api_key in secrets.toml, else the environment."""
+    return _secret(read_secrets(shared_secrets).get("classifier", {}).get("api_key"), CLASSIFIER_KEY_ENV)
+
+
+_WHERE = {"imap_user": ("IMAP user", "mailbox settings"), "imap_password": ("IMAP password", "mailbox settings"),
+          "classifier_api_key": ("API key", "Global settings")}
+
+
+def load_credentials(box: Mailbox) -> Credentials:
+    found = credential_sources(box)
+    missing = [f"{_WHERE[k][0]} ({_WHERE[k][1]}{f' or {s.env} in .env' if s.env else ''})"
+               for k, s in found.items() if not s.value]
     if missing:
-        raise ConfigError(f"missing in .env / environment: {', '.join(missing)}")
-    return Credentials(*(os.environ[n] for n in names))
+        raise ConfigError(f"missing: {'; '.join(missing)}")
+    return Credentials(**{k: s.value for k, s in found.items()})

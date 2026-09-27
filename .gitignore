@@ -8,3 +8,4 @@ reports/
 mailboxes/
 *.bak
 *.tmp
+secrets.toml

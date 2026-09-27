@@ -16,8 +16,8 @@ import tomlkit
 from tomlkit.items import AoT, Table
 
 from .. import jobs
-from ..config import (INBOX_ACTION, ConfigError, Mailbox, _read_toml, config_from_raw, default_label,
-                      mailbox_id_for)
+from ..config import (INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, _read_toml, config_from_raw,
+                      default_label, mailbox_id_for, read_secrets)
 from ..i18n import DEFAULT_LANGUAGE, LANGUAGES, _
 from ..runtime import single_instance
 
@@ -189,6 +189,7 @@ def save_settings(box: Mailbox, shared_path: Path, form: dict, busy: bool = Fals
     rules["lookback_days"] = _number(form, "lookback_days", _("Look-back in days"), 1, 365, integer=True)
     rules["max_per_run"] = _number(form, "max_per_run", _("Max. mails per run"), 1, 5000, integer=True)
     _set(rules, "expired_folder", _folder(form, "expired_folder", _("Default folder for expired mail")))
+    login = _login_changes(box, form)
     text = _checked_text(box, doc, shared_path)
     taken = {p.name for p in box.workspace.parent.iterdir() if p.is_dir()} - {box.id}
     new_id = mailbox_id_for(name, taken)
@@ -196,7 +197,25 @@ def save_settings(box: Mailbox, shared_path: Path, form: dict, busy: bool = Fals
         _write(box.config_file, text)
     else:
         _move_mailbox(box, new_id, text, busy)
+    if login:  # the secrets file moved along with the folder
+        write_secrets(box.workspace.with_name(new_id) / SECRETS_FILE, "imap", login)
     return new_id
+
+
+def _login_changes(box: Mailbox, form: dict) -> dict:
+    """What the settings form changes in the stored login: {} for nothing. The user field shows the
+    stored user (empty: none stored); the password field is write-only, empty keeps it."""
+    if "imap_user" not in form:  # not sent: the login fields are disabled (read-only)
+        return {}
+    stored = _stored(box.secrets_path, "imap")
+    user = _secret_text(form, "imap_user", _("User"), strip=True)
+    password = _secret_text(form, "imap_password", _("Password"))
+    changes = {} if user == stored.get("user", "") else {"user": user or None}
+    if password:
+        changes["password"] = password
+    if changes and not secrets_writable(box.secrets_path):
+        raise EditError(_("%(file)s is not writable, so the login cannot be stored.", file=SECRETS_FILE))
+    return changes
 
 
 def _move_mailbox(box: Mailbox, new_id: str, text: str, busy: bool) -> None:
@@ -343,9 +362,6 @@ def rename_category_key(box: Mailbox, shared_path: Path, old: str, new: str) -> 
 
 # ---------------------------------------------------------------- new mailbox
 
-_ENV_RE = re.compile(r"^[A-Z_][A-Z0-9_]{0,63}$")
-
-
 def can_add_mailbox(base_dir: Path) -> str | None:
     """None if a mailbox can be added here, else the reason why not."""
     root = base_dir / "mailboxes"
@@ -381,14 +397,10 @@ def create_mailbox(base_dir: Path, shared_path: Path, template_file: Path, templ
     host = _text(form, "imap_host", 200)
     if not host or " " in host:
         raise EditError(_("IMAP server: please enter a host name."))
-    envs = {}
-    for field, label in (("user_env", _("Variable for the user")), ("password_env", _("Variable for the password"))):
-        value = _text(form, field, 64).upper()
-        if not _ENV_RE.match(value):
-            raise EditError(_("%(label)s: uppercase letters, digits and _ only.", label=label))
-        envs[field] = value
-    if envs["user_env"] == envs["password_env"]:
-        raise EditError(_("User and password need two different variables."))
+    user = _secret_text(form, "imap_user", _("User"), strip=True)
+    password = _secret_text(form, "imap_password", _("Password"))
+    if not user or not password:
+        raise EditError(_("Please enter the user and the password of the mailbox."))
 
     source = tomlkit.parse(template_file.read_text(encoding="utf-8"))
     doc = tomlkit.document()
@@ -399,8 +411,9 @@ def create_mailbox(base_dir: Path, shared_path: Path, template_file: Path, templ
     imap["host"] = host
     imap["port"] = _number(form, "imap_port", _("Port"), 1, 65535, integer=True)
     imap["source_folder"] = _folder(form, "source_folder", _("Inbox")) or "INBOX"
-    imap["user_env"] = envs["user_env"]
-    imap["password_env"] = envs["password_env"]
+    # the login is in secrets.toml; no fallback to IMAP_USER / IMAP_PASSWORD, which may belong to another mailbox
+    imap["user_env"] = ""
+    imap["password_env"] = ""
     doc["imap"] = imap
     doc["rules"] = source["rules"]
     if "schedule" in source:
@@ -415,6 +428,7 @@ def create_mailbox(base_dir: Path, shared_path: Path, template_file: Path, templ
         raise EditError(_("Not created: %(e)s", e=e)) from None
     folder.mkdir(parents=True)
     (folder / "mailbox.toml").write_text(text, encoding="utf-8")
+    write_secrets(folder / SECRETS_FILE, "imap", {"user": user, "password": password})
     return box_id
 
 
@@ -448,6 +462,10 @@ def save_shared(base_dir: Path, shared_path: Path, form: dict) -> None:
     if "ui" not in doc:
         doc["ui"] = tomlkit.table()
     doc["ui"]["language"] = language
+    key = _secret_text(form, "api_key", _("API key"), strip=True)  # write-only: empty keeps the stored one
+    secrets = shared_path.with_name(SECRETS_FILE)
+    if key and not secrets_writable(secrets):
+        raise EditError(_("%(file)s is not writable, so the API key cannot be stored.", file=SECRETS_FILE))
 
     tmp = shared_path.with_name(shared_path.name + ".tmp")
     tmp.write_text(tomlkit.dumps(doc), encoding="utf-8")
@@ -458,3 +476,56 @@ def save_shared(base_dir: Path, shared_path: Path, form: dict) -> None:
         raise EditError(_("Not saved: %(e)s", e=e)) from None
     shutil.copy2(shared_path, shared_path.with_name(shared_path.name + ".bak"))
     os.replace(tmp, shared_path)
+    if key:
+        write_secrets(secrets, "classifier", {"api_key": key})
+
+
+# ---------------------------------------------------------------- secrets (logins, API key)
+
+_SECRET_RE = re.compile(r"^[^\x00-\x1f\x7f]{1,500}$")
+
+
+def _secret_text(form: dict, name: str, label: str, strip: bool = False) -> str:
+    """A login or key field. Its value never goes into an error message."""
+    value = str(form.get(name) or "")
+    value = value.strip() if strip else value
+    if value and not _SECRET_RE.match(value):
+        raise EditError(_("%(label)s: at most 500 characters, no line breaks.", label=label))
+    return value
+
+
+def secrets_writable(path: Path) -> bool:
+    return os.access(path.parent, os.W_OK) and (not path.exists() or os.access(path, os.W_OK))
+
+
+def _stored(path: Path, section: str) -> dict:
+    try:
+        return dict(read_secrets(path).get(section, {}))
+    except ConfigError as e:
+        raise EditError(str(e)) from None
+
+
+def write_secrets(path: Path, section: str, values: dict) -> None:
+    """Set (a string) or remove (None) keys of [section] in a secrets file - atomically, mode 0600
+    and without a .bak copy. The file is deleted once nothing is left in it."""
+    data = {k: dict(v) for k, v in read_secrets(path).items() if isinstance(v, dict)}
+    table = data.setdefault(section, {})
+    for key, value in values.items():
+        if value:
+            table[key] = value
+        else:
+            table.pop(key, None)
+    data = {k: v for k, v in data.items() if v}
+    if not data:
+        path.unlink(missing_ok=True)
+        return
+    doc = tomlkit.document()
+    doc.add(tomlkit.comment("Written by the Sortroom admin UI. Keep it private and include it in your backup."))
+    for key, value in data.items():
+        doc[key] = value
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.unlink(missing_ok=True)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)  # never readable by others, not even briefly
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(tomlkit.dumps(doc))
+    os.replace(tmp, path)

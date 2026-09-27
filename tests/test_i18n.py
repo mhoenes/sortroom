@@ -81,7 +81,7 @@ def test_mailbox_from_the_english_standard_categories(client, setup, monkeypatch
     monkeypatch.setattr(api.app.state, "base_dir", setup)  # the new mailbox folder goes there
     html = client.get("/ui/mailboxes/new").text
     form = {"csrf": _csrf(html), "name": "Work", "id": "work", "imap_host": "imap.example.com", "imap_port": "993",
-            "source_folder": "INBOX", "user_env": "WORK_USER", "password_env": "WORK_PASSWORD",
+            "source_folder": "INBOX", "imap_user": "me@work.example", "imap_password": "pw",
             "template": "_example_en"}
     assert client.post("/ui/mailboxes/new", data=form, follow_redirects=False).status_code == 303
     box = load_mailboxes(setup, setup / "config.toml")["work"]

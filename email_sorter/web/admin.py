@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import tomllib
 from datetime import date
 from urllib.parse import quote
@@ -14,8 +13,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from .. import jobs
 from ..check import check
 from .. import i18n
-from ..config import (CLASSIFIER_KEY_ENV, EXAMPLE_MAILBOXES, INBOX_ACTION, ConfigError, Mailbox, _read_toml,
-                      load_credentials)
+from ..config import (CLASSIFIER_KEY_ENV, EXAMPLE_MAILBOXES, INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox,
+                      Secret, _read_toml, classifier_key, load_credentials)
 from ..i18n import _
 from ..maintenance import relocate_category, rename_category, rename_folder
 from ..manual import ManualError, move_mail
@@ -26,8 +25,8 @@ from ..sorter import RunResult, expired_target, run, run_backfill, run_recheck_e
 from ..store import Store
 from . import _box, _boxes, _sidebar, queries, require_login, router
 from .editing import (EditError, add_sender_rule, can_add_mailbox, create_mailbox, rename_category_key,
-                      rename_folder_refs, save_shared, shared_writable, writable)
-from .editor import _flash, _form, _page, _shared_path, form_number
+                      rename_folder_refs, save_shared, secrets_writable, shared_writable, writable, write_secrets)
+from .editor import _flash, _form, _page, _shared_path, credential_view, form_number, without_secrets
 
 log = logging.getLogger(__name__)
 
@@ -35,11 +34,6 @@ EXAMPLE = "_example_"  # template choice prefix: the built-in standard categorie
 
 TASKS = {"run", "backfill", "recheck", "resort", "relocate", "rename_folder", "rename_category", "reconcile", "check"}
 RISKY_TASKS = {"rename_folder", "rename_category"}  # change the server and the settings
-
-
-def _env_status(box: Mailbox) -> list[tuple[str, bool]]:
-    cfg = box.cfg
-    return [(name, bool(os.environ.get(name))) for name in (cfg.imap_user_env, cfg.imap_password_env, CLASSIFIER_KEY_ENV)]
 
 
 # ---------------------------------------------------------------- maintenance
@@ -54,8 +48,10 @@ def maintenance(request: Request, box_id: str):
         if db:
             db.close()
     cat_folders = sorted({c.folder for c in box.cfg.categories.values() if c.folder} | set(folders))
+    login, login_error = credential_view(box)
     return _page(request, "maintenance.html", {
-        **_sidebar(request, boxes, box, "maintenance"), "box": box, "tasks": TASKS, "env": _env_status(box),
+        **_sidebar(request, boxes, box, "maintenance"), "box": box, "tasks": TASKS,
+        "login": login, "login_error": login_error,
         "jobs": jobs.recent(box.id, 15), "folders": cat_folders, "busy": request.app.state.is_busy(box),
         "editable": writable(box), "today": date.today().isoformat()})
 
@@ -77,7 +73,7 @@ def _job_for(request: Request, box: Mailbox, task: str, form: dict):
     """(label, fn, needs_lock) for a maintenance form."""
     cfg, ws, live = box.cfg, box.workspace, _flag(form, "live")
     mode = "" if live else f" ({_('dry run')})"
-    creds = load_credentials(cfg)
+    creds = load_credentials(box)
     shared = _shared_path(request)
     if task == "run":
         limit = _limit(form)
@@ -210,7 +206,7 @@ async def mail_action(request: Request, box_id: str):
         return RedirectResponse(back, status_code=303)
 
     def act() -> str:
-        creds = load_credentials(box.cfg)
+        creds = load_credentials(box)
         if action == "rule":
             match = str(form.get("match") or "").strip().lower()
             if not match:
@@ -266,7 +262,8 @@ def _set_expiry(box: Mailbox, key: str, form: dict) -> str:
 
 # ---------------------------------------------------------------- new mailbox
 
-def _new_mailbox_page(request: Request, form: dict | None = None, error: str | None = None, status: int = 200):
+def _new_mailbox_page(request: Request, form: dict | None = None, error: str | None = None, status: int = 200,
+                      retype: bool = False):
     boxes = _boxes(request)
     blocked = can_add_mailbox(request.app.state.base_dir)
     root = request.app.state.base_dir / "mailboxes"
@@ -274,7 +271,7 @@ def _new_mailbox_page(request: Request, form: dict | None = None, error: str | N
         **_sidebar(request, boxes, None, "all"), "boxes": boxes, "blocked": blocked, "error": error,
         "example_categories": {code: len(tomllib.loads(path.read_text(encoding="utf-8"))["categories"])
                                for code, path in EXAMPLE_MAILBOXES.items()},
-        "languages": i18n.LANGUAGES,
+        "languages": i18n.LANGUAGES, "retype": retype, "secrets_file": SECRETS_FILE,
         "taken_ids": sorted(p.name for p in root.iterdir() if p.is_dir()) if root.is_dir() else [],
         "form": form or {"imap_port": "993", "source_folder": "INBOX",
                          "template": next(iter(boxes), EXAMPLE + i18n.language())}},
@@ -306,16 +303,23 @@ async def mailbox_create(request: Request):
             raise EditError(_("Please choose a template for the categories."))
         box_id = create_mailbox(base, _shared_path(request), template_file, template_name, form)
     except EditError as e:
-        return _new_mailbox_page(request, form=form, error=str(e), status=422)
-    _flash(request, _('Mailbox created. Put the login into .env, restart the container and then "Check connection".'))
+        form, retype = without_secrets(form, "imap_password")
+        return _new_mailbox_page(request, form=form, error=str(e), status=422, retype=retype)
+    _flash(request, _('Mailbox created. "Check connection" tests the login and the model.'))
     return RedirectResponse(f"/ui/m/{box_id}/maintenance", status_code=303)
 
 
 # ---------------------------------------------------------------- shared settings
 
-def _shared_page(request: Request, form: dict | None = None, error: str | None = None, status: int = 200):
+def _shared_page(request: Request, form: dict | None = None, error: str | None = None, status: int = 200,
+                 retype: bool = False):
     boxes = _boxes(request)
     path = _shared_path(request)
+    secrets = path.with_name(SECRETS_FILE)
+    try:
+        key, key_error = classifier_key(secrets), None
+    except ConfigError as e:
+        key, key_error = Secret("", "", CLASSIFIER_KEY_ENV), str(e)
     if form is None:
         classifier = _read_toml(path)["classifier"]
         form = {"endpoint": classifier.get("endpoint", ""), "model": classifier.get("model", ""),
@@ -325,8 +329,9 @@ def _shared_page(request: Request, form: dict | None = None, error: str | None =
                 "language": i18n.configured_language(path)}
     return _page(request, "shared.html", {
         **_sidebar(request, boxes, None, "shared"), "form": form, "error": error, "editable": shared_writable(path),
-        "config_name": path.name, "key_env": CLASSIFIER_KEY_ENV, "languages": i18n.LANGUAGES,
-        "key_set": bool(os.environ.get(CLASSIFIER_KEY_ENV))}, status)
+        "config_name": path.name, "languages": i18n.LANGUAGES, "secrets_file": SECRETS_FILE, "retype": retype,
+        "key": {"source": key.source, "env": key.env}, "key_error": key_error,
+        "key_writable": secrets_writable(secrets)}, status)
 
 
 @router.get("/ui/settings", response_class=HTMLResponse, dependencies=[Depends(require_login)])
@@ -340,6 +345,22 @@ async def shared_settings_save(request: Request):
     try:
         save_shared(request.app.state.base_dir, _shared_path(request), form)
     except EditError as e:
-        return _shared_page(request, form=form, error=str(e), status=422)
+        form, retype = without_secrets(form, "api_key")
+        return _shared_page(request, form=form, error=str(e), status=422, retype=retype)
     _flash(request, _("Saved. Applies to all mailboxes from the next run."))
+    return RedirectResponse("/ui/settings", status_code=303)
+
+
+@router.post("/ui/settings/key/clear", dependencies=[Depends(require_login)])
+async def shared_key_clear(request: Request):
+    await _form(request)
+    secrets = _shared_path(request).with_name(SECRETS_FILE)
+    try:
+        if not secrets_writable(secrets):
+            raise EditError(_("%(file)s is not writable, so the API key cannot be stored.", file=SECRETS_FILE))
+        write_secrets(secrets, "classifier", {"api_key": None})
+    except (EditError, ConfigError) as e:
+        _flash(request, str(e), "err")
+    else:
+        _flash(request, _("Stored API key removed."))
     return RedirectResponse("/ui/settings", status_code=303)

@@ -70,7 +70,7 @@ def test_each_mailbox_reads_its_own_login(tmp_path, monkeypatch):
     monkeypatch.setenv("GMAIL_USER", "me@gmail.com")
     monkeypatch.setenv("GMAIL_PASSWORD", "app-pw")
     monkeypatch.setenv("CLASSIFIER_API_KEY", "k")
-    creds = load_credentials(load_mailboxes(tmp_path, tmp_path / "config.toml")["gmail"].cfg)
+    creds = load_credentials(load_mailboxes(tmp_path, tmp_path / "config.toml")["gmail"])
     assert (creds.imap_user, creds.imap_password) == ("me@gmail.com", "app-pw")
 
 

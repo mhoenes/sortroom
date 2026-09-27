@@ -137,7 +137,7 @@ def test_maintenance_page_and_run_job(client, monkeypatch):
 
     monkeypatch.setattr(admin, "run", fake_run)
     html = client.get("/ui/m/privat/maintenance").text
-    assert "Wartung · Privat" in html and "IMAP_PASSWORD" in html and "gesetzt" in html
+    assert "Wartung · Privat" in html and "IMAP_PASSWORD" in html and "aus .env" in html
     r = client.post("/ui/m/privat/maintenance/run", data={"csrf": _csrf(html), "limit": "20"}, follow_redirects=False)
     assert r.status_code == 303 and "/ui/m/privat/jobs/" in r.headers["location"]
     _wait(r.headers["location"].rsplit("/", 1)[1])
@@ -211,13 +211,15 @@ def test_mail_actions(client, setup, monkeypatch):
 def test_add_mailbox(client, setup):
     html = client.get("/ui/mailboxes/new").text
     form = {"csrf": _csrf(html), "name": "Gmail", "imap_host": "imap.gmail.com", "imap_port": "993",
-            "source_folder": "INBOX", "user_env": "gmail_user", "password_env": "GMAIL_PASSWORD", "template": "privat"}
+            "source_folder": "INBOX", "imap_user": "me@gmail.com", "imap_password": "app-pw", "template": "privat"}
     r = client.post("/ui/mailboxes/new", data=form, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/ui/m/gmail/maintenance"
     raw = tomllib.loads((setup / "mailboxes" / "gmail" / "mailbox.toml").read_text(encoding="utf-8"))
-    assert raw["imap"]["user_env"] == "GMAIL_USER" and set(raw["categories"]) == {"finanzen", "werbung"}
+    assert raw["imap"]["user_env"] == "" and set(raw["categories"]) == {"finanzen", "werbung"}  # no .env fallback
+    secrets = tomllib.loads((setup / "mailboxes" / "gmail" / "secrets.toml").read_text(encoding="utf-8"))
+    assert secrets["imap"] == {"user": "me@gmail.com", "password": "app-pw"}
     html = client.get(r.headers["location"]).text
-    assert "Postfach angelegt" in html and "fehlt in .env" in html
+    assert "Postfach angelegt" in html and "gespeichert" in html and "app-pw" not in html
     r = client.post("/ui/mailboxes/new", data=form, follow_redirects=False)  # same name again: next free folder
     assert r.status_code == 303 and r.headers["location"] == "/ui/m/gmail-2/maintenance"
 
@@ -257,7 +259,7 @@ def test_set_expiry_by_hand(client, setup):
 def test_add_gmail_mailbox_uses_top_level_labels(client, setup):
     html = client.get("/ui/mailboxes/new").text
     form = {"csrf": _csrf(html), "name": "Gmail", "id": "gmail", "imap_host": "imap.gmail.com", "imap_port": "993",
-            "source_folder": "INBOX", "user_env": "GMAIL_USER", "password_env": "GMAIL_PASSWORD", "template": "privat"}
+            "source_folder": "INBOX", "imap_user": "me@gmail.com", "imap_password": "app-pw", "template": "privat"}
     assert client.post("/ui/mailboxes/new", data=form, follow_redirects=False).status_code == 303
     raw = tomllib.loads((setup / "mailboxes" / "gmail" / "mailbox.toml").read_text(encoding="utf-8"))
     assert raw["categories"]["werbung"]["folder"] == "Werbung"
@@ -276,7 +278,7 @@ def test_first_mailbox_from_the_example(client, setup):
     assert 'value="_example_de" selected' in html and "Standard-Kategorien, Deutsch" in html  # UI language first
     assert 'value="_example_en"' in html and "Standard-Kategorien, English" in html
     form = {"csrf": _csrf(html), "name": "Privat", "id": "privat", "imap_host": "imap.example.com", "imap_port": "993",
-            "source_folder": "INBOX", "user_env": "IMAP_USER", "password_env": "IMAP_PASSWORD", "template": "_example_de"}
+            "source_folder": "INBOX", "imap_user": "u", "imap_password": "p", "template": "_example_de"}
     assert client.post("/ui/mailboxes/new", data=form, follow_redirects=False).status_code == 303
     box = _box(setup)
     assert box.name == "Privat" and "werbung" in box.cfg.categories and box.cfg.schedule_enabled

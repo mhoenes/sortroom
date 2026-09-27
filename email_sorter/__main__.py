@@ -74,7 +74,7 @@ def _run_one(box: Mailbox, args) -> int:
 
     cfg, work = box.cfg, box.workspace
     try:
-        creds = load_credentials(cfg)
+        creds = load_credentials(box)
     except ConfigError as e:
         log.error("[%s] configuration error: %s", box.id, e)
         return 2
@@ -143,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
         for box in selected:
             print(f"=== {box.name} ({box.id}) ===")
             try:
-                codes.append(check(box.cfg, load_credentials(box.cfg)))
+                codes.append(check(box.cfg, load_credentials(box)))
             except ConfigError as e:
                 print(f"  FAILED: {e}")
                 codes.append(2)

@@ -538,7 +538,8 @@ def _finish(store: Store, kind: str, detail: str | None, started: datetime, resu
 
 
 def _auth_failed(cfg: Config, e: Exception) -> RunResult:
-    log.error("%s - check %s in .env and your credit with the provider", e, CLASSIFIER_KEY_ENV)
+    log.error("%s - check the API key (Global settings or %s in .env) and your credit with the provider",
+              e, CLASSIFIER_KEY_ENV)
     return RunResult(exit_code=2, error=str(e))
 
 

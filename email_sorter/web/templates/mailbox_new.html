@@ -40,14 +40,15 @@
   </section>
 
   <section class="card stack">
-    <h2>{{ _('3 · Login') }} {{ help(_('User and password are never stored in the interface. You put them into .env under the names given here.')) }}</h2>
+    <h2>{{ _('3 · Login') }}</h2>
     <div class="grid cols-3">
-      <label class="f">{{ _('Variable for the user') }}
-        <input type="text" name="user_env" value="{{ form.user_env }}" required class="mono" placeholder="GMAIL_USER"></label>
-      <label class="f">{{ _('Variable for the password') }}
-        <input type="text" name="password_env" value="{{ form.password_env }}" required class="mono" placeholder="GMAIL_PASSWORD"></label>
+      <label class="f"><span class="lt">{{ _('User') }} {{ help(_('Usually the full e-mail address.')) }}</span>
+        <input type="text" name="imap_user" value="{{ form.imap_user }}" required autocomplete="off" spellcheck="false"></label>
+      <label class="f"><span class="lt">{{ _('Password') }} {{ help(_('For Gmail an app password.')) }}</span>
+        <input type="password" name="imap_password" required autocomplete="new-password">
+        {% if retype %}<span class="hint"><span class="pill warn">{{ _('Please enter it again') }}</span></span>{% endif %}</label>
     </div>
-    <p class="muted hint">{{ _('Then add them to .env, e.g. <span class="mono">GMAIL_USER=you@gmail.com</span> and <span class="mono">GMAIL_PASSWORD=…</span> (for Gmail an app password), and restart the container.') }}</p>
+    <p class="muted hint">{{ _('Stored in <span class="mono">mailboxes/…/%(file)s</span>, readable only by Sortroom. You can change it later under Settings.', file=secrets_file) }}</p>
   </section>
 
   <section class="card stack">

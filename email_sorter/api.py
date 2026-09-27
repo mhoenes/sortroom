@@ -97,7 +97,7 @@ def _pick(boxes: dict[str, Mailbox], box_id: str | None) -> Mailbox:
 
 def _credentials(box: Mailbox):
     try:
-        return load_credentials(box.cfg)
+        return load_credentials(box)
     except ConfigError as e:
         raise HTTPException(500, f"[{box.id}] configuration error: {e}") from None
 
