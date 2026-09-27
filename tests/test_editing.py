@@ -231,7 +231,7 @@ def test_category_error_is_shown(client):
 
 def test_settings_page_and_rules(client, setup):
     html = client.get("/ui/m/privat/settings").text
-    assert "imap.example.de" in html and "scanner@brother.com" in html and "IMAP_PASSWORD" in html
+    assert "imap.example.de" in html and "scanner@brother.com" in html and 'name="imap_password"' in html
     assert html.count('name="match_') == 2  # the one rule plus the row template, no blank rows
     assert '<template id="rule-row">' in html and 'name="match___i__"' in html
     token = _csrf(html)
