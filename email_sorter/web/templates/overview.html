@@ -21,7 +21,7 @@
     <span class="k">{{ _('Last run') }}</span>
     {% if stats.last_run %}
       <span class="v">{{ stats.last_run.started|ago }}</span>
-      <span class="d">{{ _('%(mails)s mails · %(moved)s moved · %(failed)s errors', mails=stats.last_run.classified, moved=stats.last_run.moved, failed=stats.last_run.failed) }}</span>
+      <span class="d">{{ ngettext('%(num)s mail', '%(num)s mails', stats.last_run.classified, num=stats.last_run.classified|num) }} · {{ _('%(moved)s moved', moved=stats.last_run.moved|num) }} · {{ ngettext('%(num)s error', '%(num)s errors', stats.last_run.failed or 0) }}</span>
     {% else %}
       <span class="v">–</span><span class="d">{{ _('No run logged yet') }}</span>
     {% endif %}
@@ -44,7 +44,7 @@
   <div class="card kpi">
     <span class="k">{{ _('Cost this month') }}</span>
     <span class="v mono">{{ stats.cost_month|usd }}</span>
-    <span class="d">{{ _('Ø %(cost)s per mail · %(n)s mails', cost=stats.cost_per_mail|usd(5), n=stats.classified_mails_month|num) }}</span>
+    <span class="d">{{ _('Ø %(cost)s per mail', cost=stats.cost_per_mail|usd(5)) }} · {{ ngettext('%(num)s mail', '%(num)s mails', stats.classified_mails_month, num=stats.classified_mails_month|num) }}</span>
   </div>
 </div>
 
@@ -64,7 +64,7 @@
 
 <div class="grid split">
   <section class="card" style="display:flex;flex-direction:column;gap:16px">
-    <div class="row"><h2 class="grow">{{ _('Received, last 7 days') }}</h2><span class="muted" style="font-size:13px">{{ _('%(n)s mails', n=total_7d|num) }}</span></div>
+    <div class="row"><h2 class="grow">{{ _('Received, last 7 days') }}</h2><span class="muted" style="font-size:13px">{{ ngettext('%(num)s mail', '%(num)s mails', total_7d, num=total_7d|num) }}</span></div>
     {% if bars %}
     <div class="bars">
       {% for b in bars %}

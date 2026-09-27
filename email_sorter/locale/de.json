@@ -13,10 +13,9 @@
  "%(label)s: please enter a number.": "%(label)s: bitte eine Zahl angeben.",
  "%(label)s: please enter a whole number.": "%(label)s: bitte eine ganze Zahl angeben.",
  "%(label)s: please fill in.": "%(label)s: bitte angeben.",
- "%(mails)s mails · %(moved)s moved · %(failed)s errors": "%(mails)s Mails · %(moved)s verschoben · %(failed)s Fehler",
+ "%(moved)s moved": "%(moved)s verschoben",
  "%(n)s days ago": "vor %(n)s Tagen",
  "%(n)s h ago": "vor %(n)s Std",
- "%(n)s mails": "%(n)s Mails",
  "%(n)s min ago": "vor %(n)s Min",
  "%(n)s starred in 7 days": "%(n)s mit Stern in 7 Tagen",
  "%(n)s unreadable": "%(n)s nicht lesbar",
@@ -35,6 +34,10 @@
  "%(num)s failed run today": [
   "%(num)s Lauf mit Fehlern heute",
   "%(num)s Läufe mit Fehlern heute"
+ ],
+ "%(num)s mail": [
+  "%(num)s Mail",
+  "%(num)s Mails"
  ],
  "%(num)s mail to review": [
   "%(num)s Mail zur Prüfung",
@@ -491,5 +494,5 @@
  "valid until %(date)s": "gültig bis %(date)s",
  "with errors": "mit Fehlern",
  "yes": "ja",
- "Ø %(cost)s per mail · %(n)s mails": "Ø %(cost)s pro Mail · %(n)s Mails"
+ "Ø %(cost)s per mail": "Ø %(cost)s pro Mail"
 }

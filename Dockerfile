@@ -12,6 +12,7 @@ RUN pip install -r requirements-api.txt
 
 COPY email_sorter ./email_sorter
 COPY config ./config
+COPY LICENSE ./
 
 # unprivileged user; mailboxes/, data/, logs/ and reports/ are mounted as volumes
 RUN useradd --system --uid 1000 --home /app sorter \

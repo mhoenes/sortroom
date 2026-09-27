@@ -1,9 +1,9 @@
-# Sortroom: settings shared by all mailboxes. Each mailbox has its own
-# mailboxes/<id>/mailbox.toml (created in the UI via "Postfach hinzufügen").
-# Secrets (API keys) live in .env, not here.
+# Sortroom: settings shared by all mailboxes, editable under "Global settings".
+# Each mailbox has its own mailboxes/<id>/mailbox.toml, created in the UI via "Add mailbox".
+# The API key is not kept here: it is set under Global settings and stored in secrets.toml.
 
 # The model that files the mails: any service that speaks the TypeSafe API
-# (https://docs.typesafe.ai/api). Its API key is CLASSIFIER_API_KEY in .env.
+# (https://docs.typesafe.ai/api), hosted or self-hosted.
 [classifier]
 endpoint = "https://openrouter.ai/api/alpha/decisions"
 model = "typesafe/jev-1.13"
@@ -11,6 +11,6 @@ max_body_chars = 3000       # body text sent to the model is cut to this length
 timeout_seconds = 20
 min_interval_seconds = 0    # pause between requests, for providers that limit requests per minute
 
-# Language of the admin UI ("en" or "de", default "en"); also under Globale Einstellungen / Global settings.
+# Language of the admin UI ("en" or "de", default "en"); also under Global settings.
 # [ui]
 # language = "de"

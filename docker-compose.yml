@@ -1,15 +1,15 @@
 # Sortroom: admin UI, built-in schedule and HTTP API in one container.
 #
 # The UI is published on the host (http://<host>:8765, login with ADMIN_PASSWORD);
-# set UI_PORT in .env to use another port. Runs start by themselves (Einstellungen -> Zeitplan).
+# set UI_PORT in .env to use another port. Runs start by themselves (Settings -> Schedule).
 
 services:
   sortroom:
-    # Prebuilt image from GitHub Container Registry. Pin a version (e.g. :0.5) or use a fork
+    # Prebuilt image from GitHub Container Registry. Pin a version (e.g. :0.11) or use a fork
     # by editing this line or setting SORTROOM_IMAGE in .env.
     # Update: docker compose pull && docker compose up -d
-    # To build locally instead: docker build -t sortroom:latest .  and set
-    # SORTROOM_IMAGE=sortroom:latest.
+    # To build locally instead: docker build -t sortroom .  and set
+    # SORTROOM_IMAGE=sortroom.
     image: ${SORTROOM_IMAGE:-ghcr.io/mhoenes/sortroom:latest}
     container_name: sortroom
     ports:
@@ -17,7 +17,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      TZ: Europe/Berlin  # expiry dates and "today" follow local time
+      TZ: Europe/Berlin  # your time zone: expiry dates, "today" and the times in the UI follow it
     volumes:
       - ./config:/app/config        # config.toml (shared settings) and secrets.toml (API key), editable under "Global settings"
       - ./mailboxes:/app/mailboxes  # one folder per mailbox: mailbox.toml, data/state.db, reports/
