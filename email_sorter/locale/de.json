@@ -185,7 +185,6 @@
  "Mail text length": "Mailtext-Länge",
  "Mailbox": "Postfach",
  "Mailbox created. Put the login into .env, restart the container and then \"Check connection\".": "Postfach angelegt. Zugangsdaten in die .env eintragen, Container neu starten und dann „Verbindung prüfen“.",
- "Mailboxes": "Postfächer",
  "Mails": "Mails",
  "Mails from these senders are not decided by the model: they stay in the inbox or go straight into a category. A rule matches when its text is part of the sender address, e.g. \"@brother.com\". The first matching rule wins.": "Mails dieser Absender entscheidet nicht das Modell: Sie bleiben im Posteingang oder gehen direkt in eine Kategorie. Treffer, wenn der Text in der Absenderadresse vorkommt, z. B. „@brother.com“. Die erste passende Regel gilt.",
  "Mails you have already read do not wait for the waiting time but are sorted in the next run. Unread ones keep waiting.": "Mails, die du schon gelesen hast, warten die Wartezeit nicht ab, sondern werden beim nächsten Lauf einsortiert. Ungelesene warten weiter.",

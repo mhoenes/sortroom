@@ -9,14 +9,13 @@
   <a class="btn" href="/ui/mailboxes/new">{{ _('Add mailbox') }}</a>
 </div>
 
-<div class="grid cols-4">
-  <div class="card kpi"><span class="k">{{ _('Mailboxes') }}</span><span class="v">{{ cards|length }}</span></div>
+<div class="grid totals">
   <div class="card kpi"><span class="k">{{ _('Sorted today') }}</span><span class="v">{{ totals.today|num }}</span></div>
   <div class="card kpi"><span class="k">{{ _('To review') }}</span><span class="v">{{ totals.uncertain|num }}</span><span class="d">{{ _('uncertain, last 30 days') }}</span></div>
   <div class="card kpi"><span class="k">{{ _('Cost this month, total') }}</span><span class="v mono">{{ totals.cost|usd }}</span></div>
 </div>
 
-<div class="grid cols-3">
+<div class="grid boxes">
 {% for c in cards %}
   {% set st = c.stats %}
   <section class="card boxcard">

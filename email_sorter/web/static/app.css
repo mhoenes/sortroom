@@ -208,6 +208,10 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 .rerun .grow { flex: 1 1 280px; display: flex; flex-direction: column; gap: 2px; }
 .rerun .muted { font-size: 13px; }
 
+/* all mailboxes: the totals and the cards share the width, however many there are */
+.totals { grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); }
+.boxes { grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); }
+
 /* mailbox cards */
 .boxcard { display: flex; flex-direction: column; gap: 16px; container-type: inline-size; }
 .boxcard .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 16px; }
