@@ -38,6 +38,10 @@
   "%(num)s Lauf mit Fehlern heute",
   "%(num)s Läufe mit Fehlern heute"
  ],
+ "%(num)s mailbox with errors today": [
+  "%(num)s Postfach mit Fehlern heute",
+  "%(num)s Postfächer mit Fehlern heute"
+ ],
  "%(num)s run with errors today.": [
   "%(num)s Lauf mit Fehlern heute.",
   "%(num)s Läufe mit Fehlern heute."
@@ -213,6 +217,7 @@
  "New mails stay in the inbox this long before they are sorted – so you see them there first. 0 = at once.": "Neue Mails bleiben so lange im Posteingang, bevor sie einsortiert werden – damit du sie zuerst dort siehst. 0 = sofort.",
  "New name": "Neuer Name",
  "Next": "Weiter",
+ "Next run %(time)s": "Nächster Lauf %(time)s",
  "Next run %(time)s · every %(minutes)s min": "Nächster Lauf %(time)s · alle %(minutes)s Min",
  "No entries yet.": "Noch keine Einträge.",
  "No folder for expired mail is set – the date is only shown.": "Es ist kein Ordner für Abgelaufenes eingestellt – das Datum wird nur angezeigt.",
@@ -280,6 +285,7 @@
  "Run for real now": "Jetzt ausführen",
  "Running": "Läuft gerade",
  "Running … the page refreshes by itself.": "Läuft … die Seite aktualisiert sich selbst.",
+ "Running: %(names)s": "Läuft gerade: %(names)s",
  "Save": "Speichern",
  "Save date": "Datum speichern",
  "Save rule": "Regel speichern",

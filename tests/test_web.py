@@ -218,3 +218,15 @@ def test_formatters():  # German (the tests' default language); English in test_
     utc = datetime(year, 9, 24, 10, 0, tzinfo=timezone.utc)
     assert i18n.dt(utc.isoformat()) == utc.astimezone().strftime("%d.%m. %H:%M")  # sender's offset -> local
     assert web.usd(0.00009, 5) == "$0.00009"
+
+
+def test_all_mailboxes_subtitle_says_what_is_going_on(client, monkeypatch):
+    c = _login(client)
+    html = c.get("/ui").text  # privat's backfill failed today; the schedule is off in tests
+    assert '<span class="sub-warn">1 Postfach mit Fehlern heute</span> · Zeitplan in diesem Prozess abgeschaltet' in html
+    status = {"enabled": True, "active": True, "running": False, "minutes": 10, "next": datetime(2026, 9, 27, 17, 45)}
+    monkeypatch.setattr(api.app.state.scheduler, "status", lambda box: dict(status))
+    assert "Nächster Lauf 17:45" in c.get("/ui").text
+    monkeypatch.setattr(api.app.state, "is_busy", lambda box: box.id == "privat")
+    html = c.get("/ui").text
+    assert "Läuft gerade: Privat" in html and "Nächster Lauf" not in html.split('class="sub"')[1].split("</div>")[0]
