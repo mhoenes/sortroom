@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import tomllib
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -183,6 +184,22 @@ def _sender_rules(raw: dict, categories: dict[str, Category], where: str) -> tup
 # ---------------------------------------------------------------- mailboxes
 
 _MAILBOX_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
+
+
+def mailbox_id_for(name: str, taken=()) -> str:
+    """The folder name (id) for a mailbox's display name: 'mh@hoenes.de' -> 'mh-hoenes-de',
+    'Büro' -> 'buero'; '-2', '-3' … when it is taken. Mirrored in web/static/mailbox-id.js."""
+    s = name.lower()
+    for a, b in (("ä", "ae"), ("ö", "oe"), ("ü", "ue"), ("ß", "ss")):
+        s = s.replace(a, b)
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
+    s = re.sub(r"-{2,}", "-", re.sub(r"[^a-z0-9_]+", "-", s)).strip("-_")
+    base = s[:40].rstrip("-_") or "mailbox"
+    candidate, n = base, 1
+    while candidate in taken:
+        n += 1
+        candidate = f"{base[:39 - len(str(n))].rstrip('-_')}-{n}"
+    return candidate
 # categories, rules and schedule a new mailbox starts from when there is none to copy
 # standard categories for new mailboxes, one set per UI language
 EXAMPLE_MAILBOXES = {lang: Path(__file__).with_name(f"example_mailbox.{lang}.toml") for lang in ("en", "de")}

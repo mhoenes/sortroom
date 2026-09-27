@@ -17,6 +17,7 @@ from urllib.parse import quote
 from fastapi import Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from .. import jobs
 from ..config import INBOX_ACTION, ConfigError, Mailbox, load_credentials
 from ..classifier import ClassifierAuthError
 from ..i18n import _
@@ -229,7 +230,9 @@ def _settings_page(request: Request, box_id: str, form: dict | None = None, erro
         **_sidebar(request, boxes, box, "settings"), "box": box, "cfg": cfg, "form": form, "error": error,
         "schedule": request.app.state.scheduler.status(box),
         "rules": rules, "editable": writable(box),
-        "config_name": box.config_file.name if box.config_file else "–"}, status)
+        "config_name": box.config_file.name if box.config_file else "–",
+        "taken_ids": sorted(p.name for p in box.workspace.parent.iterdir() if p.is_dir() and p.name != box.id)},
+        status)
 
 
 @router.get("/ui/m/{box_id}/settings", response_class=HTMLResponse, dependencies=[Depends(require_login)])
@@ -241,12 +244,17 @@ def settings(request: Request, box_id: str):
 async def settings_save(request: Request, box_id: str):
     form = await _form(request)
     _all_boxes, box = _box(request, box_id)
+    busy = (request.app.state.is_busy(box) or jobs.running(box.id)
+            or any(j["box"] == box.id and j["status"] == "running" for j in _trials.values()))
     try:
-        save_settings(box, _shared_path(request), form)
+        new_id = save_settings(box, _shared_path(request), form, busy=busy)
     except EditError as e:
         return _settings_page(request, box_id, form=form, error=str(e), status=422)
-    _flash(request, _("Settings saved. They apply from the next run."))
-    return RedirectResponse(f"/ui/m/{box.id}/settings", status_code=303)
+    if new_id != box.id:
+        _flash(request, _("Settings saved. The mailbox folder is now mailboxes/%(id)s.", id=new_id))
+    else:
+        _flash(request, _("Settings saved. They apply from the next run."))
+    return RedirectResponse(f"/ui/m/{new_id}/settings", status_code=303)
 
 
 @router.post("/ui/m/{box_id}/settings/sender-rules", response_class=HTMLResponse,

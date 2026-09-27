@@ -15,8 +15,11 @@ from pathlib import Path
 import tomlkit
 from tomlkit.items import AoT, Table
 
-from ..config import (INBOX_ACTION, ConfigError, Mailbox, _read_toml, config_from_raw, default_label)
+from .. import jobs
+from ..config import (INBOX_ACTION, ConfigError, Mailbox, _read_toml, config_from_raw, default_label,
+                      mailbox_id_for)
 from ..i18n import DEFAULT_LANGUAGE, LANGUAGES, _
+from ..runtime import single_instance
 
 _KEY_RE = re.compile(r"^[a-z0-9_]{1,40}$")
 _FOLDER_RE = re.compile(r"^[^\\%*\x00-\x1f]{1,200}$")  # IMAP list wildcards and control chars excluded
@@ -36,18 +39,27 @@ def _doc(box: Mailbox) -> tomlkit.TOMLDocument:
     return tomlkit.parse(box.config_file.read_text(encoding="utf-8"))
 
 
-def _save(box: Mailbox, doc: tomlkit.TOMLDocument, shared_path: Path) -> None:
+def _checked_text(box: Mailbox, doc: tomlkit.TOMLDocument, shared_path: Path) -> str:
+    """The new mailbox.toml, if the sorter would load it."""
     text = tomlkit.dumps(doc)
     try:
         config_from_raw({**tomllib.loads(text), "classifier": _read_toml(shared_path)["classifier"]},
                         box.config_file.name)
     except (ConfigError, tomllib.TOMLDecodeError, KeyError) as e:
         raise EditError(_("Not saved: %(e)s", e=e)) from None
-    path = box.config_file
+    return text
+
+
+def _write(path: Path, text: str) -> None:
+    """Replace path with text, keeping the previous version as .bak."""
     shutil.copy2(path, path.with_name(path.name + ".bak"))
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(text, encoding="utf-8")
     os.replace(tmp, path)
+
+
+def _save(box: Mailbox, doc: tomlkit.TOMLDocument, shared_path: Path) -> None:
+    _write(box.config_file, _checked_text(box, doc, shared_path))
 
 
 # ---------------------------------------------------------------- form parsing
@@ -146,7 +158,9 @@ def delete_category(box: Mailbox, shared_path: Path, key: str) -> None:
 
 # ---------------------------------------------------------------- mailbox settings
 
-def save_settings(box: Mailbox, shared_path: Path, form: dict) -> None:
+def save_settings(box: Mailbox, shared_path: Path, form: dict, busy: bool = False) -> str:
+    """Save the settings page. The mailbox folder (its id) follows the display name, so a new
+    name can move the folder; returns the id afterwards. `busy`: a job or test is running."""
     doc = _doc(box)
     name = _text(form, "name", 60)
     if not name:
@@ -155,7 +169,7 @@ def save_settings(box: Mailbox, shared_path: Path, form: dict) -> None:
     imap = doc.setdefault("imap", tomlkit.table())
     host = _text(form, "imap_host", 200)
     if not host or " " in host:
-        raise EditError("IMAP-Server: bitte einen Hostnamen angeben.")
+        raise EditError(_("IMAP server: please enter a host name."))
     imap["host"] = host
     imap["port"] = _number(form, "imap_port", _("Port"), 1, 65535, integer=True)
     source = _folder(form, "source_folder", _("Inbox"))
@@ -175,7 +189,38 @@ def save_settings(box: Mailbox, shared_path: Path, form: dict) -> None:
     rules["lookback_days"] = _number(form, "lookback_days", _("Look-back in days"), 1, 365, integer=True)
     rules["max_per_run"] = _number(form, "max_per_run", _("Max. mails per run"), 1, 5000, integer=True)
     _set(rules, "expired_folder", _folder(form, "expired_folder", _("Default folder for expired mail")))
-    _save(box, doc, shared_path)
+    text = _checked_text(box, doc, shared_path)
+    taken = {p.name for p in box.workspace.parent.iterdir() if p.is_dir()} - {box.id}
+    new_id = mailbox_id_for(name, taken)
+    if new_id == box.id:
+        _write(box.config_file, text)
+    else:
+        _move_mailbox(box, new_id, text, busy)
+    return new_id
+
+
+def _move_mailbox(box: Mailbox, new_id: str, text: str, busy: bool) -> None:
+    """Rename the mailbox folder to new_id and save its settings there - both or neither."""
+    target = box.workspace.with_name(new_id)
+    refused = _("The mailbox is busy, so neither the name nor the folder was changed. Please try again "
+                "when the run or job is done.")
+    if busy:
+        raise EditError(refused)
+    with single_instance(box.lock_path) as acquired:  # no run may start meanwhile
+        if not acquired:
+            raise EditError(refused)
+        try:
+            os.rename(box.workspace, target)
+        except OSError as e:
+            raise EditError(_("The folder could not be renamed: %(e)s", e=e)) from None
+        try:
+            _write(target / box.config_file.name, text)
+        except OSError as e:
+            os.rename(target, box.workspace)
+            raise EditError(_("Not saved: %(e)s", e=e)) from None
+        # the lock moved along with the folder; the old path is released on leaving this block
+        (target / box.lock_path.relative_to(box.workspace)).unlink(missing_ok=True)
+    jobs.rename_mailbox(box.id, new_id)
 
 
 def save_sender_rules(box: Mailbox, shared_path: Path, rules: list[tuple[str, str]]) -> None:
@@ -298,7 +343,6 @@ def rename_category_key(box: Mailbox, shared_path: Path, old: str, new: str) -> 
 
 # ---------------------------------------------------------------- new mailbox
 
-_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
 _ENV_RE = re.compile(r"^[A-Z_][A-Z0-9_]{0,63}$")
 
 
@@ -327,17 +371,16 @@ def _top_level_labels(doc) -> None:
 
 def create_mailbox(base_dir: Path, shared_path: Path, template_file: Path, template_name: str, form: dict) -> str:
     """Write mailboxes/<id>/mailbox.toml with the rules, schedule and categories of `template_file`
-    (another mailbox or the built-in example). Returns the id."""
-    box_id = _text(form, "id", 40).lower()
-    if not _ID_RE.match(box_id):
-        raise EditError(_("Short name: lowercase letters, digits, _ or -, starting with a letter or digit."))
-    folder = base_dir / "mailboxes" / box_id
-    if folder.exists():
-        raise EditError(_("The mailbox \"%(id)s\" already exists.", id=box_id))
-    name = _text(form, "name", 60) or box_id
+    (another mailbox or the built-in example). The id comes from the display name. Returns it."""
+    name = _text(form, "name", 60)
+    if not name:
+        raise EditError(_("The display name must not be empty."))
+    root = base_dir / "mailboxes"
+    box_id = mailbox_id_for(name, {p.name for p in root.iterdir() if p.is_dir()} if root.is_dir() else ())
+    folder = root / box_id
     host = _text(form, "imap_host", 200)
     if not host or " " in host:
-        raise EditError("IMAP-Server: bitte einen Hostnamen angeben.")
+        raise EditError(_("IMAP server: please enter a host name."))
     envs = {}
     for field, label in (("user_env", _("Variable for the user")), ("password_env", _("Variable for the password"))):
         value = _text(form, field, 64).upper()
@@ -354,7 +397,7 @@ def create_mailbox(base_dir: Path, shared_path: Path, template_file: Path, templ
     doc["name"] = name
     imap = tomlkit.table()
     imap["host"] = host
-    imap["port"] = _number(form, "imap_port", "Port", 1, 65535, integer=True)
+    imap["port"] = _number(form, "imap_port", _("Port"), 1, 65535, integer=True)
     imap["source_folder"] = _folder(form, "source_folder", _("Inbox")) or "INBOX"
     imap["user_env"] = envs["user_env"]
     imap["password_env"] = envs["password_env"]

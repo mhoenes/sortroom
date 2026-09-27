@@ -117,12 +117,12 @@ def test_invalid_changes_leave_file_untouched(setup):
 
 
 def test_save_settings(setup):
-    form = {"name": "Mein Postfach", "imap_host": "imap.example.com", "imap_port": "993", "source_folder": "INBOX",
+    form = {"name": "Privat", "imap_host": "imap.example.com", "imap_port": "993", "source_folder": "INBOX",
             "min_confidence": "0,75", "action_flag_threshold": "0.8", "expiry_threshold": "0,7",
             "min_age_hours": "24", "lookback_days": "7", "max_per_run": "150", "expired_folder": "INBOX/Abgelaufen"}
-    save_settings(_box(setup), setup / "config.toml", form)
+    assert save_settings(_box(setup), setup / "config.toml", form) == "privat"  # same name: folder stays
     box = _box(setup)
-    assert box.name == "Mein Postfach" and box.cfg.min_confidence == 0.75 and box.cfg.min_age_hours == 24
+    assert box.name == "Privat" and box.cfg.min_confidence == 0.75 and box.cfg.min_age_hours == 24
     assert box.cfg.max_per_run == 150 and box.cfg.expired_folder == "INBOX/Abgelaufen"
     assert not box.cfg.sort_read_at_once and "sort_read_at_once" not in _raw(setup)["rules"]
     save_settings(box, setup / "config.toml", {**form, "sort_read_at_once": "1"})
@@ -289,3 +289,47 @@ def test_schedule_settings_saved(client, setup):
     assert not cfg.schedule_enabled and cfg.schedule_minutes == 30
     assert _raw(setup)["schedule"] == {"enabled": False, "interval_minutes": 30}
     assert "Zeitplan aus" in client.get("/ui/m/privat").text
+
+
+# ---------------------------------------------------------------- the folder follows the name
+
+def test_mailbox_ids_from_names():
+    from email_sorter.config import mailbox_id_for
+    assert mailbox_id_for("mh@hoenes.de") == "mh-hoenes-de"
+    assert mailbox_id_for("Büro Müller") == "buero-mueller" and mailbox_id_for("Café") == "cafe"
+    assert mailbox_id_for("  --Privat!! ") == "privat" and mailbox_id_for("") == "mailbox"
+    assert mailbox_id_for("Privat", {"privat"}) == "privat-2" and mailbox_id_for("Privat", {"privat", "privat-2"}) == "privat-3"
+    assert len(mailbox_id_for("x" * 60, {"x" * 40})) == 40
+
+
+def _settings_form(html, **changes):
+    return {"csrf": _csrf(html), "name": "Privat", "imap_host": "imap.example.de", "imap_port": "993",
+            "source_folder": "INBOX", "min_confidence": "0.7", "action_flag_threshold": "0.8",
+            "expiry_threshold": "0.7", "min_age_hours": "0", "lookback_days": "7", "max_per_run": "200",
+            "expired_folder": "", "schedule_minutes": "10", **changes}
+
+
+def test_renaming_a_mailbox_moves_its_folder(client, setup):
+    Store(setup / "mailboxes" / "privat" / "data" / "state.db").close()  # the log moves along
+    html = client.get("/ui/m/privat/settings").text
+    assert 'data-current="privat"' in html and "mailboxes/<span id=\"box-id\">privat</span>" in html
+    r = client.post("/ui/m/privat/settings", data=_settings_form(html, name="mh@hoenes.de"), follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/ui/m/mh-hoenes-de/settings"
+    assert not (setup / "mailboxes" / "privat").exists()
+    moved = setup / "mailboxes" / "mh-hoenes-de"
+    assert (moved / "data" / "state.db").exists() and not (moved / "data" / "run.lock").exists()
+    assert load_mailboxes(setup, setup / "config.toml")["mh-hoenes-de"].name == "mh@hoenes.de"
+    assert "Ordner des Postfachs heißt jetzt mailboxes/mh-hoenes-de" in client.get(r.headers["location"]).text
+    assert client.get("/ui/m/privat").status_code == 404
+
+
+def test_rename_is_refused_while_the_mailbox_is_busy(client, setup):
+    lock = setup / "mailboxes" / "privat" / "data" / "run.lock"
+    lock.parent.mkdir()
+    lock.write_text(str(os.getpid()))  # a run of this very process holds the lock
+    html = client.get("/ui/m/privat/settings").text
+    r = client.post("/ui/m/privat/settings", data=_settings_form(html, name="Arbeit"))
+    assert r.status_code == 422 and "weder Name noch Ordner" in r.text
+    assert (setup / "mailboxes" / "privat").exists() and not (setup / "mailboxes" / "arbeit").exists()
+    assert load_mailboxes(setup, setup / "config.toml")["privat"].name == "Privat"  # nothing saved
+    lock.unlink()
