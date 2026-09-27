@@ -184,16 +184,28 @@ def _box(request: Request, box_id: str) -> tuple[dict[str, Mailbox], Mailbox]:
 
 def _sidebar(request: Request, boxes: dict[str, Mailbox], current: Mailbox | None, active: str) -> dict:
     busy = request.app.state.is_busy
+    # switching to another mailbox keeps the page: from A's mails to B's mails
+    page = {"mails": "/mails", "categories": "/categories", "maintenance": "/maintenance",
+            "settings": "/settings"}.get(active, "")
     items = []
     for b in boxes.values():
         db = queries.connect(b.workspace)
         try:
-            last = queries.stats(db, b.cfg.min_confidence).last_run
+            st = queries.stats(db, b.cfg.min_confidence)
         finally:
             if db:
                 db.close()
-        tone = "busy" if busy(b) else ("err" if last and last.get("exit_code") else "ok")
-        items.append({"id": b.id, "name": b.name, "host": b.cfg.imap_host, "tone": tone})
+        last = st.last_run
+        if busy(b):
+            tone, status = "busy", _("Running")
+        elif last is None:
+            tone, status = "none", _("No run yet")
+        elif last.get("exit_code"):
+            tone, status = "err", _("Last run with errors · %(when)s", when=i18n.ago(last["started"]))
+        else:
+            tone, status = "ok", _("Last run OK · %(when)s", when=i18n.ago(last["started"]))
+        items.append({"id": b.id, "name": b.name, "host": b.cfg.imap_host, "tone": tone, "status": status,
+                      "uncertain": st.uncertain, "href": f"/ui/m/{b.id}{page}"})
     current_item = next((i for i in items if current and i["id"] == current.id), None)
     return {"sidebar_boxes": items, "current": current_item, "active": active}
 

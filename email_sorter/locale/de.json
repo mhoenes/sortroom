@@ -22,10 +22,6 @@
   "%(num)s Kategorie",
   "%(num)s Kategorien"
  ],
- "%(num)s configured": [
-  "%(num)s konfiguriert",
-  "%(num)s konfiguriert"
- ],
  "%(num)s entry": [
   "%(num)s Eintrag",
   "%(num)s Einträge"
@@ -37,6 +33,10 @@
  "%(num)s failed run today": [
   "%(num)s Lauf mit Fehlern heute",
   "%(num)s Läufe mit Fehlern heute"
+ ],
+ "%(num)s mail to review": [
+  "%(num)s Mail zur Prüfung",
+  "%(num)s Mails zur Prüfung"
  ],
  "%(num)s mailbox with errors today": [
   "%(num)s Postfach mit Fehlern heute",
@@ -101,7 +101,6 @@
  "Changes the internal key in the settings, the sender rules and the log. The display name stays; folders do not change.": "Ändert den internen Schlüssel in den Einstellungen, in den Absender-Regeln und im Protokoll. Der Anzeigename bleibt; Ordner ändern sich nicht.",
  "Check connection": "Verbindung prüfen",
  "Check expiry dates": "Ablaufdaten nachprüfen",
- "Choose a mailbox": "Postfach wählen",
  "Close": "Schließen",
  "Close details": "Details schließen",
  "Confidence": "Konfidenz",
@@ -174,6 +173,8 @@
  "Language of this interface for everybody who uses it.": "Sprache dieser Oberfläche für alle, die sie benutzen.",
  "Last 24 h": "Letzte 24 h",
  "Last run": "Letzter Lauf",
+ "Last run OK · %(when)s": "Letzter Lauf OK · %(when)s",
+ "Last run with errors · %(when)s": "Letzter Lauf mit Fehlern · %(when)s",
  "Last run: %(when)s": "Letzter Lauf: %(when)s",
  "Leave in the inbox": "Im Posteingang lassen",
  "Location": "Ort",
@@ -189,6 +190,7 @@
  "Mail text length": "Mailtext-Länge",
  "Mailbox": "Postfach",
  "Mailbox created. Put the login into .env, restart the container and then \"Check connection\".": "Postfach angelegt. Zugangsdaten in die .env eintragen, Container neu starten und dann „Verbindung prüfen“.",
+ "Mailboxes": "Postfächer",
  "Mails": "Mails",
  "Mails from these senders are not decided by the model: they stay in the inbox or go straight into a category. A rule matches when its text is part of the sender address, e.g. \"@brother.com\". The first matching rule wins.": "Mails dieser Absender entscheidet nicht das Modell: Sie bleiben im Posteingang oder gehen direkt in eine Kategorie. Treffer, wenn der Text in der Absenderadresse vorkommt, z. B. „@brother.com“. Die erste passende Regel gilt.",
  "Mails you have already read do not wait for the waiting time but are sorted in the next run. Unread ones keep waiting.": "Mails, die du schon gelesen hast, warten die Wartezeit nicht ab, sondern werden beim nächsten Lauf einsortiert. Ungelesene warten weiter.",
@@ -341,8 +343,6 @@
  "Stay in %(category)s": "Bleiben in %(category)s",
  "Subject": "Betreff",
  "Suggestion": "Vorschlag",
- "Switch mailbox": "Postfach wechseln",
- "Switch mailbox, current: %(name)s": "Postfach wechseln, aktuell %(name)s",
  "Target": "Ziel",
  "Target folder": "Zielordner",
  "Target folder for expired mail": "Zielordner für Abgelaufenes",
