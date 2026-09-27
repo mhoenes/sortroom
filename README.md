@@ -5,6 +5,12 @@ and picks one of *your* categories – it doesn't generate text, so it can never
 folder. It runs as one Docker container with a web admin UI and works with any IMAP
 server (Gmail, Outlook/Microsoft 365, your provider's mailbox, …).
 
+> [!NOTE]
+> **Sortroom is in beta.** Before version 1.0, settings, files and the HTTP API can still
+> change in ways that need you to do something after an update. Such changes only come
+> with a new minor version (e.g. 0.11 → 0.12) and are listed under
+> [Upgrading](#upgrading) – read it before you update, or pin a version.
+
 ![Overview of a mailbox: last run, mails to review, received mail by folder, recent runs](docs/screenshots/overview.png)
 
 ## What it does
@@ -404,6 +410,10 @@ and `parse_response()` in `email_sorter/classifier.py` need updating. The cost p
 shown when the provider reports it in `usage.cost` (OpenRouter does), otherwise it stays 0.
 
 ## Upgrading
+
+Sortroom is in beta: a new minor version can change settings, files or the HTTP API in a
+way that needs action. Every such change is listed here, newest first. Patch versions
+(e.g. 0.11.0 → 0.11.1) need nothing.
 
 **From 0.9.x:** logins and the API key are no longer read from `.env`. After the update
 enter the API key under Global settings and each mailbox's user and password under its
