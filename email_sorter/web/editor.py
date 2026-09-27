@@ -274,6 +274,14 @@ async def settings_save(request: Request, box_id: str):
         _flash(request, _("Settings saved. The mailbox folder is now mailboxes/%(id)s.", id=new_id))
     else:
         _flash(request, _("Settings saved. They apply from the next run."))
+    if form.get("then") == "check":  # "Save and check connection": test what was just saved
+        from .admin import start_check
+        try:
+            job = start_check(request, _box(request, new_id)[1])
+        except ConfigError as e:
+            _flash(request, str(e), "err")
+        else:
+            return RedirectResponse(f"/ui/m/{new_id}/jobs/{job['id']}", status_code=303)
     return RedirectResponse(f"/ui/m/{new_id}/settings", status_code=303)
 
 

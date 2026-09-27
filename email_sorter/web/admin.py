@@ -11,10 +11,11 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from .. import jobs
-from ..check import check
+from ..check import check_imap, check_model
+from ..classifier import ClassifierClient, ClassifierError
 from .. import i18n
 from ..config import (EXAMPLE_MAILBOXES, INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, _read_toml,
-                      classifier_key, load_credentials)
+                      classifier_key, load_credentials, stored_credentials)
 from ..i18n import _
 from ..maintenance import relocate_category, rename_category, rename_folder
 from ..manual import ManualError, move_mail
@@ -26,7 +27,7 @@ from ..store import Store
 from . import _box, _boxes, _sidebar, queries, require_login, router
 from .editing import (EditError, add_sender_rule, can_add_mailbox, create_mailbox, rename_category_key,
                       rename_folder_refs, save_shared, secrets_writable, shared_writable, writable)
-from .editor import _flash, _form, _page, _shared_path, credential_view, form_number, without_secrets
+from .editor import _flash, _form, _page, _shared_path, form_number, without_secrets
 
 log = logging.getLogger(__name__)
 
@@ -48,10 +49,8 @@ def maintenance(request: Request, box_id: str):
         if db:
             db.close()
     cat_folders = sorted({c.folder for c in box.cfg.categories.values() if c.folder} | set(folders))
-    login, login_error = credential_view(box)
     return _page(request, "maintenance.html", {
         **_sidebar(request, boxes, box, "maintenance"), "box": box, "tasks": TASKS,
-        "login": login, "login_error": login_error,
         "jobs": jobs.recent(box.id, 15), "folders": cat_folders, "busy": request.app.state.is_busy(box),
         "editable": writable(box), "today": date.today().isoformat()})
 
@@ -73,6 +72,16 @@ def _job_for(request: Request, box: Mailbox, task: str, form: dict):
     """(label, fn, needs_lock) for a maintenance form."""
     cfg, ws, live = box.cfg, box.workspace, _flag(form, "live")
     mode = "" if live else f" ({_('dry run')})"
+    if task == "check":  # only the mailbox; the model is checked under Global settings
+        stored = stored_credentials(box)
+        if not stored["imap_user"] or not stored["imap_password"]:
+            raise ConfigError(_("The login of this mailbox is not set yet."))
+
+        def run_check() -> dict:
+            ok = check_imap(cfg, stored["imap_user"], stored["imap_password"],
+                            out=lambda line: log.info("%s", line.strip("\n")))
+            return {"ok": ok, "exit_code": 0 if ok else 1}
+        return _("Check connection"), run_check, False
     creds = load_credentials(box)
     shared = _shared_path(request)
     if task == "run":
@@ -136,11 +145,6 @@ def _job_for(request: Request, box: Mailbox, task: str, form: dict):
         return _("Category %(old)s → %(new)s", old=old, new=new) + mode, rename_key, True
     if task == "reconcile":
         return _("Reconcile the log") + mode, lambda: run_reconcile(cfg, creds, ws, live=live), True
-    if task == "check":
-        def run_check() -> dict:
-            code = check(cfg, creds, out=lambda line: log.info("%s", line.strip("\n")))
-            return {"ok": code == 0, "exit_code": code}
-        return _("Check connection"), run_check, False
     raise HTTPException(404, _("Unknown task"))
 
 
@@ -161,6 +165,12 @@ async def maintenance_start(request: Request, box_id: str, task: str):
     job = jobs.start(box, task, label, fn, request={k: v for k, v in form.items() if k != "csrf"},
                      needs_lock=needs_lock)
     return RedirectResponse(f"/ui/m/{box.id}/jobs/{job['id']}", status_code=303)
+
+
+def start_check(request: Request, box: Mailbox) -> dict:
+    """Start "Check connection" in the background, e.g. right after the settings were saved."""
+    label, fn, needs_lock = _job_for(request, box, "check", {})
+    return jobs.start(box, "check", label, fn, request={}, needs_lock=needs_lock)
 
 
 @router.get("/ui/m/{box_id}/jobs/{job_id}", response_class=HTMLResponse, dependencies=[Depends(require_login)])
@@ -305,8 +315,8 @@ async def mailbox_create(request: Request):
     except EditError as e:
         form, retype = without_secrets(form, "imap_password")
         return _new_mailbox_page(request, form=form, error=str(e), status=422, retype=retype)
-    _flash(request, _('Mailbox created. "Check connection" tests the login and the model.'))
-    return RedirectResponse(f"/ui/m/{box_id}/maintenance", status_code=303)
+    _flash(request, _('Mailbox created. "Save & check" in the login section tests it.'))
+    return RedirectResponse(f"/ui/m/{box_id}/settings", status_code=303)
 
 
 # ---------------------------------------------------------------- shared settings
@@ -348,4 +358,26 @@ async def shared_settings_save(request: Request):
         form, retype = without_secrets(form, "api_key")
         return _shared_page(request, form=form, error=str(e), status=422, retype=retype)
     _flash(request, _("Saved. Applies to all mailboxes from the next run."))
+    if form.get("then") == "check":  # "Save and check model": test what was just saved
+        tone, text = await run_in_threadpool(_check_model, _shared_path(request))
+        _flash(request, text, tone)
     return RedirectResponse("/ui/settings", status_code=303)
+
+
+def _check_model(shared_path) -> tuple[str, str]:
+    """Send the model one sample mail with the standard categories of the UI language."""
+    try:
+        key = classifier_key(shared_path.with_name(SECRETS_FILE))
+        c = _read_toml(shared_path)["classifier"]
+    except ConfigError as e:
+        return "err", str(e)
+    if not key:
+        return "err", _("The API key is not set yet.")
+    client = ClassifierClient(key, c["endpoint"], c["model"], timeout=float(c.get("timeout_seconds", 20)), retries=2)
+    example = tomllib.loads(EXAMPLE_MAILBOXES[i18n.language()].read_text(encoding="utf-8"))["categories"]
+    try:
+        d = check_model(client, {k: v["description"] for k, v in example.items()})
+    except ClassifierError as e:
+        return "err", _("Model check failed: %(e)s", e=e)
+    return "ok", _("Model works: a sample invoice was filed under \"%(category)s\" (confidence %(conf)s, cost $%(cost)s).",
+                   category=d.category, conf=i18n.conf(d.confidence), cost=f"{d.cost:.6f}")

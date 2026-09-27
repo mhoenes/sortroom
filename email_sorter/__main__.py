@@ -142,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
         codes = []
         for box in selected:
             print(f"=== {box.name} ({box.id}) ===")
-            try:
+            try:  # the mailbox and the model; the admin UI checks them separately
                 codes.append(check(box.cfg, load_credentials(box)))
             except ConfigError as e:
                 print(f"  FAILED: {e}")

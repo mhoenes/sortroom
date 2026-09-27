@@ -112,9 +112,9 @@ def test_settings_login_is_write_only(client, setup):
 
 def test_missing_login_is_shown(client, setup):
     (setup / "mailboxes" / "privat" / "secrets.toml").unlink()
-    html = client.get("/ui/m/privat/maintenance").text
-    assert html.count('<span class="pill err">fehlt</span>') == 2  # user and password; the key is set
-    assert 'placeholder="unverändert"' not in client.get("/ui/m/privat/settings").text
+    html = client.get("/ui/m/privat/settings").text
+    assert html.count('<span class="pill err">fehlt</span>') == 2  # user and password
+    assert 'placeholder="unverändert"' not in html
 
 
 def test_new_mailbox_stores_its_login(client, setup):
@@ -160,3 +160,53 @@ def test_read_only_secrets(client, setup, monkeypatch):
     assert r.status_code == 422 and "nicht beschreibbar" in r.text
     html = client.get("/ui/settings").text
     assert 'name="api_key" autocomplete="new-password" spellcheck="false" disabled' in html
+
+
+def test_save_and_check_tests_the_new_login(client, setup, monkeypatch):
+    import time
+    from email_sorter import jobs
+    seen = []
+    monkeypatch.setattr(admin, "check_imap", lambda cfg, user, password, out: seen.append(password) or True)
+    (setup / "secrets.toml").unlink()  # the mailbox check does not need the API key
+    html = client.get("/ui/m/privat/settings").text
+    assert 'name="then" value="check"' in html
+    form = {**SETTINGS, "csrf": _csrf(html), "imap_user": "u", "imap_password": "Neu-789", "then": "check"}
+    r = client.post("/ui/m/privat/settings", data=form, follow_redirects=False)
+    assert r.status_code == 303 and "/ui/m/privat/jobs/" in r.headers["location"]
+    job_id = r.headers["location"].rsplit("/", 1)[1]
+    for _ in range(100):
+        if jobs.get(job_id)["status"] != "running":
+            break
+        time.sleep(0.02)
+    assert seen == ["Neu-789"] and jobs.get(job_id)["request"] == {}  # the password is not kept with the job
+    assert "Neu-789" not in client.get(r.headers["location"]).text
+
+    # an error: nothing saved, no check started
+    r = client.post("/ui/m/privat/settings", data={**form, "imap_password": "x", "imap_port": "abc"})
+    assert r.status_code == 422 and seen == ["Neu-789"]
+
+
+def test_save_and_check_model(client, setup, monkeypatch):
+    calls = []
+
+    class FakeClient:
+        def __init__(self, key, endpoint, model, **kw):
+            calls.append(key)
+
+        def decide(self, state, categories):
+            from email_sorter.classifier import Decision
+            assert "finanzen" in categories  # the standard categories of the UI language
+            return Decision("finanzen", 0.93, {"finanzen": 0.93}, 0.1, 0.000021)
+
+    monkeypatch.setattr(admin, "ClassifierClient", FakeClient)
+    html = client.get("/ui/settings").text
+    form = {"csrf": _csrf(html), "endpoint": "https://example.invalid/decisions", "model": "example/model-1",
+            "max_body_chars": "3000", "timeout_seconds": "20", "min_interval_seconds": "0", "language": "de",
+            "api_key": "sk-Neu", "then": "check"}
+    r = client.post("/ui/settings", data=form)
+    assert calls == ["sk-Neu"] and "Modell funktioniert" in r.text and "„finanzen“" in r.text
+    assert "sk-Neu" not in r.text
+
+    (setup / "secrets.toml").unlink()
+    r = client.post("/ui/settings", data={**form, "api_key": ""})
+    assert "API-Schlüssel ist noch nicht gesetzt" in r.text and calls == ["sk-Neu"]

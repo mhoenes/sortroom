@@ -1,4 +1,8 @@
-"""--check: verify IMAP and classifier API access without touching any mail."""
+"""Connection checks without touching any mail: the IMAP login of a mailbox and the model endpoint.
+
+They are independent: the admin UI checks the mailbox under its settings and the model under
+Global settings; --check does both for every mailbox.
+"""
 from __future__ import annotations
 
 from typing import Callable
@@ -6,7 +10,7 @@ from typing import Callable
 from imap_tools import MailBox
 
 from .config import Config, Credentials
-from .classifier import ClassifierError
+from .classifier import ClassifierClient, ClassifierError, Decision
 from .sorter import IMAP_TIMEOUT, _delimiter, server_folder
 
 SAMPLE_STATE = {
@@ -20,18 +24,16 @@ SAMPLE_STATE = {
 }
 
 
-def check(cfg: Config, creds: Credentials, out: Callable[[str], None] = print) -> int:
-    ok = True
-
-    out(f"IMAP  {cfg.imap_host}:{cfg.imap_port} as {creds.imap_user}")
+def check_imap(cfg: Config, user: str, password: str, out: Callable[[str], None] = print) -> bool:
+    """Log in, look at the inbox and list which target folders exist."""
+    out(f"IMAP  {cfg.imap_host}:{cfg.imap_port} as {user}")
     try:
-        with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(creds.imap_user, creds.imap_password,
-                                                         initial_folder=cfg.source_folder) as mb:
+        with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(user, password,
+                                                                               initial_folder=cfg.source_folder) as mb:
             delim = _delimiter(mb)
             existing = {f.name for f in mb.folder.list()}
             status = mb.folder.status(cfg.source_folder)
-            out(f"  OK - {cfg.source_folder} has {status.get('MESSAGES')} mails, "
-                  f"folder separator is {delim!r}")
+            out(f"  OK - {cfg.source_folder} has {status.get('MESSAGES')} mails, folder separator is {delim!r}")
             out("  target folders:")
             for cat in cfg.categories.values():
                 if cat.folder:
@@ -39,17 +41,25 @@ def check(cfg: Config, creds: Credentials, out: Callable[[str], None] = print) -
                     state = "exists" if name in existing else "will be created on first live run"
                     out(f"    {cat.key:<20} -> {name}  ({state})")
     except Exception as e:
-        ok = False
         out(f"  FAILED: {e}")
+        return False
+    return True
 
+
+def check_model(client: ClassifierClient, descriptions: dict[str, str]) -> Decision:
+    """Classify one sample mail; raises ClassifierError when the endpoint, model or key don't work."""
+    return client.decide(SAMPLE_STATE, descriptions)
+
+
+def check(cfg: Config, creds: Credentials, out: Callable[[str], None] = print) -> int:
+    """--check: the mailbox and the model."""
+    ok = check_imap(cfg, creds.imap_user, creds.imap_password, out)
     out(f"\nModel {cfg.classifier_model} via {cfg.classifier_endpoint}")
     try:
-        classifier = cfg.classifier_client(creds.classifier_api_key)
-        d = classifier.decide(SAMPLE_STATE, cfg.descriptions)
+        d = check_model(cfg.classifier_client(creds.classifier_api_key), cfg.descriptions)
         out(f"  OK - sample electricity bill -> {d.category} (confidence {d.confidence:.2f}, "
-              f"needs_action {d.needs_action:.2f}, cost ${d.cost:.6f})")
+            f"needs_action {d.needs_action:.2f}, cost ${d.cost:.6f})")
     except ClassifierError as e:
         ok = False
         out(f"  FAILED: {e}")
-
     return 0 if ok else 1

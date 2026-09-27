@@ -16,6 +16,8 @@
 
 <form method="post" action="/ui/settings">
   <input type="hidden" name="csrf" value="{{ csrf }}">
+  {# Enter in a field only saves: the first submit button is the default one #}
+  {% if editable %}<button type="submit" class="sr-only" tabindex="-1" aria-hidden="true">{{ _('Save') }}</button>{% endif %}
   <fieldset {% if not editable %}disabled{% endif %} class="stack">
     <section class="card stack">
       <h2>{{ _('Interface') }}</h2>
@@ -45,7 +47,9 @@
           <input type="number" name="min_interval_seconds" min="0" max="60" step="any" value="{{ form.min_interval_seconds }}" required></label>
       </div>
     </section>
-    {% if editable %}<div class="actions"><button class="btn primary" type="submit">{{ _('Save') }}</button></div>{% endif %}
+    {% if editable %}<div class="actions"><button class="btn primary" type="submit">{{ _('Save') }}</button>
+      <button class="btn" type="submit" name="then" value="check">{{ _('Save & check') }}</button>
+      {{ help(_('Saves, then sends the model one sample mail with the standard categories. Costs a fraction of a cent.')) }}</div>{% endif %}
   </fieldset>
 </form>
 {% endblock %}
