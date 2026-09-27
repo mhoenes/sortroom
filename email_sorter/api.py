@@ -217,6 +217,7 @@ app.state.scheduler = Scheduler(lambda: app.state.load_mailboxes())
 app.add_middleware(SessionMiddleware, secret_key=web.session_secret(), session_cookie="email_sorter_session",
                    max_age=web.SESSION_DAYS * 86400, same_site="lax",
                    https_only=os.environ.get("UI_SECURE_COOKIES") == "1")
+app.middleware("http")(web.language_middleware)
 app.mount("/ui/static", StaticFiles(directory=str(web.HERE / "static")), name="static")
 app.include_router(web.router)
 

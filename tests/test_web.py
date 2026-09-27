@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from email_sorter import __version__, api, web
+from email_sorter import __version__, api, i18n, web
 from email_sorter.web import queries
 from email_sorter.config import Mailbox
 from email_sorter.classifier import Decision
@@ -203,13 +203,13 @@ def test_source_link_for_agpl(client):
     assert f"v{__version__}<" not in html                    # not under the brand any more
 
 
-def test_formatters():
-    assert web.de_num(12345) == "12 345"
-    assert web.de_conf(0.456) == "0,46"
+def test_formatters():  # German (the tests' default language); English in test_i18n.py
+    assert i18n.num(12345) == "12 345"
+    assert i18n.conf(0.456) == "0,46"
     year = date.today().year
-    assert web.de_dt(f"{year}-09-24T21:58:00") == "24.09. 21:58"
-    assert web.de_dt("2020-01-14T16:32:00") == "14.01.2020"            # earlier year: date only
-    assert web.de_dt("2020-01-14T16:32:00", True) == "14.01.2020 16:32"
+    assert i18n.dt(f"{year}-09-24T21:58:00") == "24.09. 21:58"
+    assert i18n.dt("2020-01-14T16:32:00") == "14.01.2020"            # earlier year: date only
+    assert i18n.dt("2020-01-14T16:32:00", True) == "14.01.2020 16:32"
     utc = datetime(year, 9, 24, 10, 0, tzinfo=timezone.utc)
-    assert web.de_dt(utc.isoformat()) == utc.astimezone().strftime("%d.%m. %H:%M")  # sender's offset -> local
+    assert i18n.dt(utc.isoformat()) == utc.astimezone().strftime("%d.%m. %H:%M")  # sender's offset -> local
     assert web.usd(0.00009, 5) == "$0.00009"

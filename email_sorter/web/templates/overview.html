@@ -1,61 +1,61 @@
 {% extends "base.html" %}
-{% block title %}Übersicht · {{ box.name }}{% endblock %}
+{% block title %}{{ _('Overview') }} · {{ box.name }}{% endblock %}
 {% block content %}
 {% set cfg = box.cfg %}
 <div class="head">
   <div class="title">
-    <h1>Übersicht · {{ box.name }}</h1>
-    <div class="sub">{{ cfg.imap_host }}{% if cfg.min_age_hours %} · Neue Mails werden {{ cfg.min_age_hours|de_num }} Stunden nach Eingang einsortiert{% if cfg.sort_read_at_once %}, gelesene sofort{% endif %}{% endif %}</div>
+    <h1>{{ _('Overview') }} · {{ box.name }}</h1>
+    <div class="sub">{{ cfg.imap_host }}{% if cfg.min_age_hours %} · {{ _('New mails are sorted %(hours)s hours after they arrive', hours=cfg.min_age_hours|num) }}{% if cfg.sort_read_at_once %}{{ _(', read ones at once') }}{% endif %}{% endif %}</div>
   </div>
 </div>
 
 {% if stats.errors_today %}
 <div class="banner" role="status">
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-  <div style="flex-grow:1"><strong>{{ stats.errors_today }} {{ 'Lauf' if stats.errors_today == 1 else 'Läufe' }} mit Fehlern heute.</strong> Betroffene Mails werden beim nächsten Lauf erneut versucht.</div>
+  <div style="flex-grow:1"><strong>{{ ngettext('%(num)s run with errors today.', '%(num)s runs with errors today.', stats.errors_today) }}</strong> {{ _('Affected mails are retried in the next run.') }}</div>
 </div>
 {% endif %}
 
 <div class="grid cols-4">
   <div class="card kpi">
-    <span class="k">Letzter Lauf</span>
+    <span class="k">{{ _('Last run') }}</span>
     {% if stats.last_run %}
       <span class="v">{{ stats.last_run.started|ago }}</span>
-      <span class="d">{{ stats.last_run.classified }} Mails · {{ stats.last_run.moved }} verschoben · {{ stats.last_run.failed }} Fehler</span>
+      <span class="d">{{ _('%(mails)s mails · %(moved)s moved · %(failed)s errors', mails=stats.last_run.classified, moved=stats.last_run.moved, failed=stats.last_run.failed) }}</span>
     {% else %}
-      <span class="v">–</span><span class="d">Noch kein Lauf protokolliert</span>
+      <span class="v">–</span><span class="d">{{ _('No run logged yet') }}</span>
     {% endif %}
-    <span class="d">{% if schedule.running %}Lauf läuft gerade
-      {% elif schedule.enabled and schedule.active and schedule.next %}Nächster Lauf {{ schedule.next.strftime('%H:%M') }} · alle {{ schedule.minutes }} Min
-      {% elif schedule.enabled and schedule.active %}Zeitplan startet in Kürze
-      {% elif schedule.enabled %}Zeitplan in diesem Prozess abgeschaltet
-      {% else %}Zeitplan aus{% endif %}</span>
+    <span class="d">{% if schedule.running %}{{ _('A run is in progress') }}
+      {% elif schedule.enabled and schedule.active and schedule.next %}{{ _('Next run %(time)s · every %(minutes)s min', time=schedule.next.strftime('%H:%M'), minutes=schedule.minutes) }}
+      {% elif schedule.enabled and schedule.active %}{{ _('Schedule starts shortly') }}
+      {% elif schedule.enabled %}{{ _('Schedule switched off in this process') }}
+      {% else %}{{ _('Schedule off') }}{% endif %}</span>
   </div>
   <div class="card kpi">
-    <span class="k">Heute einsortiert</span>
-    <span class="v">{{ stats.sorted_today|de_num }}</span>
-    <span class="d">{{ stats.flagged_7d|de_num }} mit Stern in 7 Tagen</span>
+    <span class="k">{{ _('Sorted today') }}</span>
+    <span class="v">{{ stats.sorted_today|num }}</span>
+    <span class="d">{{ _('%(n)s starred in 7 days', n=stats.flagged_7d|num) }}</span>
   </div>
   <a class="card kpi link" href="/ui/m/{{ box.id }}/mails?uncertain=1&amp;period=30d">
-    <span class="k">Zur Prüfung</span>
-    <span class="v">{{ stats.uncertain|de_num }} <small>unsicher</small></span>
-    <span class="d">Konfidenz unter {{ cfg.min_confidence|de_conf }}, Eingang letzte 30 Tage</span>
+    <span class="k">{{ _('To review') }}</span>
+    <span class="v">{{ stats.uncertain|num }} <small>{{ _('uncertain') }}</small></span>
+    <span class="d">{{ _('Confidence below %(min)s, received in the last 30 days', min=cfg.min_confidence|conf) }}</span>
   </a>
   <div class="card kpi">
-    <span class="k">Kosten diesen Monat</span>
+    <span class="k">{{ _('Cost this month') }}</span>
     <span class="v mono">{{ stats.cost_month|usd }}</span>
-    <span class="d">Ø {{ stats.cost_per_mail|usd(5) }} pro Mail · {{ stats.classified_mails_month|de_num }} Mails</span>
+    <span class="d">{{ _('Ø %(cost)s per mail · %(n)s mails', cost=stats.cost_per_mail|usd(5), n=stats.classified_mails_month|num) }}</span>
   </div>
 </div>
 
 {% if review %}
-<section class="card stack tight" aria-label="Zur Prüfung">
-  <div class="row"><h2 class="grow">Zur Prüfung</h2><a href="/ui/m/{{ box.id }}/mails?uncertain=1&amp;period=30d" style="font-size:13px">{{ 'Alle ' ~ stats.uncertain|de_num ~ ' anzeigen' if stats.uncertain > review|length else 'In der Liste öffnen' }}</a></div>
+<section class="card stack tight" aria-label="{{ _('To review') }}">
+  <div class="row"><h2 class="grow">{{ _('To review') }}</h2><a href="/ui/m/{{ box.id }}/mails?uncertain=1&amp;period=30d" style="font-size:13px">{{ _('Show all %(n)s', n=stats.uncertain|num) if stats.uncertain > review|length else _('Open in the list') }}</a></div>
   <div class="review">
     {% for m in review %}
     <a href="/ui/m/{{ box.id }}/mails?uncertain=1&amp;period=30d&amp;key={{ m.message_key|urlencode }}">
-      <span class="what"><b>{{ m.subject or '(ohne Betreff)' }}</b><span class="muted"><span class="mono">{{ m.received|de_dt }}</span> · {{ m.sender }}</span></span>
-      <span class="guess"><span class="muted">Vorschlag</span><b>{{ label(m.category) }} <span class="mono muted">{{ m.confidence|de_conf }}</span></b></span>
+      <span class="what"><b>{{ m.subject or _('(no subject)') }}</b><span class="muted"><span class="mono">{{ m.received|dt }}</span> · {{ m.sender }}</span></span>
+      <span class="guess"><span class="muted">{{ _('Suggestion') }}</span><b>{{ label(m.category) }} <span class="mono muted">{{ m.confidence|conf }}</span></b></span>
     </a>
     {% endfor %}
   </div>
@@ -64,39 +64,39 @@
 
 <div class="grid split">
   <section class="card" style="display:flex;flex-direction:column;gap:16px">
-    <div class="row"><h2 class="grow">Eingang, letzte 7 Tage</h2><span class="muted" style="font-size:13px">{{ total_7d|de_num }} Mails</span></div>
+    <div class="row"><h2 class="grow">{{ _('Received, last 7 days') }}</h2><span class="muted" style="font-size:13px">{{ _('%(n)s mails', n=total_7d|num) }}</span></div>
     {% if bars %}
     <div class="bars">
       {% for b in bars %}
-      <div class="bar"><span>{{ b.label }}</span><span class="track"><span class="fill {{ b.tone }}" style="width:{{ b.pct }}%"></span></span><span class="n">{{ b.n|de_num }}</span></div>
+      <div class="bar"><span>{{ b.label }}</span><span class="track"><span class="fill {{ b.tone }}" style="width:{{ b.pct }}%"></span></span><span class="n">{{ b.n|num }}</span></div>
       {% endfor %}
     </div>
-    {% else %}<div class="empty">Keine verarbeiteten Mails aus den letzten 7 Tagen.</div>{% endif %}
+    {% else %}<div class="empty">{{ _('No processed mails from the last 7 days.') }}</div>{% endif %}
     <div class="muted" style="margin-top:auto;padding-top:14px;border-top:1px solid var(--line-soft);font-size:13px">
-      <strong style="color:var(--ink)">{{ expired_7d|de_num }}</strong> abgelaufene Angebote verschoben
+      {{ ngettext('<strong style="color:var(--ink)">%(num)s</strong> expired offer moved', '<strong style="color:var(--ink)">%(num)s</strong> expired offers moved', expired_7d) }}
     </div>
   </section>
 
   <section class="card" style="display:flex;flex-direction:column;gap:12px;min-width:0">
-    <h2>Letzte Läufe</h2>
+    <h2>{{ _('Recent runs') }}</h2>
     {% if runs %}
     <div class="scroll-x"><table>
-      <thead><tr><th scope="col">Zeit</th><th scope="col">Art</th><th scope="col" class="num">Mails</th><th scope="col" class="num">Verschoben</th><th scope="col" class="num">Kosten</th><th scope="col">Status</th></tr></thead>
+      <thead><tr><th scope="col">{{ _('Time') }}</th><th scope="col">{{ _('Kind') }}</th><th scope="col" class="num">{{ _('Mails') }}</th><th scope="col" class="num">{{ _('Moved') }}</th><th scope="col" class="num">{{ _('Cost') }}</th><th scope="col">{{ _('Status') }}</th></tr></thead>
       <tbody>
       {% for r in runs %}
         {% set st = run_status(r) %}
         <tr>
-          <td class="mono">{{ r.started|de_dt }}</td>
-          <td>{{ run_kinds.get(r.kind, r.kind) }}{% if r.detail %} <span class="muted">{{ r.detail }}</span>{% endif %}</td>
-          <td class="num">{{ r.classified|de_num }}</td>
-          <td class="num">{{ r.moved|de_num }}</td>
+          <td class="mono">{{ r.started|dt }}</td>
+          <td>{{ run_kind(r.kind) }}{% if r.detail %} <span class="muted">{{ r.detail }}</span>{% endif %}</td>
+          <td class="num">{{ r.classified|num }}</td>
+          <td class="num">{{ r.moved|num }}</td>
           <td class="num">{{ r.cost_usd|usd(4) }}</td>
           <td><span class="pill {{ st[1] }}" {% if r.error %}title="{{ r.error }}"{% endif %}>{{ st[0] }}</span></td>
         </tr>
       {% endfor %}
       </tbody>
     </table></div>
-    {% else %}<div class="empty">Noch keine Läufe mit Mails protokolliert.</div>{% endif %}
+    {% else %}<div class="empty">{{ _('No runs with mails logged yet.') }}</div>{% endif %}
 
   </section>
 </div>

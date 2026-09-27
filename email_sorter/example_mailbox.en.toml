@@ -1,0 +1,101 @@
+# English standard categories, named like Gmail's tabs where they overlap (Purchases, Promotions,
+# Updates): "Add mailbox" offers these categories and rules as
+# "Standard categories, English" (example_mailbox.de.toml has the German ones). The wizard sets
+# name and [imap]; everything can be changed in the UI afterwards.
+# Secrets (IMAP login) live in .env, never here.
+
+name = "Mailbox"
+
+[imap]
+host = "imap.example.com"
+port = 993
+source_folder = "INBOX"
+
+[rules]
+min_confidence = 0.70         # below this, mail stays in the inbox untouched
+action_flag_threshold = 0.80  # "needs action" probability at/above this -> mail gets flagged
+expiry_threshold = 0.70       # "time-limited offer" probability at/above this -> expiry date is tracked
+expired_folder = "INBOX/Promotions/Expired"  # expired offers are moved here the day after their deadline
+lookback_days = 7             # only look at mail received in the last N days
+min_age_hours = 24            # leave mail alone until it has been in the inbox this long (0 = sort at once)
+# sort_read_at_once = true    # mail you have already read skips that wait
+max_per_run = 200             # safety cap on mails classified per run
+
+# ---------------------------------------------------------------------------
+# Sender rules - checked before the model, first match wins, no model request.
+#   match   part of the sender address, case-insensitive
+#   action  "inbox" (leave it in the inbox, untouched) or a category key below
+# ---------------------------------------------------------------------------
+
+# [[sender_rules]]
+# match = "scanner@example.com"   # e.g. scan-to-mail from a scanner: leave it in the inbox
+# action = "inbox"
+
+[schedule]
+enabled = true
+interval_minutes = 10         # a normal run every N minutes
+
+# ---------------------------------------------------------------------------
+# Categories
+#   description  what the model reads to decide - the more precise, the better
+#   folder       target folder ("/" is translated to the server's separator);
+#                omit to leave the mail in the inbox
+#   flag         true = always flag mails of this category
+#   flag_on_action  false = never flag because of "needs action" (default true);
+#                   for advertising ("voucher expires!") and anything suspicious
+#   track_expiry  true = find the end date of time-limited offers; the day after it
+#                 has passed, move the mail to expired_folder
+# Order does not matter. Keys must be unique, lowercase, no spaces.
+# ---------------------------------------------------------------------------
+
+[categories.finance]
+description = "Routine money matters: invoices and bills of any kind (including electricity, gas, water, phone and internet bills, and invoices from online shops and retailers - also when the invoice comes together with a shipping or order confirmation), receipts and payment confirmations, direct debit notices, monthly bank and credit card statements, insurance premium invoices, payment reminders and dunning letters. Not annual tax certificates, tax assessments or contract documents"
+folder = "INBOX/Finance"
+
+[categories.purchases]
+description = "Online shop order confirmations, shipping and delivery notifications, parcel tracking, returns and refunds of orders. Mails that contain or attach an invoice for the purchase belong in finance instead"
+folder = "INBOX/Purchases"
+
+[categories.travel]
+description = "Travel: flight, train and long-distance bus bookings and tickets, hotel and holiday rental confirmations, rental cars, check-in and boarding reminders, itinerary changes, delays and cancellations; booking receipts and invoices from travel platforms and agencies (e.g. Agoda, trip.com, Booking.com); activities booked for a trip away from home: tickets for sights, museums, tours and excursions at the travel destination. Not local events or appointments at home"
+folder = "INBOX/Travel"
+
+[categories.appointments]
+description = "Local appointments and events the recipient booked or was personally invited to: tickets and booking confirmations for concerts, cinema, theatre, sports and other events, restaurant reservations, leisure bookings; doctor, dentist, craftsman, hairdresser, car service and other appointment confirmations, reminders, reschedules and cancellations; calendar invitations. Not advertising for events and not sightseeing or tours on a trip"
+folder = "INBOX/Appointments"
+
+[categories.documents]
+description = "Documents worth keeping for years: new contracts and contract changes, price change announcements, cancellations and cancellation confirmations, insurance policies and annual insurance statements, rental agreements and landlord or housing matters, official letters and decisions from authorities (tax office, tax assessments, city, vehicle registration, broadcasting fee, pension insurance, courts), annual tax certificates from banks, employers or funds, certificates and diplomas, medical findings. Not routine monthly bills, receipts or account statements"
+folder = "INBOX/Documents"
+
+[categories.promotions]
+description = "Marketing and editorial mail sent to many recipients: newsletters, advertising, promotions, discounts, vouchers and coupons, sales, product and event announcements (e.g. new concerts or shows), subscription upgrade or renewal offers, club and association newsletters and member invitations, general service announcements to all customers. Not job alerts, social network digests or notifications about the recipient's own accounts"
+folder = "INBOX/Promotions"
+flag_on_action = false
+track_expiry = true
+
+[categories.updates]
+description = "Automated notifications about the recipient's own accounts, devices and activity: social and career networks (LinkedIn, Xing, Instagram: job alerts and recommendations, 'hiring near you', 'open to work', birthdays, follow suggestions, network digests), likes and comments, price alerts and wishlist price drops, requests to rate or review a purchase or trip, genealogy and record hints, app and smart home alerts, server and device status mails (updates, backups, errors), family safety reports"
+folder = "INBOX/Updates"
+flag_on_action = false
+
+[categories.portal]
+description = "Notice that a new document or message is waiting in an online customer portal or postbox (bank PostBox, health insurance mailbox, tenant or property management portal), without the document itself"
+folder = "INBOX/Updates"  # own category so the model recognises them reliably, filed with updates
+flag_on_action = false
+
+[categories.personal]
+description = "Personal mail written by a real person to the recipient: friends, family, acquaintances, private conversations"
+# no folder: stays in the inbox
+
+[categories.security]
+description = "Genuine account security mail sent from the service's own official domain: password resets, login alerts, new device sign-ins, two-factor and verification codes, account changes"
+flag = true
+
+[categories.suspicious]
+description = "Phishing, scams and fraud: fake account warnings, suspended or locked account claims, urgent requests to log in, verify or pay, sender domain that does not belong to the brand it names, misspelled brand names (e.g. AppIe, PayPaI), unexpected prizes, inheritances, crypto or investment offers"
+folder = "INBOX/Suspicious"
+flag_on_action = false   # never star suspicious mail
+
+[categories.other]
+description = "Anything that clearly fits none of the other categories"

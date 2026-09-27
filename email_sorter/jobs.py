@@ -5,6 +5,7 @@ Jobs live in memory until the process restarts. Each runs in its own thread unde
 """
 from __future__ import annotations
 
+import contextvars
 import logging
 import threading
 import uuid
@@ -75,7 +76,8 @@ def start(box: Mailbox, kind: str, label: str, fn: Callable[[], object], request
         finally:
             job["finished"] = _now()
 
-    threading.Thread(target=work, name=f"job-{job['id']}", daemon=True).start()
+    # the job's thread inherits the request's context, e.g. the UI language of its messages
+    threading.Thread(target=contextvars.copy_context().run, args=(work,), name=f"job-{job['id']}", daemon=True).start()
     return job
 
 

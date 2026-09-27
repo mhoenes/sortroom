@@ -1,16 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Einstellungen · {{ box.name }}{% endblock %}
+{% block title %}{{ _('Settings') }} · {{ box.name }}{% endblock %}
 {% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text }}" data-tip="{{ text }}">?</span>{% endmacro %}
 {% block content %}
 <div class="head">
   <div class="title">
-    <h1>Einstellungen · {{ box.name }}</h1>
-    <div class="sub">Gespeichert in <span class="mono">{{ config_name }}</span> · Änderungen gelten ab dem nächsten Lauf</div>
+    <h1>{{ _('Settings') }} · {{ box.name }}</h1>
+    <div class="sub">{{ _('Saved in <span class="mono">%(file)s</span> · changes apply from the next run', file=config_name) }}</div>
   </div>
 </div>
 
 {% if not editable %}
-<div class="banner" role="status">Nur lesen: {{ config_name }} ist schreibgeschützt eingebunden. Änderungen bitte in der Datei vornehmen.</div>
+<div class="banner" role="status">{{ _('Read only: %(file)s is mounted read-only. Please make changes in the file.', file=config_name) }}</div>
 {% endif %}
 {% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
 
@@ -18,83 +18,83 @@
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <fieldset {% if not editable %}disabled{% endif %} class="stack">
     <section class="card stack">
-      <h2>Postfach</h2>
+      <h2>{{ _('Mailbox') }}</h2>
       <div class="grid cols-3">
-        <label class="f"><span class="lt">Anzeigename {{ help('Name des Postfachs in der Oberfläche.') }}</span>
+        <label class="f"><span class="lt">{{ _('Display name') }} {{ help(_('Name of the mailbox in the interface.')) }}</span>
           <input type="text" name="name" value="{{ form.name }}" maxlength="60" required>
         </label>
-        <label class="f"><span class="lt">IMAP-Server {{ help('Hostname des IMAP-Servers, z. B. imap.example.com. Die Verbindung ist immer verschlüsselt (SSL).') }}</span>
+        <label class="f"><span class="lt">{{ _('IMAP server') }} {{ help(_('Host name of the IMAP server, e.g. imap.example.com. The connection is always encrypted (SSL).')) }}</span>
           <input type="text" name="imap_host" value="{{ form.imap_host }}" required>
         </label>
-        <label class="f"><span class="lt">Port {{ help('Meist 993 für IMAP über SSL.') }}</span>
+        <label class="f"><span class="lt">{{ _('Port') }} {{ help(_('Usually 993 for IMAP over SSL.')) }}</span>
           <input type="number" name="imap_port" min="1" max="65535" step="1" value="{{ form.imap_port }}" required>
         </label>
-        <label class="f"><span class="lt">Posteingang {{ help('Ordner, aus dem neue Mails einsortiert werden. Meist INBOX.') }}</span>
+        <label class="f"><span class="lt">{{ _('Inbox') }} {{ help(_('Folder that new mails are sorted from. Usually INBOX.')) }}</span>
           <input type="text" name="source_folder" value="{{ form.source_folder }}">
         </label>
-        <div class="f"><span class="lt">Zugangsdaten {{ help('Benutzer und Passwort stehen aus Sicherheitsgründen nur in der .env-Datei; hier stehen die Namen der Variablen.') }}</span>
+        <div class="f"><span class="lt">{{ _('Login') }} {{ help(_('For security, user and password live only in the .env file; shown here are the names of the variables.')) }}</span>
           <span class="static mono">{{ cfg.imap_user_env }} · {{ cfg.imap_password_env }}</span>
         </div>
       </div>
     </section>
 
     <section class="card stack">
-      <h2>Einsortieren</h2>
+      <h2>{{ _('Sorting') }}</h2>
       <div class="grid cols-3">
-        <label class="f"><span class="lt">Mindest-Konfidenz {{ help('Nur wenn das Modell mindestens so sicher ist (0 bis 1), wird verschoben. Unsichere Mails bleiben im Posteingang und erscheinen unter „Zur Prüfung“.') }}</span>
+        <label class="f"><span class="lt">{{ _('Minimum confidence') }} {{ help(_('A mail is moved only when the model is at least this sure (0 to 1). Uncertain mails stay in the inbox and show up under "To review".')) }}</span>
           <input type="number" name="min_confidence" min="0" max="1" step="0.01" value="{{ form.min_confidence }}" required>
         </label>
-        <label class="f"><span class="lt">Stern bei Handlungsbedarf ab {{ help('Ab dieser Wahrscheinlichkeit für „du musst etwas tun“ bekommt eine Mail einen Stern – in Kategorien, in denen das eingeschaltet ist.') }}</span>
+        <label class="f"><span class="lt">{{ _('Star for needed action from') }} {{ help(_('From this probability for "you need to do something" a mail gets a star – in categories where that is switched on.')) }}</span>
           <input type="number" name="action_flag_threshold" min="0" max="1" step="0.01" value="{{ form.action_flag_threshold }}" required>
         </label>
-        <label class="f"><span class="lt">Befristetes Angebot ab {{ help('Ab dieser Wahrscheinlichkeit gilt eine Mail als befristet, ihr Ablaufdatum wird verfolgt.') }}</span>
+        <label class="f"><span class="lt">{{ _('Time-limited offer from') }} {{ help(_('From this probability a mail counts as time-limited and its expiry date is tracked.')) }}</span>
           <input type="number" name="expiry_threshold" min="0" max="1" step="0.01" value="{{ form.expiry_threshold }}" required>
         </label>
-        <label class="f"><span class="lt">Wartezeit in Stunden {{ help('Neue Mails bleiben so lange im Posteingang, bevor sie einsortiert werden – damit du sie zuerst dort siehst. 0 = sofort.') }}</span>
+        <label class="f"><span class="lt">{{ _('Waiting time in hours') }} {{ help(_('New mails stay in the inbox this long before they are sorted – so you see them there first. 0 = at once.')) }}</span>
           <input type="number" name="min_age_hours" min="0" max="336" step="any" value="{{ form.min_age_hours }}" required>
-          <label class="check small"><input type="checkbox" name="sort_read_at_once" value="1" {% if form.sort_read_at_once in (true, 'on', '1') %}checked{% endif %}>Gelesene sofort einsortieren
-            {{ help('Mails, die du schon gelesen hast, warten die Wartezeit nicht ab, sondern werden beim nächsten Lauf einsortiert. Ungelesene warten weiter.') }}</label>
+          <label class="check small"><input type="checkbox" name="sort_read_at_once" value="1" {% if form.sort_read_at_once in (true, 'on', '1') %}checked{% endif %}>{{ _('Sort read mails at once') }}
+            {{ help(_('Mails you have already read do not wait for the waiting time but are sorted in the next run. Unread ones keep waiting.')) }}</label>
         </label>
-        <label class="f"><span class="lt">Rückblick in Tagen {{ help('Ein normaler Lauf schaut nur auf Mails der letzten so vielen Tage. Ältere holt ein Backfill.') }}</span>
+        <label class="f"><span class="lt">{{ _('Look-back in days') }} {{ help(_('A normal run only looks at mails from this many days. A backfill fetches older ones.')) }}</span>
           <input type="number" name="lookback_days" min="1" max="365" step="1" value="{{ form.lookback_days }}" required>
         </label>
-        <label class="f"><span class="lt">Max. Mails pro Lauf {{ help('Obergrenze für Anfragen an das Modell je Lauf; begrenzt die Kosten, falls plötzlich sehr viele Mails ankommen. Absender-Regeln zählen nicht mit.') }}</span>
+        <label class="f"><span class="lt">{{ _('Max. mails per run') }} {{ help(_('Upper limit of model requests per run; limits the cost if suddenly very many mails arrive. Sender rules do not count.')) }}</span>
           <input type="number" name="max_per_run" min="1" max="5000" step="1" value="{{ form.max_per_run }}" required>
         </label>
-        <label class="f" style="grid-column:span 2"><span class="lt">Standard-Ordner für Abgelaufenes {{ help('Hierhin wandern befristete Angebote nach ihrem letzten gültigen Tag – außer eine Kategorie hat einen eigenen Ordner. Leer: nichts wird verschoben.') }}</span>
-          <input type="text" name="expired_folder" value="{{ form.expired_folder }}" placeholder="INBOX/Werbung/Abgelaufen">
+        <label class="f" style="grid-column:span 2"><span class="lt">{{ _('Default folder for expired mail') }} {{ help(_('Time-limited offers go here after their last valid day – unless a category has its own folder. Empty: nothing is moved.')) }}</span>
+          <input type="text" name="expired_folder" value="{{ form.expired_folder }}" placeholder="INBOX/…/{{ _('Expired') }}">
         </label>
       </div>
     </section>
     <section class="card stack">
-      <h2>Zeitplan</h2>
+      <h2>{{ _('Schedule') }}</h2>
       <div class="grid cols-3">
-        <div class="f"><span class="lt">Automatisch einsortieren {{ help('Sortroom startet selbst alle paar Minuten einen Lauf für dieses Postfach. Aus: Läufe nur von Hand unter „Wartung“ oder über die API.') }}</span>
-          <label class="check"><input type="checkbox" name="schedule_enabled" value="1" {% if form.schedule_enabled in (true, 'on', '1') %}checked{% endif %}>Zeitplan an</label>
+        <div class="f"><span class="lt">{{ _('Sort automatically') }} {{ help(_('Sortroom starts a run for this mailbox every few minutes by itself. Off: runs only by hand under "Maintenance" or via the API.')) }}</span>
+          <label class="check"><input type="checkbox" name="schedule_enabled" value="1" {% if form.schedule_enabled in (true, 'on', '1') %}checked{% endif %}>{{ _('Schedule on') }}</label>
         </div>
-        <label class="f"><span class="lt">Abstand in Minuten {{ help('Zeit zwischen zwei Läufen. Läuft gerade etwas für das Postfach, wird der Lauf übersprungen und zum nächsten Termin nachgeholt.') }}</span>
+        <label class="f"><span class="lt">{{ _('Interval in minutes') }} {{ help(_('Time between two runs. If something is running for the mailbox, the run is skipped and made up at the next slot.')) }}</span>
           <input type="number" name="schedule_minutes" min="1" max="1440" step="1" value="{{ form.schedule_minutes }}" required>
         </label>
-        <div class="f"><span class="lt">Status</span>
-          <span class="static">{% if not schedule.active %}Zeitplan in diesem Prozess abgeschaltet (SORTROOM_SCHEDULER)
-            {% elif not schedule.enabled %}aus
-            {% elif schedule.running %}Lauf läuft gerade
-            {% elif schedule.next %}nächster Lauf {{ schedule.next.strftime('%H:%M') }}
-            {% else %}startet in Kürze{% endif %}</span>
+        <div class="f"><span class="lt">{{ _('Status') }}</span>
+          <span class="static">{% if not schedule.active %}{{ _('Schedule switched off in this process (SORTROOM_SCHEDULER)') }}
+            {% elif not schedule.enabled %}{{ _('off') }}
+            {% elif schedule.running %}{{ _('A run is in progress') }}
+            {% elif schedule.next %}{{ _('next run %(time)s', time=schedule.next.strftime('%H:%M')) }}
+            {% else %}{{ _('starts shortly') }}{% endif %}</span>
         </div>
       </div>
     </section>
-    {% if editable %}<div class="actions"><button class="btn primary" type="submit">Einstellungen speichern</button></div>{% endif %}
+    {% if editable %}<div class="actions"><button class="btn primary" type="submit">{{ _('Save settings') }}</button></div>{% endif %}
   </fieldset>
 </form>
 
 {% macro rule_row(i, match, action) %}<tr>
-            <td><input type="text" name="match_{{ i }}" value="{{ match }}" aria-label="Absender enthält" placeholder="name@firma.de oder @firma.de"></td>
-            <td><select name="action_{{ i }}" aria-label="Ziel">
-              <option value="inbox" {% if action == 'inbox' %}selected{% endif %}>Im Posteingang lassen</option>
+            <td><input type="text" name="match_{{ i }}" value="{{ match }}" aria-label="{{ _('Sender contains') }}" placeholder="{{ _('name@company.com or @company.com') }}"></td>
+            <td><select name="action_{{ i }}" aria-label="{{ _('Target') }}">
+              <option value="inbox" {% if action == 'inbox' %}selected{% endif %}>{{ _('Leave in the inbox') }}</option>
               {% for key, c in cfg.categories.items() %}<option value="{{ key }}" {% if action == key %}selected{% endif %}>{{ c.label }}{% if c.folder %} → {{ c.folder|folder_label }}{% endif %}</option>{% endfor %}
             </select></td>
-            <td class="rule-del">{% if editable %}<button class="icon-btn rule-remove" type="button" aria-label="Regel entfernen" title="Regel entfernen">
+            <td class="rule-del">{% if editable %}<button class="icon-btn rule-remove" type="button" aria-label="{{ _('Remove rule') }}" title="{{ _('Remove rule') }}">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>{% endif %}</td>
           </tr>{% endmacro %}
 <form method="post" action="/ui/m/{{ box.id }}/settings/sender-rules" id="regeln">
@@ -104,12 +104,12 @@
   <fieldset {% if not editable %}disabled{% endif %} class="stack">
     <section class="card stack rules-box">
       <div>
-        <h2>Absender-Regeln {{ help('Mails dieser Absender entscheidet nicht das Modell: Sie bleiben im Posteingang oder gehen direkt in eine Kategorie. Treffer, wenn der Text in der Absenderadresse vorkommt, z. B. „@brother.com“. Die erste passende Regel gilt.') }}</h2>
-        <p class="muted hint">Die erste passende Regel gilt. Neue und entfernte Regeln werden erst mit „Regeln speichern“ übernommen.</p>
+        <h2>{{ _('Sender rules') }} {{ help(_('Mails from these senders are not decided by the model: they stay in the inbox or go straight into a category. A rule matches when its text is part of the sender address, e.g. "@brother.com". The first matching rule wins.')) }}</h2>
+        <p class="muted hint">{{ _('The first matching rule wins. New and removed rules only take effect with "Save rules".') }}</p>
       </div>
-      <p class="muted no-rules">Noch keine Regeln – alle Mails entscheidet das Modell.</p>
+      <p class="muted no-rules">{{ _('No rules yet – the model decides every mail.') }}</p>
       <div class="scroll-x"><table class="rules">
-        <thead><tr><th scope="col">Absender enthält</th><th scope="col">Ziel</th><th scope="col"><span class="sr-only">Entfernen</span></th></tr></thead>
+        <thead><tr><th scope="col">{{ _('Sender contains') }}</th><th scope="col">{{ _('Target') }}</th><th scope="col"><span class="sr-only">{{ _('Remove') }}</span></th></tr></thead>
         <tbody>
         {% for match, action in rules %}
           {{ rule_row(loop.index0, match, action) }}
@@ -119,16 +119,16 @@
       {% if editable %}
       <template id="rule-row">{{ rule_row('__i__', '', 'inbox') }}</template>
       <div class="actions">
-        <button class="btn rule-add" type="button">+ Regel hinzufügen</button>
-        <button class="btn primary" type="submit">Regeln speichern</button>
-        <span class="muted hint unsaved" hidden>Noch nicht gespeichert</span>
+        <button class="btn rule-add" type="button">{{ _('+ Add rule') }}</button>
+        <button class="btn primary" type="submit">{{ _('Save rules') }}</button>
+        <span class="muted hint unsaved" hidden>{{ _('Not saved yet') }}</span>
       </div>
       {% endif %}
     </section>
   </fieldset>
 </form>
 <script>
-  // add and remove rule rows in place; nothing is saved until "Regeln speichern"
+  // add and remove rule rows in place; nothing is saved until "Save rules"
   (() => {
     const form = document.getElementById('regeln'), tpl = document.getElementById('rule-row');
     if (!tpl) return;

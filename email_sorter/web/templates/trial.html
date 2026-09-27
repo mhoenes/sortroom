@@ -1,46 +1,46 @@
 {% extends "base.html" %}
-{% block title %}Test · {{ cat_label }}{% endblock %}
+{% block title %}{{ _('Test') }} · {{ cat_label }}{% endblock %}
 {% block head %}{% if job.status == 'running' %}<meta http-equiv="refresh" content="2">{% endif %}{% endblock %}
 {% block content %}
 <div class="head">
   <div class="title">
-    <h1>Test: {{ cat_label }}{% if job.new %} (neu){% endif %}</h1>
-    <div class="sub">Das Modell ordnet bereits sortierte Mails mit der neuen Beschreibung ein · nichts wird verschoben oder gespeichert</div>
+    <h1>{{ _('Test: %(category)s', category=cat_label) }}{% if job.new %} {{ _('(new)') }}{% endif %}</h1>
+    <div class="sub">{{ _('The model files already sorted mails with the new description · nothing is moved or saved') }}</div>
   </div>
-  <a class="btn" href="/ui/m/{{ box.id }}/categories?{{ 'new=1' if job.new else 'cat=' ~ job.key }}">Zurück</a>
+  <a class="btn" href="/ui/m/{{ box.id }}/categories?{{ 'new=1' if job.new else 'cat=' ~ job.key }}">{{ _('Back') }}</a>
 </div>
 
 <section class="card stack">
-  <h2>Getestete Beschreibung</h2>
+  <h2>{{ _('Tested description') }}</h2>
   <p class="quote">{{ job.description }}</p>
 </section>
 
 {% if job.status == 'running' %}
-<div class="banner ok" role="status">Test läuft … {{ job.done }}{% if job.total %} von {{ job.total }}{% endif %} Mails eingeordnet. Die Seite aktualisiert sich selbst.</div>
+<div class="banner ok" role="status">{{ _('Test running … %(done)s of %(total)s mails filed. The page refreshes by itself.', done=job.done, total=job.total) if job.total else _('Test running … %(done)s mails filed. The page refreshes by itself.', done=job.done) }}</div>
 {% elif job.status == 'failed' %}
-<div class="banner err" role="alert">Test fehlgeschlagen: {{ job.error }}</div>
+<div class="banner err" role="alert">{{ _('Test failed: %(error)s', error=job.error) }}</div>
 {% else %}
 <div class="grid cols-4">
-  <div class="card kpi"><span class="k">Getestet</span><span class="v">{{ s.tested }}</span><span class="d">{{ s.errors }} nicht lesbar · {{ job.cost|usd(4) }}</span></div>
-  <div class="card kpi"><span class="k">Bleiben in {{ cat_label }}</span><span class="v">{{ s.kept }} <small>von {{ s.own }}</small></span><span class="d">bisher in dieser Kategorie</span></div>
-  <div class="card kpi"><span class="k">Würden wechseln</span><span class="v">{{ s.lost|length }}</span><span class="d">aus {{ cat_label }} in eine andere</span></div>
-  <div class="card kpi"><span class="k">Kämen neu dazu</span><span class="v">{{ s.gained|length }}</span><span class="d">aus anderen Kategorien</span></div>
+  <div class="card kpi"><span class="k">{{ _('Tested') }}</span><span class="v">{{ s.tested }}</span><span class="d">{{ _('%(n)s unreadable', n=s.errors) }} · {{ job.cost|usd(4) }}</span></div>
+  <div class="card kpi"><span class="k">{{ _('Stay in %(category)s', category=cat_label) }}</span><span class="v">{{ s.kept }} <small>{{ _('of %(n)s', n=s.own) }}</small></span><span class="d">{{ _('so far in this category') }}</span></div>
+  <div class="card kpi"><span class="k">{{ _('Would change') }}</span><span class="v">{{ s.lost|length }}</span><span class="d">{{ _('from %(category)s to another one', category=cat_label) }}</span></div>
+  <div class="card kpi"><span class="k">{{ _('Would join') }}</span><span class="v">{{ s.gained|length }}</span><span class="d">{{ _('from other categories') }}</span></div>
 </div>
 
 <section class="card" style="padding:6px 12px">
   <div class="scroll-x"><table>
-    <thead><tr><th scope="col">Eingang</th><th scope="col">Absender</th><th scope="col">Betreff</th><th scope="col">Bisher</th><th scope="col">Mit Entwurf</th><th scope="col" class="num">Konfidenz</th></tr></thead>
+    <thead><tr><th scope="col">{{ _('Received') }}</th><th scope="col">{{ _('Sender') }}</th><th scope="col">{{ _('Subject') }}</th><th scope="col">{{ _('So far') }}</th><th scope="col">{{ _('With draft') }}</th><th scope="col" class="num">{{ _('Confidence') }}</th></tr></thead>
     <tbody>
     {% for r in rows %}
       <tr {% if r.after and r.after != r.before %}class="changed"{% endif %}>
-        <td class="mono" style="white-space:nowrap">{{ r.received|de_dt }}</td>
+        <td class="mono" style="white-space:nowrap">{{ r.received|dt }}</td>
         <td class="clip" style="width:20%">{{ r.sender }}</td>
-        <td class="clip" style="width:34%">{{ r.subject or '(ohne Betreff)' }}</td>
+        <td class="clip" style="width:34%">{{ r.subject or _('(no subject)') }}</td>
         <td><span class="pill">{{ label(r.before) }}</span></td>
         <td>{% if r.error %}<span class="muted">{{ r.error }}</span>
-            {% elif r.after == r.before %}<span class="muted">unverändert</span>
+            {% elif r.after == r.before %}<span class="muted">{{ _('unchanged') }}</span>
             {% else %}<span class="pill {{ 'ok' if r.after == job.key else 'warn' }}">{{ label(r.after) }}</span>{% endif %}</td>
-        <td class="num">{{ r.confidence|de_conf }}</td>
+        <td class="num">{{ r.confidence|conf }}</td>
       </tr>
     {% endfor %}
     </tbody>
@@ -48,8 +48,8 @@
 </section>
 
 <div class="actions">
-  <a class="btn primary" href="/ui/m/{{ box.id }}/categories?{{ 'new=1&' if job.new }}cat={{ job.key }}&draft={{ job.id }}">Entwurf ins Formular übernehmen</a>
-  <span class="muted" style="font-size:13px">Gespeichert wird erst mit „Speichern“ im Formular.</span>
+  <a class="btn primary" href="/ui/m/{{ box.id }}/categories?{{ 'new=1&' if job.new }}cat={{ job.key }}&draft={{ job.id }}">{{ _('Put the draft into the form') }}</a>
+  <span class="muted" style="font-size:13px">{{ _('Nothing is saved until "Save" in the form.') }}</span>
 </div>
 {% endif %}
 {% endblock %}

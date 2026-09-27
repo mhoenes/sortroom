@@ -10,3 +10,7 @@ model = "typesafe/jev-1.13"
 max_body_chars = 3000       # body text sent to the model is cut to this length
 timeout_seconds = 20
 min_interval_seconds = 0    # pause between requests, for providers that limit requests per minute
+
+# Language of the admin UI ("en" or "de", default "en"); also under Globale Einstellungen / Global settings.
+# [ui]
+# language = "de"

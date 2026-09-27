@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from email_sorter import scheduler
-from email_sorter.config import EXAMPLE_MAILBOX, ConfigError, _read_toml, config_from_raw
+from email_sorter.config import EXAMPLE_MAILBOXES, ConfigError, _read_toml, config_from_raw
 from email_sorter.runtime import BASE_DIR
 from support import example_config
 
@@ -108,7 +108,7 @@ def test_scheduled_run_skips_a_busy_mailbox(tmp_path, monkeypatch):
 
 
 def test_schedule_settings_in_config():
-    raw = {**_read_toml(EXAMPLE_MAILBOX), "classifier": _read_toml(BASE_DIR / "config" / "config.toml")["classifier"]}
+    raw = {**_read_toml(EXAMPLE_MAILBOXES["de"]), "classifier": _read_toml(BASE_DIR / "config" / "config.toml")["classifier"]}
     cfg = config_from_raw(raw, "x")
     assert cfg.schedule_enabled and cfg.schedule_minutes == 10          # on by default
     cfg = config_from_raw({**raw, "schedule": {"enabled": False, "interval_minutes": 30}}, "x")

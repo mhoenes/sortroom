@@ -95,7 +95,7 @@ _FLAGS = re.compile(rb"UID (\d+) FLAGS \(([^)]*)\)|FLAGS \(([^)]*)\) UID (\d+)")
 
 
 def seen_uids(mb: MailBox, uids: list[str]) -> set[str]:
-    """UIDs the user has already read (IMAP \Seen). Fetching FLAGS does not change them."""
+    r"""UIDs the user has already read (IMAP \Seen). Fetching FLAGS does not change them."""
     seen: set[str] = set()
     for chunk in _chunks(uids):
         typ, data = mb.client.uid("FETCH", ",".join(chunk), "(FLAGS)")
@@ -555,7 +555,7 @@ def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int 
         ) as mb:
             since = date.today() - timedelta(days=cfg.lookback_days)
             try:
-                outcomes, failed, _ = classify_new(mb, cfg, classifier, store, limit, since,
+                outcomes, failed, _moving = classify_new(mb, cfg, classifier, store, limit, since,
                                                    on_outcome=report.write if report else None)
             except ClassifierAuthError as e:
                 return _finish(store, "run", None, started, _auth_failed(cfg, e))

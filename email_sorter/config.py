@@ -184,7 +184,8 @@ def _sender_rules(raw: dict, categories: dict[str, Category], where: str) -> tup
 
 _MAILBOX_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
 # categories, rules and schedule a new mailbox starts from when there is none to copy
-EXAMPLE_MAILBOX = Path(__file__).with_name("example_mailbox.toml")
+# standard categories for new mailboxes, one set per UI language
+EXAMPLE_MAILBOXES = {lang: Path(__file__).with_name(f"example_mailbox.{lang}.toml") for lang in ("en", "de")}
 
 
 @dataclass(frozen=True)

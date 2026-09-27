@@ -6,42 +6,42 @@
 <div class="head">
   <div class="title">
     <h1>{{ job.label }}</h1>
-    <div class="sub">Gestartet {{ job.started|de_dt(true) }}{% if job.finished %} · fertig {{ job.finished|de_dt(true) }}{% endif %} · {% include "_job_status.html" %}</div>
+    <div class="sub">{{ _('Started %(when)s', when=job.started|dt(true)) }}{% if job.finished %} · {{ _('finished %(when)s', when=job.finished|dt(true)) }}{% endif %} · {% include "_job_status.html" %}</div>
   </div>
-  <a class="btn" href="/ui/m/{{ box.id }}/maintenance">Zur Wartung</a>
+  <a class="btn" href="/ui/m/{{ box.id }}/maintenance">{{ _('To maintenance') }}</a>
 </div>
 
-{% if job.status == 'running' %}<div class="banner ok" role="status">Läuft … die Seite aktualisiert sich selbst.</div>{% endif %}
-{% if job.status == 'rejected' %}<div class="banner" role="status">Nicht gestartet: Für dieses Postfach lief bereits etwas.</div>{% endif %}
+{% if job.status == 'running' %}<div class="banner ok" role="status">{{ _('Running … the page refreshes by itself.') }}</div>{% endif %}
+{% if job.status == 'rejected' %}<div class="banner" role="status">{{ _('Not started: something was already running for this mailbox.') }}</div>{% endif %}
 {% if job.error %}<div class="banner err" role="alert">{{ job.error }}</div>{% endif %}
 
 {% set r = job.result %}
 {% if r and r.classified is defined %}
 <div class="grid cols-4">
-  <div class="card kpi"><span class="k">Verarbeitet</span><span class="v">{{ r.classified|de_num }}</span><span class="d">{{ 'echt' if r.live else 'Probelauf – nichts geändert' }}</span></div>
-  <div class="card kpi"><span class="k">{{ 'Verschoben' if r.live else 'Würde verschieben' }}</span><span class="v">{{ r.moved|de_num }}</span><span class="d">{{ r.flagged|de_num }} mit Stern · {{ r.expired_moved|de_num }} abgelaufen</span></div>
-  <div class="card kpi"><span class="k">Fehler</span><span class="v">{{ r.failed|de_num }}</span><span class="d">werden beim nächsten Lauf erneut versucht</span></div>
-  <div class="card kpi"><span class="k">Kosten</span><span class="v mono">{{ r.cost_usd|usd(4) }}</span><span class="d">{% if r.report %}Bericht: <span class="mono">{{ r.report.replace('\\', '/').split('/')[-1] }}</span>{% endif %}</span></div>
+  <div class="card kpi"><span class="k">{{ _('Processed') }}</span><span class="v">{{ r.classified|num }}</span><span class="d">{{ _('for real') if r.live else _('Dry run – nothing changed') }}</span></div>
+  <div class="card kpi"><span class="k">{{ _('Moved') if r.live else _('Would move') }}</span><span class="v">{{ r.moved|num }}</span><span class="d">{{ _('%(flagged)s starred · %(expired)s expired', flagged=r.flagged|num, expired=r.expired_moved|num) }}</span></div>
+  <div class="card kpi"><span class="k">{{ _('Errors') }}</span><span class="v">{{ r.failed|num }}</span><span class="d">{{ _('are retried in the next run') }}</span></div>
+  <div class="card kpi"><span class="k">{{ _('Cost') }}</span><span class="v mono">{{ r.cost_usd|usd(4) }}</span><span class="d">{% if r.report %}{{ _('Report:') }} <span class="mono">{{ r.report.replace('\\', '/').split('/')[-1] }}</span>{% endif %}</span></div>
 </div>
 {% if r.error %}<div class="banner err" role="alert">{{ r.error }}</div>{% endif %}
 {% elif r %}
-<div class="banner {{ 'ok' if r.ok else 'err' }}" role="status">{{ r.summary if r.summary else ('Alles in Ordnung.' if r.ok else 'Es gab Fehler – siehe Protokoll.') }}</div>
+<div class="banner {{ 'ok' if r.ok else 'err' }}" role="status">{{ r.summary if r.summary else (_('All good.') if r.ok else _('There were errors – see the log.')) }}</div>
 {% endif %}
 
 {% if rerun is not none %}
 <form class="card rerun" method="post" action="/ui/m/{{ box.id }}/maintenance/{{ job.kind }}">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   {% for k, v in rerun.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
-  <div class="grow"><b>Probelauf abgeschlossen – nichts wurde geändert.</b>
-    <span class="muted">Passt das Ergebnis, lässt sich dieselbe Aufgabe mit denselben Angaben jetzt echt ausführen.</span></div>
+  <div class="grow"><b>{{ _('Dry run finished – nothing was changed.') }}</b>
+    <span class="muted">{{ _('If the result looks right, the same task can now run for real with the same settings.') }}</span></div>
   <button class="btn {{ 'danger' if risky else 'primary' }}" type="submit" name="live" value="1"
-    {% if risky and not editable %}disabled title="Einstellungen schreibgeschützt"{% endif %}
-    {% if risky %}onclick="return confirm('Wirklich ausführen?')"{% endif %}>Jetzt ausführen</button>
+    {% if risky and not editable %}disabled title="{{ _('Settings are read-only') }}"{% endif %}
+    {% if risky %}onclick='return confirm({{ _("Really run it?")|tojson }})'{% endif %}>{{ _('Run for real now') }}</button>
 </form>
 {% endif %}
 
 <section class="card stack">
-  <h2>Protokoll</h2>
-  {% if job.log %}<pre class="log">{{ job.log|join('\n') }}</pre>{% else %}<div class="empty">Noch keine Einträge.</div>{% endif %}
+  <h2>{{ _('Log') }}</h2>
+  {% if job.log %}<pre class="log">{{ job.log|join('\n') }}</pre>{% else %}<div class="empty">{{ _('No entries yet.') }}</div>{% endif %}
 </section>
 {% endblock %}
