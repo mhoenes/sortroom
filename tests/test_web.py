@@ -238,4 +238,5 @@ def test_sidebar_lists_the_mailboxes(client):
     assert 'href="/ui/m/gmail/mails"' in html                   # switching mailboxes keeps the page
     assert 'href="/ui/m/privat/mails?uncertain=1&amp;period=30d"' in html and "1 Mail zur Prüfung" in html  # badge
     assert 'title="Noch kein Lauf"' in html                     # status dot explained
-    assert '<form method="post" action="/logout"><button type="submit">Abmelden</button></form>' in html
+    logout = html.split('<form method="post" action="/logout">', 1)[1].split("</form>", 1)[0]
+    assert "<svg" in logout and logout.rstrip().endswith("Abmelden</button>")  # a nav entry with an icon
