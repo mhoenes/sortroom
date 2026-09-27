@@ -238,8 +238,16 @@ def all_mailboxes(request: Request):
         totals["today"] += st.sorted_today
         totals["uncertain"] += st.uncertain
         totals["cost"] += st.cost_month
+    schedules = [c["schedule"] for c in cards]
+    status = {  # the page's subtitle: what is going on across all mailboxes
+        "running": [c["box"].name for c in cards if c["busy"] or c["schedule"]["running"]],
+        "errors": sum(1 for c in cards if c["stats"].errors_today),
+        "next": min((s["next"] for s in schedules if s["enabled"] and s["active"] and s["next"]), default=None),
+        "scheduled": any(s["enabled"] and s["active"] for s in schedules),
+        "process_off": bool(schedules) and not any(s["active"] for s in schedules),
+    }
     return templates.TemplateResponse(request, "mailboxes.html", {
-        **_sidebar(request, boxes, None, "all"), "cards": cards, "totals": totals})
+        **_sidebar(request, boxes, None, "all"), "cards": cards, "totals": totals, "status": status})
 
 
 @router.get("/ui/m/{box_id}", response_class=HTMLResponse, dependencies=[Depends(require_login)])

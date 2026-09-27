@@ -4,7 +4,17 @@
 <div class="head">
   <div class="title">
     <h1>{{ _('All mailboxes') }}</h1>
-    <div class="sub">{{ _('Every mailbox has its own categories, rules and log') }}</div>
+    <div class="sub">{% if not cards %}{{ _('Every mailbox has its own categories, rules and log') }}
+      {%- else %}
+      {%- if status.running %}{{ _('Running: %(names)s', names=status.running|join(', ')) }}{% endif %}
+      {%- if status.errors %}{% if status.running %} · {% endif %}<span class="sub-warn">{{ ngettext('%(num)s mailbox with errors today', '%(num)s mailboxes with errors today', status.errors) }}</span>{% endif %}
+      {%- if not status.running %}{% if status.errors %} · {% endif %}
+        {%- if status.next %}{{ _('Next run %(time)s', time=status.next.strftime('%H:%M')) }}
+        {%- elif status.scheduled %}{{ _('Schedule starts shortly') }}
+        {%- elif status.process_off %}{{ _('Schedule switched off in this process') }}
+        {%- else %}{{ _('Schedule off') }}{% endif %}
+      {%- endif %}
+      {%- endif %}</div>
   </div>
   <a class="btn" href="/ui/mailboxes/new">{{ _('Add mailbox') }}</a>
 </div>
