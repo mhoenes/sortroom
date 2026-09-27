@@ -18,13 +18,13 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from .. import jobs
-from ..config import INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, credential_sources, load_credentials
+from ..config import INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, load_credentials, stored_credentials
 from ..classifier import ClassifierAuthError
 from ..i18n import _
 from ..trial import OTHER_SAMPLE, OWN_SAMPLE, run_trial
 from . import _box, _sidebar, queries, require_login, router, templates
 from .editing import (EditError, delete_category, save_category, save_sender_rules,
-                      save_settings, secrets_writable, writable, write_secrets)
+                      save_settings, secrets_writable, writable)
 
 log = logging.getLogger(__name__)
 
@@ -72,15 +72,13 @@ def _shared_path(request: Request):
 
 
 def credential_view(box: Mailbox) -> tuple[dict, str | None]:
-    """Where each credential of a mailbox comes from, for the pages: {"source", "env"} per
-    credential - never a password or key - plus the stored user; and an error, if any."""
+    """For the pages: whether each credential of a mailbox is set - never a password or key -
+    plus the stored user; and an error, if any."""
     try:
-        found = credential_sources(box)
+        found = stored_credentials(box)
     except ConfigError as e:
-        return {k: {"source": "", "env": ""} for k in ("imap_user", "imap_password", "classifier_api_key")}, str(e)
-    view = {k: {"source": s.source, "env": s.env} for k, s in found.items()}
-    view["stored_user"] = found["imap_user"].value if found["imap_user"].source == "file" else ""
-    return view, None
+        return {"imap_user": False, "imap_password": False, "classifier_api_key": False, "stored_user": ""}, str(e)
+    return {**{k: bool(v) for k, v in found.items()}, "stored_user": found["imap_user"]}, None
 
 
 def without_secrets(form: dict, *names: str) -> tuple[dict, bool]:
@@ -277,21 +275,6 @@ async def settings_save(request: Request, box_id: str):
     else:
         _flash(request, _("Settings saved. They apply from the next run."))
     return RedirectResponse(f"/ui/m/{new_id}/settings", status_code=303)
-
-
-@router.post("/ui/m/{box_id}/login/clear", dependencies=[Depends(require_login)])
-async def login_clear(request: Request, box_id: str):
-    await _form(request)
-    _all_boxes, box = _box(request, box_id)
-    try:
-        if not secrets_writable(box.secrets_path):
-            raise EditError(_("%(file)s is not writable, so the login cannot be stored.", file=SECRETS_FILE))
-        write_secrets(box.secrets_path, "imap", {"user": None, "password": None})
-    except (EditError, ConfigError) as e:
-        _flash(request, str(e), "err")
-    else:
-        _flash(request, _("Stored login removed."))
-    return RedirectResponse(f"/ui/m/{box.id}/settings", status_code=303)
 
 
 @router.post("/ui/m/{box_id}/settings/sender-rules", response_class=HTMLResponse,

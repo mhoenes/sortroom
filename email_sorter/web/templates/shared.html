@@ -34,10 +34,8 @@
           <input type="text" name="model" value="{{ form.model }}" required class="mono"></label>
         <label class="f" style="grid-column:span 2"><span class="lt">{{ _('API key') }} {{ help(_('Stored in %(file)s next to %(config)s, readable only by Sortroom, and never shown again. Leave empty to keep the current one.', file=secrets_file, config=config_name)) }}</span>
           <input type="password" name="api_key" autocomplete="new-password" spellcheck="false" {% if not key_writable %}disabled{% endif %}
-            {% if key.source %}placeholder="{{ _('unchanged') }}"{% endif %}>
-          <span class="hint">{% if retype %}<span class="pill warn">{{ _('Please enter it again') }}</span>{% else %}{{ source(key) }}{% endif %}
-            {% if key.source == 'file' and key_writable and editable %}<button class="linkish" type="submit" form="key-clear"
-              onclick='return confirm({{ _("Remove the stored API key?")|tojson }})'>{{ _('Remove') }}</button>{% endif %}</span>
+            {% if key_set %}placeholder="{{ _('unchanged') }}"{% endif %}>
+          <span class="hint">{% if retype %}<span class="pill warn">{{ _('Please enter it again') }}</span>{% else %}{{ source(key_set) }}{% endif %}</span>
         </label>
         <label class="f"><span class="lt">{{ _('Mail text length') }} {{ help(_('This many characters of the mail text are sent to the model. More text can be more accurate but costs a bit more.')) }}</span>
           <input type="number" name="max_body_chars" min="200" max="20000" step="1" value="{{ form.max_body_chars }}" required></label>
@@ -50,5 +48,4 @@
     {% if editable %}<div class="actions"><button class="btn primary" type="submit">{{ _('Save') }}</button></div>{% endif %}
   </fieldset>
 </form>
-<form method="post" action="/ui/settings/key/clear" id="key-clear" hidden><input type="hidden" name="csrf" value="{{ csrf }}"></form>
 {% endblock %}

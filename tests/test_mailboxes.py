@@ -19,8 +19,6 @@ name = "{name}"
 
 [imap]
 host = "{host}"
-user_env = "{user_env}"
-password_env = "{pw_env}"
 
 [rules]
 min_confidence = 0.7
@@ -40,14 +38,14 @@ description = "B"
 def _box(root: Path, box_id: str, **kw):
     d = root / "mailboxes" / box_id
     d.mkdir(parents=True)
-    vals = {"name": box_id.title(), "host": "imap.example.org", "user_env": "IMAP_USER", "pw_env": "IMAP_PASSWORD"}
+    vals = {"name": box_id.title(), "host": "imap.example.org"}
     (d / "mailbox.toml").write_text(MAILBOX.format(**{**vals, **kw}), encoding="utf-8")
 
 
 def test_mailbox_folders_share_classifier_and_have_own_settings(tmp_path):
     (tmp_path / "config.toml").write_text(SHARED, encoding="utf-8")
     _box(tmp_path, "privat", name="Privat", host="imap.example.com")
-    _box(tmp_path, "gmail", name="Gmail", host="imap.gmail.com", user_env="GMAIL_USER", pw_env="GMAIL_PASSWORD")
+    _box(tmp_path, "gmail", name="Gmail", host="imap.gmail.com")
     boxes = load_mailboxes(tmp_path, tmp_path / "config.toml")
     assert list(boxes) == ["gmail", "privat"]
     assert boxes["gmail"].name == "Gmail" and boxes["gmail"].cfg.imap_host == "imap.gmail.com"
@@ -57,21 +55,24 @@ def test_mailbox_folders_share_classifier_and_have_own_settings(tmp_path):
 
 
 def test_mailbox_sections_in_the_shared_config_are_ignored(tmp_path):
-    (tmp_path / "config.toml").write_text(SHARED + MAILBOX.format(name="x", host="h", user_env="U", pw_env="P"),
+    (tmp_path / "config.toml").write_text(SHARED + MAILBOX.format(name="x", host="h"),
                                           encoding="utf-8")
     assert load_mailboxes(tmp_path, tmp_path / "config.toml") == {}
     _box(tmp_path, "privat")
     assert list(load_mailboxes(tmp_path, tmp_path / "config.toml")) == ["privat"]
 
 
-def test_each_mailbox_reads_its_own_login(tmp_path, monkeypatch):
+def test_each_mailbox_reads_its_own_login(tmp_path):
+    from email_sorter.web.editing import write_secrets
     (tmp_path / "config.toml").write_text(SHARED, encoding="utf-8")
-    _box(tmp_path, "gmail", user_env="GMAIL_USER", pw_env="GMAIL_PASSWORD")
-    monkeypatch.setenv("GMAIL_USER", "me@gmail.com")
-    monkeypatch.setenv("GMAIL_PASSWORD", "app-pw")
-    monkeypatch.setenv("CLASSIFIER_API_KEY", "k")
-    creds = load_credentials(load_mailboxes(tmp_path, tmp_path / "config.toml")["gmail"])
-    assert (creds.imap_user, creds.imap_password) == ("me@gmail.com", "app-pw")
+    write_secrets(tmp_path / "secrets.toml", "classifier", {"api_key": "k"})
+    for box_id, user in (("gmail", "me@gmail.com"), ("privat", "me@example.org")):
+        _box(tmp_path, box_id)
+        write_secrets(tmp_path / "mailboxes" / box_id / "secrets.toml", "imap", {"user": user, "password": box_id})
+    boxes = load_mailboxes(tmp_path, tmp_path / "config.toml")
+    creds = load_credentials(boxes["gmail"])
+    assert (creds.imap_user, creds.imap_password, creds.classifier_api_key) == ("me@gmail.com", "gmail", "k")
+    assert load_credentials(boxes["privat"]).imap_user == "me@example.org"
 
 
 def test_classifier_in_a_mailbox_file_is_rejected(tmp_path):
@@ -95,12 +96,9 @@ def test_no_mailbox_yet(tmp_path):
     assert load_mailboxes(tmp_path, tmp_path / "config.toml") == {}
 
 
-def test_old_config_section_gets_a_clear_message(tmp_path):
-    (tmp_path / "config.toml").write_text(SHARED.replace("[classifier]", "[jev]"), encoding="utf-8")
-    with pytest.raises(ConfigError, match=r"\[jev\] is now called \[classifier\].*CLASSIFIER_API_KEY"):
-        load_mailboxes(tmp_path, tmp_path / "config.toml")
-    (tmp_path / "config.toml").write_text(SHARED + 'api_key_env = "OPENROUTER_API_KEY"\n', encoding="utf-8")
-    with pytest.raises(ConfigError, match="no api_key_env any more"):
+def test_shared_config_needs_the_classifier(tmp_path):
+    (tmp_path / "config.toml").write_text(SHARED.replace("[classifier]", "[model]"), encoding="utf-8")
+    with pytest.raises(ConfigError, match=r"missing \[classifier\]"):
         load_mailboxes(tmp_path, tmp_path / "config.toml")
 
 

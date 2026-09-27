@@ -252,10 +252,10 @@ def test_read_only_mailbox_page(client, setup):
         os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
 
 
-def test_trial_job_page(client, monkeypatch):
-    monkeypatch.setenv("IMAP_USER", "u")
-    monkeypatch.setenv("IMAP_PASSWORD", "p")
-    monkeypatch.setenv("CLASSIFIER_API_KEY", "k")
+def test_trial_job_page(client, setup, monkeypatch):
+    from email_sorter.web.editing import write_secrets
+    write_secrets(setup / "secrets.toml", "classifier", {"api_key": "k"})
+    write_secrets(setup / "mailboxes" / "privat" / "secrets.toml", "imap", {"user": "u", "password": "p"})
     rows = [trial.TrialRow(None, "a@b", "Rabatt", "werbung", "werbung", 0.9),
             trial.TrialRow(None, "c@d", "Rechnung", "finanzen", "werbung", 0.6),
             trial.TrialRow(None, "e@f", "Weg", "werbung", error="nicht mehr im Ordner")]

@@ -13,8 +13,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from .. import jobs
 from ..check import check
 from .. import i18n
-from ..config import (CLASSIFIER_KEY_ENV, EXAMPLE_MAILBOXES, INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox,
-                      Secret, _read_toml, classifier_key, load_credentials)
+from ..config import (EXAMPLE_MAILBOXES, INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, _read_toml,
+                      classifier_key, load_credentials)
 from ..i18n import _
 from ..maintenance import relocate_category, rename_category, rename_folder
 from ..manual import ManualError, move_mail
@@ -25,7 +25,7 @@ from ..sorter import RunResult, expired_target, run, run_backfill, run_recheck_e
 from ..store import Store
 from . import _box, _boxes, _sidebar, queries, require_login, router
 from .editing import (EditError, add_sender_rule, can_add_mailbox, create_mailbox, rename_category_key,
-                      rename_folder_refs, save_shared, secrets_writable, shared_writable, writable, write_secrets)
+                      rename_folder_refs, save_shared, secrets_writable, shared_writable, writable)
 from .editor import _flash, _form, _page, _shared_path, credential_view, form_number, without_secrets
 
 log = logging.getLogger(__name__)
@@ -317,9 +317,9 @@ def _shared_page(request: Request, form: dict | None = None, error: str | None =
     path = _shared_path(request)
     secrets = path.with_name(SECRETS_FILE)
     try:
-        key, key_error = classifier_key(secrets), None
+        key_set, key_error = bool(classifier_key(secrets)), None
     except ConfigError as e:
-        key, key_error = Secret("", "", CLASSIFIER_KEY_ENV), str(e)
+        key_set, key_error = False, str(e)
     if form is None:
         classifier = _read_toml(path)["classifier"]
         form = {"endpoint": classifier.get("endpoint", ""), "model": classifier.get("model", ""),
@@ -330,7 +330,7 @@ def _shared_page(request: Request, form: dict | None = None, error: str | None =
     return _page(request, "shared.html", {
         **_sidebar(request, boxes, None, "shared"), "form": form, "error": error, "editable": shared_writable(path),
         "config_name": path.name, "languages": i18n.LANGUAGES, "secrets_file": SECRETS_FILE, "retype": retype,
-        "key": {"source": key.source, "env": key.env}, "key_error": key_error,
+        "key_set": key_set, "key_error": key_error,
         "key_writable": secrets_writable(secrets)}, status)
 
 
@@ -348,19 +348,4 @@ async def shared_settings_save(request: Request):
         form, retype = without_secrets(form, "api_key")
         return _shared_page(request, form=form, error=str(e), status=422, retype=retype)
     _flash(request, _("Saved. Applies to all mailboxes from the next run."))
-    return RedirectResponse("/ui/settings", status_code=303)
-
-
-@router.post("/ui/settings/key/clear", dependencies=[Depends(require_login)])
-async def shared_key_clear(request: Request):
-    await _form(request)
-    secrets = _shared_path(request).with_name(SECRETS_FILE)
-    try:
-        if not secrets_writable(secrets):
-            raise EditError(_("%(file)s is not writable, so the API key cannot be stored.", file=SECRETS_FILE))
-        write_secrets(secrets, "classifier", {"api_key": None})
-    except (EditError, ConfigError) as e:
-        _flash(request, str(e), "err")
-    else:
-        _flash(request, _("Stored API key removed."))
     return RedirectResponse("/ui/settings", status_code=303)

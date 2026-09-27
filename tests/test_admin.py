@@ -12,20 +12,19 @@ from email_sorter.classifier import Decision
 from email_sorter.sorter import RunResult
 from email_sorter.store import Store
 from email_sorter.web import admin
-from email_sorter.web.editing import (EditError, rename_category_key, rename_folder_refs, save_sender_rules)
+from email_sorter.web.editing import (EditError, rename_category_key, rename_folder_refs, save_sender_rules,
+                                      write_secrets)
 
 from test_editing import MAILBOX, PASSWORD, SHARED
 
-ENV = {"IMAP_USER": "u", "IMAP_PASSWORD": "p", "CLASSIFIER_API_KEY": "k"}
-
 
 @pytest.fixture
-def setup(tmp_path, monkeypatch):
-    for k, v in ENV.items():
-        monkeypatch.setenv(k, v)
+def setup(tmp_path):
     (tmp_path / "config.toml").write_text(SHARED, encoding="utf-8")
+    write_secrets(tmp_path / "secrets.toml", "classifier", {"api_key": "k"})
     box_dir = tmp_path / "mailboxes" / "privat"
     box_dir.mkdir(parents=True)
+    write_secrets(box_dir / "secrets.toml", "imap", {"user": "u", "password": "p"})
     (box_dir / "mailbox.toml").write_text(MAILBOX.replace(
         'folder = "INBOX/Werbung"', 'folder = "INBOX/Werbung"\nexpired_folder = "INBOX/Werbung/Alt"'), encoding="utf-8")
     store = Store(box_dir / "data" / "state.db")
@@ -137,7 +136,7 @@ def test_maintenance_page_and_run_job(client, monkeypatch):
 
     monkeypatch.setattr(admin, "run", fake_run)
     html = client.get("/ui/m/privat/maintenance").text
-    assert "Wartung · Privat" in html and "IMAP_PASSWORD" in html and "aus .env" in html
+    assert "Wartung · Privat" in html and "IMAP-Passwort" in html and "gesetzt" in html
     r = client.post("/ui/m/privat/maintenance/run", data={"csrf": _csrf(html), "limit": "20"}, follow_redirects=False)
     assert r.status_code == 303 and "/ui/m/privat/jobs/" in r.headers["location"]
     _wait(r.headers["location"].rsplit("/", 1)[1])
@@ -215,18 +214,18 @@ def test_add_mailbox(client, setup):
     r = client.post("/ui/mailboxes/new", data=form, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/ui/m/gmail/maintenance"
     raw = tomllib.loads((setup / "mailboxes" / "gmail" / "mailbox.toml").read_text(encoding="utf-8"))
-    assert raw["imap"]["user_env"] == "" and set(raw["categories"]) == {"finanzen", "werbung"}  # no .env fallback
+    assert set(raw["imap"]) == {"host", "port", "source_folder"} and set(raw["categories"]) == {"finanzen", "werbung"}
     secrets = tomllib.loads((setup / "mailboxes" / "gmail" / "secrets.toml").read_text(encoding="utf-8"))
     assert secrets["imap"] == {"user": "me@gmail.com", "password": "app-pw"}
     html = client.get(r.headers["location"]).text
-    assert "Postfach angelegt" in html and "gespeichert" in html and "app-pw" not in html
+    assert "Postfach angelegt" in html and "gesetzt" in html and "app-pw" not in html
     r = client.post("/ui/mailboxes/new", data=form, follow_redirects=False)  # same name again: next free folder
     assert r.status_code == 303 and r.headers["location"] == "/ui/m/gmail-2/maintenance"
 
 
 def test_shared_settings(client, setup):
     html = client.get("/ui/settings").text
-    assert "example/model-1" in html and "CLASSIFIER_API_KEY" in html
+    assert "example/model-1" in html and 'name="api_key"' in html
     form = {"csrf": _csrf(html), "endpoint": "https://example.invalid/decisions", "model": "example/model-2",
             "max_body_chars": "4000", "timeout_seconds": "30",
             "min_interval_seconds": "0,5"}

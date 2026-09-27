@@ -12,7 +12,7 @@ from typing import Callable, Iterable
 
 from imap_tools import AND, MailBox, MailMessage, MailMessageFlags
 
-from .config import CLASSIFIER_KEY_ENV, INBOX_ACTION, Config, Credentials, SenderRule
+from .config import INBOX_ACTION, Config, Credentials, SenderRule
 from .expiry import resolve_expiry
 from .classifier import Decision, ClassifierAuthError, ClassifierClient, ClassifierError
 from .mailtext import build_state, full_text, message_key, sent_date
@@ -538,8 +538,7 @@ def _finish(store: Store, kind: str, detail: str | None, started: datetime, resu
 
 
 def _auth_failed(cfg: Config, e: Exception) -> RunResult:
-    log.error("%s - check the API key (Global settings or %s in .env) and your credit with the provider",
-              e, CLASSIFIER_KEY_ENV)
+    log.error("%s - check the API key under Global settings and your credit with the provider", e)
     return RunResult(exit_code=2, error=str(e))
 
 

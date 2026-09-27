@@ -411,9 +411,6 @@ def create_mailbox(base_dir: Path, shared_path: Path, template_file: Path, templ
     imap["host"] = host
     imap["port"] = _number(form, "imap_port", _("Port"), 1, 65535, integer=True)
     imap["source_folder"] = _folder(form, "source_folder", _("Inbox")) or "INBOX"
-    # the login is in secrets.toml; no fallback to IMAP_USER / IMAP_PASSWORD, which may belong to another mailbox
-    imap["user_env"] = ""
-    imap["password_env"] = ""
     doc["imap"] = imap
     doc["rules"] = source["rules"]
     if "schedule" in source:

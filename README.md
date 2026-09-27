@@ -53,7 +53,7 @@ uid 1000. Forms carry a CSRF token.
   uncertain mails you filed by hand; reads only, trash/spam/sent/drafts don't
   count), check the connection. Each job runs in the background
   under the mailbox lock ("Dry run" changes nothing, "Run" is the real thing) and shows
-  its log; also shows where the login and the API key come from (stored, `.env` or missing)
+  its log; also shows whether the login and the API key are set
 - **Mails** detail – accept the model's suggestion for an uncertain mail, move a mail
   to another category (logged as "by hand"), or create a sender rule from it
 - **Add mailbox** – creates `mailboxes/<id>/mailbox.toml` with the
@@ -78,13 +78,8 @@ the current value:
 
 They are read at the start of every run, so a change needs no restart. **Include both
 files in your backup** – they are not copied as `.bak` and are excluded from git and
-the Docker build. What is stored there takes precedence over the environment: a
-mailbox without a stored login uses the `.env` variables named by `user_env` /
-`password_env` in its `mailbox.toml` (default `IMAP_USER` / `IMAP_PASSWORD`), and
-without a stored key `CLASSIFIER_API_KEY` is used. So existing setups keep working
-unchanged; values in `.env` are only read at startup. Mailboxes added in the UI
-have no `.env` fallback. "Remove stored login" / "Remove" delete the stored values
-again.
+the Docker build. They are the only place Sortroom takes a login or key from; `.env`
+holds only `ADMIN_PASSWORD`, `API_TOKEN` and the Docker settings.
 
 Jobs are kept in memory until the container restarts; backfills started via
 `POST /backfill` show up there too. The API endpoints keep their bearer-token
@@ -113,9 +108,7 @@ folder too – refused while a run or job is active – so scripts using the old
 one. A folder renamed by hand also works; the id is always the folder name.
 
 `mailbox.toml` starts with `name = "Privat"`. The login is in `secrets.toml` next to it
-(see [Logins and the API key](#logins-and-the-api-key)); in `[imap]`, `user_env` and
-`password_env` can name `.env` variables to fall back to instead (default
-`IMAP_USER` / `IMAP_PASSWORD`).
+(see [Logins and the API key](#logins-and-the-api-key)).
 
 Normal runs and `--check` cover every mailbox; `--mailbox privat` limits to
 one. Maintenance commands (`--since`, `--resort-folder`, `--rename-*`,
@@ -406,19 +399,16 @@ catalog; the tests fail on a missing one. A new language needs a catalog, an ent
 - Mail content (first 3000 chars) is sent to the configured endpoint and whoever runs the
   model behind it.
 - Switching provider only needs `endpoint`, `model` and its API key under Global
-  settings (or `config.toml` and `CLASSIFIER_API_KEY`). The cost per mail is shown when the
+  settings. The cost per mail is shown when the
   provider reports it in `usage.cost` (OpenRouter does); otherwise it stays at 0.
 - Exit codes: `0` ok, `1` some mails failed (retried next run), `2` config or
   API-key/credit problem.
 
-## Upgrading from 0.7.x
+## Upgrading from 0.9.x
 
-The model settings are no longer named after one model, and there is only one key:
-
-1. In `config/config.toml` rename `[jev]` to `[classifier]` and delete its `api_key_env` line.
-2. In `.env` rename the key variable (e.g. `OPENROUTER_API_KEY`) to `CLASSIFIER_API_KEY`.
-3. Restart the container. Until step 1 is done it refuses to start with a message saying
-   exactly this. The mail log in `state.db` is updated by itself.
+Logins and the API key are no longer read from `.env`. After the update, enter the API key
+under Global settings and each mailbox's user and password under its Settings, then delete
+`IMAP_*` and `CLASSIFIER_API_KEY` from `.env`. Until then runs stop with "not set: …".
 
 ## License
 

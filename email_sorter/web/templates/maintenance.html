@@ -24,7 +24,7 @@
         <tr><td>{{ _('API key') }}</td><td>{{ source(login.classifier_api_key) }}</td></tr>
       </tbody>
     </table></div>
-    <p class="muted hint">{{ _('Set the login under <a href="/ui/m/%(id)s/settings">Settings</a> and the API key under <a href="/ui/settings">Global settings</a>. Values from .env are only used when nothing is stored there, and need a container restart after a change.', id=box.id) }}</p>
+    <p class="muted hint">{{ _('Set the login under <a href="/ui/m/%(id)s/settings">Settings</a> and the API key under <a href="/ui/settings">Global settings</a>.', id=box.id) }}</p>
     <form method="post" action="/ui/m/{{ box.id }}/maintenance/check">{{ hidden() }}
       <button class="btn" type="submit">{{ _('Check connection') }}</button>
       {{ help(_('Logs in to the IMAP server, lists the target folders and sends the model a sample mail. Moves nothing; costs a fraction of a cent.')) }}

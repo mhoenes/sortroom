@@ -43,24 +43,20 @@
       <div><h2>{{ _('Login') }}</h2>
         <p class="muted hint">{{ _('Stored in <span class="mono">mailboxes/%(id)s/%(file)s</span>, readable only by Sortroom. The password is never shown again.', id=box.id, file=secrets_file) }}</p></div>
       {% if login_error %}<div class="banner err" role="alert">{{ login_error }}</div>{% endif %}
-      {% if not login_writable %}<div class="banner" role="status">{{ _('%(file)s is not writable, so the login can only be set in .env.', file=secrets_file) }}</div>{% endif %}
+      {% if not login_writable %}<div class="banner" role="status">{{ _('%(file)s is not writable, so the login cannot be stored.', file=secrets_file) }}</div>{% endif %}
       <div class="grid cols-3">
-        <label class="f"><span class="lt">{{ _('User') }} {{ help(_('Usually the full e-mail address. Empty: the user from .env is used, if there is one.')) }}</span>
+        <label class="f"><span class="lt">{{ _('User') }} {{ help(_('Usually the full e-mail address.')) }}</span>
           <input type="text" name="imap_user" value="{{ form.imap_user }}" autocomplete="off" spellcheck="false" {% if not login_writable %}disabled{% endif %}>
           <span class="hint">{{ source(login.imap_user) }}</span>
         </label>
         <label class="f"><span class="lt">{{ _('Password') }} {{ help(_('For Gmail an app password. Leave empty to keep the current one.')) }}</span>
           <input type="password" name="imap_password" autocomplete="new-password" {% if not login_writable %}disabled{% endif %}
-            {% if login.imap_password.source %}placeholder="{{ _('unchanged') }}"{% endif %}>
+            {% if login.imap_password %}placeholder="{{ _('unchanged') }}"{% endif %}>
           <span class="hint">{% if retype %}<span class="pill warn">{{ _('Please enter it again') }}</span>{% else %}{{ source(login.imap_password) }}{% endif %}</span>
         </label>
         <div class="f"><span class="lt">{{ _('Test') }} {{ help(_('Logs in with the saved login, lists the target folders and sends the model a sample mail. Save changes first.')) }}</span>
           <div class="login-actions">
             <button class="btn" type="submit" form="login-check">{{ _('Check connection') }}</button>
-            {% if login.imap_user.source == 'file' or login.imap_password.source == 'file' %}{% if login_writable %}
-            <button class="btn" type="submit" form="login-clear"
-              onclick='return confirm({{ _("Remove the stored login of this mailbox?")|tojson }})'
-              title="{{ _('Deletes %(file)s of this mailbox. Afterwards the login from .env is used, if there is one.', file=secrets_file) }}">{{ _('Remove stored login') }}</button>{% endif %}{% endif %}
           </div>
         </div>
       </div>
@@ -115,9 +111,8 @@
     {% if editable %}<div class="actions"><button class="btn primary" type="submit">{{ _('Save settings') }}</button></div>{% endif %}
   </fieldset>
 </form>
-{# targets of the buttons in the login section, which sits inside the settings form #}
+{# target of the button in the login section, which sits inside the settings form #}
 <form method="post" action="/ui/m/{{ box.id }}/maintenance/check" id="login-check" hidden><input type="hidden" name="csrf" value="{{ csrf }}"></form>
-<form method="post" action="/ui/m/{{ box.id }}/login/clear" id="login-clear" hidden><input type="hidden" name="csrf" value="{{ csrf }}"></form>
 
 {% macro rule_row(i, match, action) %}<tr>
             <td><input type="text" name="match_{{ i }}" value="{{ match }}" aria-label="{{ _('Sender contains') }}" placeholder="{{ _('name@company.com or @company.com') }}"></td>
