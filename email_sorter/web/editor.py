@@ -239,7 +239,7 @@ def _settings_page(request: Request, box_id: str, form: dict | None = None, erro
                 "expiry_threshold": form_number(cfg.expiry_threshold), "min_age_hours": form_number(cfg.min_age_hours),
                 "sort_read_at_once": cfg.sort_read_at_once,
                 "schedule_enabled": cfg.schedule_enabled, "schedule_minutes": cfg.schedule_minutes,
-                "reconcile_hours": cfg.reconcile_hours,
+                "reconcile_enabled": cfg.reconcile_enabled, "reconcile_hours": cfg.reconcile_hours,
                 "lookback_days": cfg.lookback_days, "max_per_run": cfg.max_per_run,
                 "expired_folder": cfg.expired_folder or "", "imap_user": login["stored_user"]}
     if rules is None:

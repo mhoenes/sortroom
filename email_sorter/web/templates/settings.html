@@ -106,10 +106,18 @@
             {% elif schedule.next %}{{ _('next run %(time)s', time=schedule.next.strftime('%H:%M')) }}
             {% else %}{{ _('starts shortly') }}{% endif %}</span>
         </div>
-        <label class="f"><span class="lt">{{ _('Reconcile every … hours') }} {{ help(_('Compares the log with the mailbox, like "Reconcile the log with the mailbox" under Maintenance: deleted mails leave "To review", mails filed by hand get their folder. Free of charge, changes nothing on the server. Also runs when "Sort automatically" is off. 0 = never.')) }}</span>
-          <input type="number" name="reconcile_hours" min="0" max="720" step="1" value="{{ form.reconcile_hours }}" required>
-          <span class="hint muted" style="font-weight:400">{% if schedule.last_reconcile %}{{ _('Last reconcile %(when)s', when=schedule.last_reconcile.isoformat()|ago) }}{% else %}{{ _('Not reconciled yet') }}{% endif %}</span>
+        <div class="f"><span class="lt">{{ _('Reconcile automatically') }} {{ help(_('Compares the log with the mailbox, like "Reconcile the log with the mailbox" under Maintenance: deleted mails leave "To review", mails filed by hand get their folder. Free of charge, changes nothing on the server. Independent of "Sort automatically".')) }}</span>
+          <label class="check"><input type="checkbox" name="reconcile_enabled" value="1" {% if form.reconcile_enabled in (true, 'on', '1') %}checked{% endif %}>{{ _('Schedule on') }}</label>
+        </div>
+        <label class="f"><span class="lt">{{ _('Interval in hours') }} {{ help(_('Time between two reconciles, counted from the last one – also one started by hand. If something is running for the mailbox, it waits until that is done.')) }}</span>
+          <input type="number" name="reconcile_hours" min="1" max="720" step="1" value="{{ form.reconcile_hours }}" required>
         </label>
+        <div class="f"><span class="lt">{{ _('Status') }}</span>
+          <span class="static">{% if not schedule.active %}{{ _('Schedule switched off in this process (SORTROOM_SCHEDULER)') }}
+            {% elif not schedule.reconcile_enabled %}{{ _('off') }}{% if schedule.last_reconcile %} · {{ _('last %(when)s', when=schedule.last_reconcile.isoformat()|ago) }}{% endif %}
+            {% elif schedule.next_reconcile %}{{ _('last %(when)s · next %(time)s', when=schedule.last_reconcile.isoformat()|ago, time=schedule.next_reconcile.isoformat()|dt) }}
+            {% else %}{{ _('starts shortly') }}{% endif %}</span>
+        </div>
       </div>
     </section>
     {% if editable %}<div class="actions"><button class="btn primary" type="submit">{{ _('Save settings') }}</button></div>{% endif %}

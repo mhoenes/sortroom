@@ -100,7 +100,7 @@
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/reconcile">{{ hidden() }}
       <div class="about"><h3>{{ _('Reconcile the log with the mailbox') }}</h3>
         <p>{{ _('Reads all folders (except trash, spam, sent and drafts) and marks mails you deleted as "no longer in the mailbox" – they then disappear from "To review". Uncertain mails you filed by hand get their folder. Changes nothing on the server.') }}</p>
-        <p class="muted">{% if box.cfg.reconcile_hours %}{{ ngettext('Runs by itself every %(num)s hour (Settings → Schedule).', 'Runs by itself every %(num)s hours (Settings → Schedule).', box.cfg.reconcile_hours) }}{% else %}{{ _('Does not run by itself (Settings → Schedule).') }}{% endif %}</p></div>
+        <p class="muted">{% if box.cfg.reconcile_enabled %}{{ ngettext('Runs by itself every %(num)s hour (Settings → Schedule).', 'Runs by itself every %(num)s hours (Settings → Schedule).', box.cfg.reconcile_hours) }}{% else %}{{ _('Does not run by itself (Settings → Schedule).') }}{% endif %}</p></div>
       <div class="fields"></div>
       {{ go() }}
     </form>

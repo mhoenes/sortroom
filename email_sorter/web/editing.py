@@ -186,8 +186,9 @@ def save_settings(box: Mailbox, shared_path: Path, form: dict, busy: bool = Fals
         schedule = doc.setdefault("schedule", tomlkit.table())
         schedule["enabled"] = _checked(form, "schedule_enabled")
         schedule["interval_minutes"] = _number(form, "schedule_minutes", _("Interval in minutes"), 1, 1440, integer=True)
-        if "reconcile_hours" in form:
-            schedule["reconcile_hours"] = _number(form, "reconcile_hours", _("Reconcile every … hours"), 0, 720,
+        if "reconcile_hours" in form:  # likewise
+            schedule["reconcile_enabled"] = _checked(form, "reconcile_enabled")
+            schedule["reconcile_hours"] = _number(form, "reconcile_hours", _("Interval in hours"), 1, 720,
                                                   integer=True)
     rules["lookback_days"] = _number(form, "lookback_days", _("Look-back in days"), 1, 365, integer=True)
     rules["max_per_run"] = _number(form, "max_per_run", _("Max. mails per run"), 1, 5000, integer=True)

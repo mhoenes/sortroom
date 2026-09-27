@@ -14,7 +14,7 @@ T0 = datetime(2026, 9, 26, 12, 0)
 
 
 def _box(box_id, enabled=True, minutes=10, tmp=None):
-    cfg = SimpleNamespace(schedule_enabled=enabled, schedule_minutes=minutes, reconcile_hours=0)
+    cfg = SimpleNamespace(schedule_enabled=enabled, schedule_minutes=minutes, reconcile_enabled=False, reconcile_hours=24)
     return SimpleNamespace(id=box_id, cfg=cfg, lock_path=(tmp / box_id / "run.lock") if tmp else None)
 
 
@@ -157,7 +157,7 @@ def _reconciler(result=True):
 
 def test_reconcile_once_a_day_after_the_last_one():
     box = _box("privat", enabled=False)
-    box.cfg.reconcile_hours = 24
+    box.cfg.reconcile_enabled = True
     last = {"privat": None}
     calls, reconcile = _reconciler()
     s = scheduler.Scheduler(lambda: {"privat": box}, Recorder(), reconcile, lambda b: last[b.id])
@@ -170,13 +170,13 @@ def test_reconcile_once_a_day_after_the_last_one():
     last["privat"] = T0 + timedelta(hours=20)                   # started by hand meanwhile: counts too
     assert s.tick(T0 + timedelta(hours=25)) == []
     assert s.tick(T0 + timedelta(hours=44)) == ["privat:reconcile"]
-    box.cfg.reconcile_hours = 0                                 # switched off
+    box.cfg.reconcile_enabled = False                           # switched off
     assert s.tick(T0 + timedelta(days=5)) == []
 
 
 def test_a_busy_reconcile_is_retried_and_a_run_goes_first():
     box = _box("privat", minutes=10)
-    box.cfg.reconcile_hours = 24
+    box.cfg.reconcile_enabled = True
     calls, reconcile = _reconciler(result=False)                # mailbox busy
     rec = Recorder()
     s = scheduler.Scheduler(lambda: {"privat": box}, rec, reconcile, lambda b: T0 - timedelta(days=2))
@@ -202,7 +202,8 @@ def test_last_reconcile_is_kept_in_the_log(tmp_path):
 def test_reconcile_hours_in_the_settings(tmp_path):
     raw = _read_toml(EXAMPLE_MAILBOXES["en"])
     raw["classifier"] = {"endpoint": "https://x.invalid", "model": "m"}
-    assert config_from_raw(raw, "x").reconcile_hours == 24
-    raw["schedule"]["reconcile_hours"] = 1000
+    cfg = config_from_raw(raw, "x")
+    assert cfg.reconcile_enabled and cfg.reconcile_hours == 24
+    raw["schedule"]["reconcile_hours"] = 0
     with pytest.raises(ConfigError, match="reconcile_hours"):
         config_from_raw(raw, "x")

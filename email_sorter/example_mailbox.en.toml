@@ -34,7 +34,8 @@ max_per_run = 200             # safety cap on mails classified per run
 [schedule]
 enabled = true
 interval_minutes = 10         # a normal run every N minutes
-reconcile_hours = 24          # reconcile the log with the mailbox every N hours, 0 = off
+reconcile_enabled = true
+reconcile_hours = 24          # reconcile the log with the mailbox every N hours
 
 # ---------------------------------------------------------------------------
 # Categories

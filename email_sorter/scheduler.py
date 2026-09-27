@@ -1,5 +1,5 @@
 """Built-in schedule: every mailbox with [schedule] enabled gets a normal run every N minutes, and
-its log is reconciled with the mailbox every reconcile_hours (independent of `enabled`).
+with reconcile_enabled its log is reconciled with the mailbox every reconcile_hours (independent of `enabled`).
 
 Runs in a background thread of the API/UI process. Each run takes the mailbox's lock like any
 other run, so a run started by hand (or from outside via the API) is never doubled: the
@@ -115,9 +115,9 @@ class Scheduler:
         return started
 
     def _reconcile_due(self, box: Mailbox, now: datetime) -> bool:
-        hours = box.cfg.reconcile_hours
-        if not hours:
+        if not box.cfg.reconcile_enabled:
             return False
+        hours = box.cfg.reconcile_hours
         first = self._first_seen.setdefault(box.id, now)
         last = self.reconciled.get(box.id)
         if last is not None and now < last + timedelta(hours=hours):
@@ -158,7 +158,12 @@ class Scheduler:
         """What the UI shows about a mailbox's schedule."""
         return {"enabled": box.cfg.schedule_enabled, "minutes": box.cfg.schedule_minutes,
                 "active": self.active, "next": self.next_run.get(box.id), "running": box.id in self.running,
-                "reconcile_hours": box.cfg.reconcile_hours, "last_reconcile": last_reconcile(box.workspace)}
+                **self._reconcile_status(box)}
+
+    def _reconcile_status(self, box: Mailbox) -> dict:
+        last = last_reconcile(box.workspace)
+        due = last + timedelta(hours=box.cfg.reconcile_hours) if last else None
+        return {"reconcile_enabled": box.cfg.reconcile_enabled, "last_reconcile": last, "next_reconcile": due}
 
 
 def run_scheduled(box: Mailbox) -> None:
