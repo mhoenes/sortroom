@@ -233,6 +233,7 @@ def all_mailboxes(request: Request):
             if db:
                 db.close()
         cards.append({"box": b, "stats": st, "busy": request.app.state.is_busy(b),
+                      "schedule": request.app.state.scheduler.status(b),
                       "categories": len(b.cfg.categories)})
         totals["today"] += st.sorted_today
         totals["uncertain"] += st.uncertain

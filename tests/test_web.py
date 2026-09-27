@@ -110,6 +110,11 @@ def test_all_mailboxes_page(client):
     assert "Alle Postfächer" in html and "Privat" in html and "Gmail" in html
     assert "Noch kein Lauf" in html  # gmail has no log yet
     assert 'href="/ui/settings" >' in html and "Globale Einstellungen</a>" in html  # sidebar footer, not current
+    # privat: its failed backfill today shows in the status; the figures link to their lists
+    assert "1 Lauf mit Fehlern heute" in html
+    assert 'href="/ui/m/privat/mails?uncertain=1&amp;period=30d"' in html
+    assert 'href="/ui/m/privat/mails?flagged=1&amp;period=7d"' in html
+    assert 'href="/ui/m/privat/mails">' not in html  # no separate "Mails" button any more
 
 
 def test_overview_page(client):
