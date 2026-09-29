@@ -39,7 +39,7 @@ names, whether it is a mailing list and up to 3000 characters of the cleaned tex
 **With a hosted endpoint this data goes to that provider** and whoever runs the model
 behind it – check their privacy terms. With a self-hosted endpoint it stays in your
 network. Apart from that Sortroom only talks to your IMAP server; it sends nothing
-anywhere else.
+anywhere else. Details: [PRIVACY.md](PRIVACY.md).
 
 ## What you need
 
@@ -188,7 +188,11 @@ method, the client ID or the tenant, or when you revoke the access in your accou
    "Sortroom", and enable the **Gmail API** for it.
 2. Under **Google Auth Platform** set up the consent screen: an app name, your address as
    support and developer contact, audience **External**. Under **Data access** add the
-   scope `https://mail.google.com/`.
+   scope `https://mail.google.com/`. Under **Branding** Google asks for links before
+   publishing; only you see them on the sign-in, so point them at this project:
+   home page `https://github.com/mhoenes/sortroom`, privacy policy
+   `https://github.com/mhoenes/sortroom/blob/main/PRIVACY.md`, terms of service
+   `https://github.com/mhoenes/sortroom/blob/main/LICENSE`, authorized domain `github.com`.
 3. Under **Audience** press **Publish app** (status *In production*). This is important:
    while an app is in *Testing*, Google ends its sign-ins after 7 days. A published app
    doesn't need Google's verification for your own use; the sign-in just shows a
