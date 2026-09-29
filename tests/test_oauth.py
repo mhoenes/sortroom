@@ -113,6 +113,10 @@ def test_a_revoked_sign_in_asks_to_sign_in_again(token_server):
     with pytest.raises(OAuthError, match="expired or was revoked – sign in again") as e:
         OAuthLogin("google", GOOGLE_ID, "", "gsecret", "rt-secret").access_token()
     assert "rt-secret" not in str(e.value) and "gsecret" not in str(e.value)
+    token_server.answers = [FakeResponse(400, {"error": "invalid_grant",
+                                               "error_description": "AADSTS70000: The request was denied …"})]
+    with pytest.raises(OAuthError, match=r"sign in again under the mailbox's settings \(AADSTS70000\)$"):
+        OAuthLogin("microsoft", MS_ID, "", "", "rt").access_token()
 
 
 def test_sign_in_uses_xoauth2(token_server):

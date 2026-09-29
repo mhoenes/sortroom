@@ -18,6 +18,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import logging
+import re
 import secrets
 import threading
 import time
@@ -126,10 +127,11 @@ def _token_request(provider: str, tenant: str, data: dict) -> dict:
         body = {}
     if r.status_code != 200 or "access_token" not in body:
         error = body.get("error", f"HTTP {r.status_code}")
-        if error == "invalid_grant" and data.get("grant_type") == "refresh_token":
-            raise OAuthError(f"the sign-in with {p.label} has expired or was revoked – sign in again "
-                             "under the mailbox's settings")
         detail = str(body.get("error_description") or "").split("\n")[0][:200]
+        if error == "invalid_grant" and data.get("grant_type") == "refresh_token":
+            code = re.match(r"(AADSTS\d+)", detail)  # Microsoft's reason, e.g. AADSTS70000: access removed
+            raise OAuthError(f"the sign-in with {p.label} has expired or was revoked – sign in again "
+                             f"under the mailbox's settings{f' ({code.group(1)})' if code else ''}")
         raise OAuthError(f"{p.label} refused the sign-in ({error}{': ' + detail if detail else ''})")
     return body
 
