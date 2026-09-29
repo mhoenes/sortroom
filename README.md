@@ -188,15 +188,14 @@ method, the client ID or the tenant, or when you revoke the access in your accou
    "Sortroom", and enable the **Gmail API** for it.
 2. Under **Google Auth Platform** set up the consent screen: an app name, your address as
    support and developer contact, audience **External**. Under **Data access** add the
-   scope `https://mail.google.com/`. Under **Branding** Google asks for links before
-   publishing; only you see them on the sign-in, so point them at this project:
-   home page `https://github.com/mhoenes/sortroom`, privacy policy
-   `https://github.com/mhoenes/sortroom/blob/main/PRIVACY.md`, terms of service
-   `https://github.com/mhoenes/sortroom/blob/main/LICENSE`, authorized domain `github.com`.
+   scope `https://mail.google.com/`.
 3. Under **Audience** press **Publish app** (status *In production*). This is important:
    while an app is in *Testing*, Google ends its sign-ins after 7 days. A published app
    doesn't need Google's verification for your own use; the sign-in just shows a
-   warning that the app isn't verified – continue via **Advanced**.
+   warning that the app isn't verified – continue via **Advanced**. Don't submit the app
+   for verification, and leave the links under **Branding** (home page, privacy policy,
+   terms) empty: Google only accepts them on a domain you have proven to own.
+   What Sortroom does with your data is described in [PRIVACY.md](PRIVACY.md).
 4. Under **Clients** create a client of type **Desktop app** and copy its **client ID**
    and **client secret** into the mailbox's settings.
 
