@@ -188,6 +188,21 @@
     </section>
   </fieldset>
 </form>
+{% if deletable %}
+<section class="card stack danger-zone">
+  <div><h2>{{ _('Delete mailbox') }}</h2>
+    <p class="muted hint">{{ _('Deletes the settings, the login, the log and the reports of this mailbox from Sortroom, for good. Folders and mail on the IMAP server stay as they are.') }}</p>
+    {% if cfg.imap_auth == 'google' %}<p class="muted hint">{{ _('The sign-in with Google is revoked as well.') }}</p>
+    {% elif cfg.imap_auth == 'microsoft' %}<p class="muted hint">{{ _('Microsoft offers no way to revoke the sign-in from here. If you don\'t use Sortroom with this account any more, remove its access under <a href="https://account.live.com/consent/Manage" target="_blank" rel="noopener">account.live.com/consent/Manage</a>.') }}</p>{% endif %}
+  </div>
+  <form method="post" action="/ui/m/{{ box.id }}/delete" class="actions">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="f grow">{{ _('Type "%(name)s" to confirm', name=box.name) }}
+      <input type="text" name="confirm" required autocomplete="off" spellcheck="false"></label>
+    <button class="btn danger" type="submit">{{ _('Delete mailbox') }}</button>
+  </form>
+</section>
+{% endif %}
 <script src="{{ asset('mailbox-id.js') }}"></script>
 <script src="{{ asset('login-method.js') }}"></script>
 <script>

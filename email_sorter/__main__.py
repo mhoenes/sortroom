@@ -54,6 +54,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--reconcile", action="store_true",
                         help="compare the log with the mailbox: mark deleted mails, note mails filed by hand "
                              "(with --live; changes nothing on the server)")
+    parser.add_argument("--delete-mailbox", metavar="ID",
+                        help="delete a mailbox for good: its settings, login, log and reports "
+                             "(nothing on the IMAP server); asks for confirmation unless --yes")
+    parser.add_argument("--yes", action="store_true", help="with --delete-mailbox: don't ask")
     parser.add_argument("--config", type=Path, help="shared config (default: config/config.toml)")
     parser.add_argument("-v", "--verbose", action="store_true")
     return parser
@@ -111,6 +115,34 @@ def _run_one(box: Mailbox, args) -> int:
             return 1
 
 
+def _delete(boxes: dict[str, Mailbox], box_id: str, yes: bool) -> int:
+    from .removal import MailboxBusy, delete_mailbox
+
+    if box_id not in boxes:
+        log.error("unknown mailbox %r - configured: %s", box_id, ", ".join(boxes) or "none")
+        return 2
+    box = boxes[box_id]
+    if not yes:
+        print(f'This deletes the mailbox "{box.name}" ({box.id}) for good: its settings, login, log and '
+              "reports. Nothing on the IMAP server is changed.")
+        try:
+            answer = input(f"Type {box.id} to confirm: ")
+        except EOFError:
+            answer = ""
+        if answer.strip() != box.id:
+            print("Not deleted. (Without a terminal, confirm with --yes.)")
+            return 1
+    try:
+        result = delete_mailbox(box)
+    except MailboxBusy:
+        log.error("[%s] not deleted: another run is active", box.id)
+        return 1
+    print(f'Mailbox "{box.name}" deleted.')
+    if result["revoked"] is False:
+        print("Revoking the Google sign-in failed - remove Sortroom's access at myaccount.google.com/connections.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     load_dotenv(BASE_DIR / ".env")
@@ -122,8 +154,10 @@ def main(argv: list[str] | None = None) -> int:
     except ConfigError as e:
         log.error("configuration error: %s", e)
         return 2
+    if args.delete_mailbox:
+        return _delete(boxes, args.delete_mailbox, args.yes)
     if not boxes:
-        log.error("no mailbox configured yet: add one in the admin UI (Postfach hinzufügen)")
+        log.error("no mailbox configured yet: add one in the admin UI (Add mailbox)")
         return 2
 
     if args.mailbox:

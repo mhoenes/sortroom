@@ -62,7 +62,9 @@ The admin UI sets one cookie, for the login session, and loads no external resou
   a Microsoft one at [account.live.com/consent/Manage](https://account.live.com/consent/Manage)
   (personal accounts) or [myapplications.microsoft.com](https://myapplications.microsoft.com/)
   (work accounts).
-- Delete a mailbox's folder under `mailboxes/` to remove its settings, login and log.
+- **Delete mailbox** at the end of a mailbox's Settings removes its settings, login, log and
+  reports from Sortroom for good (so does deleting its folder under `mailboxes/`), and
+  revokes a Google sign-in.
 
 ## Questions
 
