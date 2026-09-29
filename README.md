@@ -214,8 +214,10 @@ only with an Azure account.
 1. In the [Microsoft Entra admin center](https://entra.microsoft.com/) open
    **App registrations → New registration**: a name, e.g. "Sortroom", and the account
    types – usually *Accounts in this organizational directory only*.
-2. As redirect URI choose the platform **Public client/native (mobile & desktop)** and
-   enter `http://localhost/oauth/callback`.
+2. Under **Authentication** add the platform **Mobile and desktop applications** with the
+   redirect URI `http://localhost/oauth/callback` – not one of the suggested URIs. If the
+   portal only offers the suggestions, open **Manifest** instead and enter it there:
+   `"publicClient": { "redirectUris": ["http://localhost/oauth/callback"] }`.
 3. Under **API permissions** add the delegated permissions `offline_access` and
    `IMAP.AccessAsUser.All` (Microsoft Graph). Sortroom asks for them at the sign-in anyway;
    listed here, an administrator can grant them for a whole organization.
@@ -446,7 +448,7 @@ answers 409.
   mailbox's Settings. If it happens every week, the Google app is still in *Testing*:
   publish it (see [Google](#google)).
 - **The sign-in shows an error from Microsoft (AADSTS…)** – with your own app usually the redirect URI
-  (`http://localhost/oauth/callback`, platform *Public client*), the account types of the
+  (`http://localhost/oauth/callback`, platform *Mobile and desktop applications*), the account types of the
   app or the tenant don't fit the account. In an organization it may say that an
   administrator has to approve the app first.
 - **The model check fails with HTTP 401, 402 or 403** – the API key is wrong, or the
