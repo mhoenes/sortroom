@@ -65,7 +65,7 @@ class Config:
     max_per_run: int
     categories: dict[str, Category]
     imap_auth: str = "password"      # "password", or "google" / "microsoft" for OAuth2 (see oauth.py)
-    oauth_client_id: str = ""        # the user's own OAuth client (not secret)
+    oauth_client_id: str = ""        # the user's own OAuth client (not secret); Microsoft: "" = Sortroom's
     oauth_tenant: str = ""           # Microsoft only: "common" (default), "consumers" or a tenant id
     sender_rules: tuple[SenderRule, ...] = ()  # checked in order, first match wins
     sort_read_at_once: bool = False  # mail already read skips the min_age_hours wait
@@ -347,15 +347,16 @@ def _imap_login(box: Mailbox, found: dict[str, str]) -> tuple[Credentials, list[
         if not found["imap_password"]:
             missing.append("IMAP password (mailbox settings)")
     else:
-        from .oauth import PROVIDERS, OAuthLogin
+        from .oauth import PROVIDERS, OAuthLogin, client_id_for
         label = PROVIDERS[cfg.imap_auth].label
-        if not cfg.oauth_client_id:
+        client_id = client_id_for(cfg.imap_auth, cfg.oauth_client_id)
+        if not client_id:
             missing.append(f"{label} client ID (mailbox settings)")
         if PROVIDERS[cfg.imap_auth].needs_secret and not found["oauth_client_secret"]:
             missing.append(f"{label} client secret (mailbox settings)")
         if not found["oauth_refresh_token"]:
             missing.append(f"sign-in with {label} (mailbox settings)")
-        oauth = OAuthLogin(cfg.imap_auth, cfg.oauth_client_id, cfg.oauth_tenant, found["oauth_client_secret"],
+        oauth = OAuthLogin(cfg.imap_auth, client_id, cfg.oauth_tenant, found["oauth_client_secret"],
                            found["oauth_refresh_token"], box.secrets_path)
     creds = Credentials(found["imap_user"], "" if oauth else found["imap_password"],
                         found["classifier_api_key"], oauth)

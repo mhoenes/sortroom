@@ -62,8 +62,8 @@
             {% if login.imap_password %}placeholder="{{ _('unchanged') }}"{% endif %}>
           <span class="hint">{% if retype %}<span class="pill warn">{{ _('Please enter it again') }}</span>{% else %}{{ source(login.imap_password) }}{% endif %}</span>
         </label>
-        <label class="f" data-auth="oauth"><span class="lt">{{ _('Client ID') }} {{ help(_('From your OAuth app: at Google under APIs & Services → Credentials (type "Desktop app"), at Microsoft under Entra ID → App registrations ("Application (client) ID").')) }}</span>
-          <input type="text" name="oauth_client_id" value="{{ form.oauth_client_id }}" autocomplete="off" spellcheck="false" class="mono" {% if not login_writable %}disabled{% endif %}>
+        <label class="f" data-auth="oauth"><span class="lt">{{ _('Client ID') }} {{ help(_('From your OAuth app: at Google under APIs & Services → Credentials (type "Desktop app"). Microsoft: leave it empty to use Sortroom\'s own app, or enter the "Application (client) ID" of your own app registration.')) }}</span>
+          <input type="text" name="oauth_client_id" value="{{ form.oauth_client_id }}" autocomplete="off" spellcheck="false" class="mono" data-ms-placeholder="{{ _('Sortroom\'s app') }}" {% if not login_writable %}disabled{% endif %}>
         </label>
         <label class="f" data-auth="google"><span class="lt">{{ _('Client secret') }} {{ help(_('Google gives desktop apps a client secret too. It is stored like a password and never shown again; leave empty to keep the current one.')) }}</span>
           <input type="password" name="oauth_client_secret" autocomplete="new-password" {% if not login_writable %}disabled{% endif %}

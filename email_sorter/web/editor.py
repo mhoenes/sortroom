@@ -336,12 +336,13 @@ def oauth_start(request: Request, box_id: str):
     """Start a sign-in: the link to the provider and a field for the address it sends the browser to."""
     _all_boxes, box = _box(request, box_id)
     cfg = box.cfg
-    if cfg.imap_auth == "password" or not cfg.oauth_client_id:
+    client_id = "" if cfg.imap_auth == "password" else oauth.client_id_for(cfg.imap_auth, cfg.oauth_client_id)
+    if not client_id:
         _flash(request, _("Choose Google or Microsoft as the sign-in method and enter the client ID first."), "warn")
         return RedirectResponse(f"/ui/m/{box.id}/settings", status_code=303)
     verifier, challenge = oauth.pkce_pair()
     state, redirect = secrets.token_urlsafe(24), oauth.redirect_uri(request.url.port)
-    url = oauth.authorize_url(cfg.imap_auth, cfg.oauth_client_id, cfg.oauth_tenant, redirect, state, challenge,
+    url = oauth.authorize_url(cfg.imap_auth, client_id, cfg.oauth_tenant, redirect, state, challenge,
                               login_hint=stored_credentials(box)["imap_user"])
     with _sign_ins_lock:
         now = time.time()
@@ -354,7 +355,7 @@ def oauth_start(request: Request, box_id: str):
 def _complete_sign_in(box: Mailbox, state: str, code: str) -> None:
     """Exchange the code for the tokens and keep the refresh token in the mailbox's secrets.toml."""
     pending = _sign_ins[state]
-    tokens = oauth.exchange_code(box.cfg.imap_auth, box.cfg.oauth_client_id,
+    tokens = oauth.exchange_code(box.cfg.imap_auth, oauth.client_id_for(box.cfg.imap_auth, box.cfg.oauth_client_id),
                                  stored_credentials(box)["oauth_client_secret"], box.cfg.oauth_tenant, code,
                                  pending["redirect"], pending["verifier"])
     write_secrets(box.secrets_path, "oauth", {"refresh_token": tokens["refresh_token"]})

@@ -1,7 +1,10 @@
 """OAuth2 sign-in for IMAP (XOAUTH2) with Google and Microsoft.
 
-Every user registers their own OAuth client ("Desktop app" at Google, a public client at
-Microsoft); its client ID is set per mailbox. The sign-in is the authorization-code flow with
+Google: every user registers their own OAuth client (a "Desktop app"), since Gmail's scope is
+restricted and a shared app would need Google's security assessment. Microsoft: Sortroom brings its
+own app (a public client for personal and work accounts, no secret) - a personal Outlook.com
+account can't register apps without an Azure tenant - and a mailbox can still set its own client ID,
+e.g. for an organization that only allows its own apps. The client ID is set per mailbox. The sign-in is the authorization-code flow with
 PKCE and a loopback redirect to http://localhost:<port>/oauth/callback: when the admin UI runs
 on another machine the browser can't open that address, so the user copies it from the address
 bar into the UI, which takes the code from it. Google doesn't allow the Gmail scope in the device
@@ -39,6 +42,7 @@ class Provider:
     scope: str
     extra: dict = field(default_factory=dict)
     needs_secret: bool = False  # Google's desktop clients send their (not secret) client secret
+    default_client_id: str = ""  # Sortroom's own app, used when a mailbox sets no client ID
 
 
 PROVIDERS = {
@@ -48,7 +52,8 @@ PROVIDERS = {
     "microsoft": Provider(
         "microsoft", "Microsoft", "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize",
         "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token",
-        "https://outlook.office.com/IMAP.AccessAsUser.All offline_access", {"prompt": "select_account"}),
+        "https://outlook.office.com/IMAP.AccessAsUser.All offline_access", {"prompt": "select_account"},
+        default_client_id="d35f0c72-77b8-4463-81fb-d3bc62074976"),  # "Sortroom", public client
 }
 DEFAULT_TENANT = "common"  # Microsoft: personal and work accounts
 
@@ -65,6 +70,11 @@ def provider_for_host(host: str) -> str:
     if host.endswith(("office365.com", "outlook.com", "hotmail.com", "live.com")):
         return "microsoft"
     return "password"
+
+
+def client_id_for(provider: str, configured: str) -> str:
+    """The client ID a mailbox signs in with: its own, else Sortroom's app ("" when there is none)."""
+    return configured or PROVIDERS[provider].default_client_id
 
 
 def redirect_uri(port: int | None) -> str:

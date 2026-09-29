@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 
 from email_sorter import oauth
-from email_sorter.config import ConfigError, load_credentials, write_secrets
+from email_sorter.config import ConfigError, load_credentials, load_mailboxes, write_secrets
 from email_sorter.oauth import OAuthError, OAuthLogin
 
 from test_admin import _box, _csrf, client, setup  # noqa: F401 - fixtures; privat has user "u", key "k"
@@ -250,3 +250,23 @@ def test_new_gmail_mailbox_sets_the_server(client, setup):
     assert r.status_code == 422 and "Client-Secret" in r.text
     r = client.post("/ui/mailboxes/new", data={**form, "name": "Gmail 3", "kind": "yahoo"})
     assert r.status_code == 422 and "Art des Postfachs" in r.text
+
+
+def test_outlook_without_client_id_uses_sortrooms_app(client, setup):
+    html = client.get("/ui/mailboxes/new").text
+    form = {"csrf": _csrf(html), "name": "Outlook", "kind": "outlook", "imap_user": "me@outlook.example",
+            "oauth_client_id": "", "oauth_tenant": "", "template": "privat"}
+    r = client.post("/ui/mailboxes/new", data=form, follow_redirects=False)
+    assert r.headers["location"] == "/ui/m/outlook/oauth"
+    raw = tomllib.loads((setup / "mailboxes" / "outlook" / "mailbox.toml").read_text(encoding="utf-8"))
+    assert "oauth_client_id" not in raw["imap"]  # nothing to store: Sortroom's app
+    link = re.search(r'href="(https://login\.microsoftonline\.com/[^"]+)"',
+                     client.get(r.headers["location"]).text).group(1).replace("&amp;", "&")
+    assert f"client_id={oauth.PROVIDERS['microsoft'].default_client_id}" in link and "/common/" in link
+    box = load_mailboxes(setup, setup / "config.toml")["outlook"]
+    write_secrets(box.secrets_path, "oauth", {"refresh_token": "rt"})
+    assert load_credentials(box).oauth.client_id == oauth.PROVIDERS["microsoft"].default_client_id
+
+    # Google has no app of Sortroom's: its client ID is needed
+    r = client.post("/ui/mailboxes/new", data={**form, "name": "Gmail", "kind": "gmail", "oauth_client_secret": "s"})
+    assert r.status_code == 422 and "Client-ID" in r.text

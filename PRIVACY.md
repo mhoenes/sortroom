@@ -18,6 +18,10 @@ the flag (star). It never sends, forwards or deletes mail.
 With a Google or Microsoft sign-in, Sortroom asks for IMAP access
 (`https://mail.google.com/` at Google, `IMAP.AccessAsUser.All` at Microsoft) – the
 only permissions that allow IMAP – and uses it for nothing else than the above.
+For Microsoft, Sortroom brings its own app registration so that you don't need one. That
+gives the Sortroom project no access to anything: Microsoft sends the tokens of your
+sign-in only to your installation, which keeps them in its `secrets.toml`.
+
 Sortroom's use of information received from Google APIs adheres to the
 [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy),
 including the Limited Use requirements.

@@ -22,6 +22,10 @@
         const wanted = el.dataset.auth.split(' ');
         el.hidden = !value || !(wanted.includes(value) || (wanted.includes('oauth') && value !== 'password'));
       });
+      // Microsoft: an empty client ID means Sortroom's own app
+      scope.querySelectorAll('[data-ms-placeholder]').forEach(el => {
+        el.placeholder = value === 'microsoft' ? el.dataset.msPlaceholder : '';
+      });
     };
     control.addEventListener('change', () => { control.dataset.picked = '1'; show(); });
     const host = control.tagName === 'SELECT' && control.dataset.suggest !== undefined

@@ -46,10 +46,10 @@ anywhere else. Details: [PRIVACY.md](PRIVACY.md).
 - A machine that runs Docker (amd64 or arm64, e.g. a home server, NAS or Raspberry Pi).
 - Access to each mailbox:
   - **Microsoft** (Outlook.com, Hotmail, Microsoft 365) no longer accepts passwords for
-    IMAP: you sign in with your account through your own, free OAuth app – see
+    IMAP: you sign in with your account through Sortroom's app – nothing to set up, see
     [Signing in with Google or Microsoft](#signing-in-with-google-or-microsoft).
-  - **Gmail**: the same OAuth sign-in, or an **app password** (needs two-factor
-    authentication).
+  - **Gmail**: the sign-in with your account through your own, free OAuth app (a few
+    minutes to create), or an **app password** (needs two-factor authentication).
   - **Any other provider**: the IMAP user and password (an app password where the
     provider asks for one).
 - An API key for the classification endpoint, e.g. from
@@ -168,10 +168,16 @@ backup**. `.env` holds only `ADMIN_PASSWORD`, `API_TOKEN` and the Docker setting
 ## Signing in with Google or Microsoft
 
 Microsoft accepts only OAuth for IMAP, and for Gmail it is the alternative to an app
-password. Sortroom has no shared OAuth app: **you create your own**, once, for free – that
-keeps your mail access in your hands and needs no approval by Google or Microsoft. A
-mailbox then gets the sign-in method *Google (OAuth)* or *Microsoft (OAuth)* under
-Settings → Login, with the app's client ID.
+password. A mailbox gets the sign-in method *Google (OAuth)* or *Microsoft (OAuth)* – on
+**Add mailbox** by choosing the type Gmail or Outlook.com / Microsoft 365, later under
+Settings → Login.
+
+- **Microsoft:** Sortroom brings its own app, so there is nothing to register: leave the
+  client ID empty. On the first sign-in Microsoft asks you to allow Sortroom access to
+  your mail.
+- **Google:** you create your own OAuth app, once, for free (see below). A shared app is
+  not possible: Gmail's scope is restricted, and Google only allows that for a shared app
+  after a security assessment.
 
 **The sign-in.** **Save & sign in** opens the provider's sign-in in a new tab. Sign in
 with the mailbox's account and allow the access. The provider then sends the browser to
@@ -199,24 +205,28 @@ method, the client ID or the tenant, or when you revoke the access in your accou
 4. Under **Clients** create a client of type **Desktop app** and copy its **client ID**
    and **client secret** into the mailbox's settings.
 
-### Microsoft
+### Microsoft: your own app (optional)
 
-1. In the [Microsoft Entra admin center](https://entra.microsoft.com/) (with any Microsoft
-   account) open **App registrations → New registration**: a name, e.g. "Sortroom", and
-   the account types – *Personal Microsoft accounts only* for Outlook.com/Hotmail, or
-   *any organizational directory and personal Microsoft accounts*.
+Only needed if your organization allows only its own apps. Registering an app needs a
+Microsoft Entra tenant: a work account has one; a personal Outlook.com account gets one
+only with an Azure account.
+
+1. In the [Microsoft Entra admin center](https://entra.microsoft.com/) open
+   **App registrations → New registration**: a name, e.g. "Sortroom", and the account
+   types – usually *Accounts in this organizational directory only*.
 2. As redirect URI choose the platform **Public client/native (mobile & desktop)** and
    enter `http://localhost/oauth/callback`.
 3. Under **API permissions** add the delegated permissions `offline_access` and
    `IMAP.AccessAsUser.All` (Microsoft Graph). Sortroom asks for them at the sign-in anyway;
    listed here, an administrator can grant them for a whole organization.
 4. Copy the **Application (client) ID** into the mailbox's settings. There is no client
-   secret. **Tenant**: leave it empty (personal and work accounts); for an app with
-   personal accounts only enter `consumers`, for one of your organization only its tenant
-   ID.
+   secret. **Tenant**: your organization's tenant ID for an app of one organization;
+   empty (`common`) for one that allows personal and work accounts; `consumers` for
+   personal accounts only.
 
 In a Microsoft 365 organization, IMAP must also be allowed for the mailbox, and the
-organization may require an administrator to approve the app.
+organization may require an administrator to approve the app – Sortroom's as well as
+your own.
 
 ## Schedule
 
@@ -435,9 +445,10 @@ answers 409.
 - **"The sign-in with Google has expired or was revoked"** – sign in again under the
   mailbox's Settings. If it happens every week, the Google app is still in *Testing*:
   publish it (see [Google](#google)).
-- **The sign-in shows an error from Microsoft (AADSTS…)** – usually the redirect URI
+- **The sign-in shows an error from Microsoft (AADSTS…)** – with your own app usually the redirect URI
   (`http://localhost/oauth/callback`, platform *Public client*), the account types of the
-  app or the tenant don't fit the account.
+  app or the tenant don't fit the account. In an organization it may say that an
+  administrator has to approve the app first.
 - **The model check fails with HTTP 401, 402 or 403** – the API key is wrong, or the
   provider account has no credit left.
 - **Mail stays in the inbox** – it is younger than the waiting time, the model was

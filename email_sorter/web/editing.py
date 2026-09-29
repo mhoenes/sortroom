@@ -241,10 +241,10 @@ def _sign_in_method(form: dict, imap: Table, before: Config | None) -> tuple[str
     _set(imap, "auth", auth, default="password")
     if auth == "password":
         return auth, {}
-    client_id = _text(form, "oauth_client_id", 200)
-    if not _CLIENT_ID_RE.match(client_id):
+    client_id = _text(form, "oauth_client_id", 200)  # Microsoft: empty = Sortroom's own app
+    if (client_id or auth == "google") and not _CLIENT_ID_RE.match(client_id):
         raise EditError(_("Client ID: please copy it from your OAuth app."))
-    imap["oauth_client_id"] = client_id
+    _set(imap, "oauth_client_id", client_id, default="")
     tenant = _text(form, "oauth_tenant", 100) if auth == "microsoft" else ""
     if tenant and not _TENANT_RE.match(tenant):
         raise EditError(_("Tenant: \"common\", \"consumers\", \"organizations\" or your tenant's ID or domain."))
