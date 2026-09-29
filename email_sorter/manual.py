@@ -15,6 +15,7 @@ from .i18n import _
 from .sorter import (IMAP_TIMEOUT, MAX_EXPIRY_AGE_DAYS, move_uids, server_folder, _delimiter, _ensure_folder,
                      _find_uids)
 from .store import Store
+from .oauth import sign_in
 
 log = logging.getLogger(__name__)
 
@@ -43,9 +44,7 @@ def move_mail(cfg: Config, creds: Credentials, base_dir: Path, key: str, categor
         target = target_for(cfg, category)
         current = row["moved_to"]
         if (current or None) != (target or None):
-            with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(
-                creds.imap_user, creds.imap_password, initial_folder=cfg.source_folder
-            ) as mb:
+            with sign_in(MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT), creds, cfg.source_folder) as mb:
                 delim = _delimiter(mb)
                 src = server_folder(current or cfg.source_folder, delim)
                 dst = server_folder(target or cfg.source_folder, delim)

@@ -39,7 +39,8 @@ def test_credentials_come_only_from_the_secrets_files(setup, monkeypatch):
         load_credentials(box)
     assert str(e.value) == ("not set: IMAP user (mailbox settings); IMAP password (mailbox settings); "
                             "API key (Global settings)")
-    assert stored_credentials(box) == dict.fromkeys(("imap_user", "imap_password", "classifier_api_key"), "")
+    assert stored_credentials(box) == dict.fromkeys(("imap_user", "imap_password", "oauth_client_secret",
+                                                     "oauth_refresh_token", "classifier_api_key"), "")
 
 
 def test_broken_secrets_file(setup):
@@ -113,7 +114,7 @@ def test_settings_login_is_write_only(client, setup):
 def test_missing_login_is_shown(client, setup):
     (setup / "mailboxes" / "privat" / "secrets.toml").unlink()
     html = client.get("/ui/m/privat/settings").text
-    assert html.count('<span class="pill err">fehlt</span>') == 2  # user and password
+    assert html.count('<span class="pill err">fehlt</span>') == 3  # user, password and the (hidden) Google client secret
     assert 'placeholder="unverändert"' not in html
 
 
@@ -166,7 +167,7 @@ def test_save_and_check_tests_the_new_login(client, setup, monkeypatch):
     import time
     from email_sorter import jobs
     seen = []
-    monkeypatch.setattr(admin, "check_imap", lambda cfg, user, password, out: seen.append(password) or True)
+    monkeypatch.setattr(admin, "check_imap", lambda cfg, creds, out: seen.append(creds.imap_password) or True)
     (setup / "secrets.toml").unlink()  # the mailbox check does not need the API key
     html = client.get("/ui/m/privat/settings").text
     assert 'name="then" value="check"' in html

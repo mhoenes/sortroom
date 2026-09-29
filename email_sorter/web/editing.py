@@ -16,8 +16,8 @@ import tomlkit
 from tomlkit.items import AoT, Table
 
 from .. import jobs
-from ..config import (INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, _read_toml, config_from_raw,
-                      default_label, mailbox_id_for, read_secrets)
+from ..config import (IMAP_AUTHS, INBOX_ACTION, SECRETS_FILE, Config, ConfigError, Mailbox, _read_toml,
+                      config_from_raw, default_label, mailbox_id_for, read_secrets, secrets_writable, write_secrets)
 from ..i18n import DEFAULT_LANGUAGE, LANGUAGES, _
 from ..runtime import single_instance
 
@@ -174,6 +174,7 @@ def save_settings(box: Mailbox, shared_path: Path, form: dict, busy: bool = Fals
     imap["port"] = _number(form, "imap_port", _("Port"), 1, 65535, integer=True)
     source = _folder(form, "source_folder", _("Inbox"))
     imap["source_folder"] = source or "INBOX"
+    auth, oauth = _sign_in_method(form, imap, box.cfg) if "imap_auth" in form else (box.cfg.imap_auth, {})
 
     rules = doc.setdefault("rules", tomlkit.table())
     rules["min_confidence"] = _number(form, "min_confidence", _("Minimum confidence"), 0, 1)
@@ -193,7 +194,9 @@ def save_settings(box: Mailbox, shared_path: Path, form: dict, busy: bool = Fals
     rules["lookback_days"] = _number(form, "lookback_days", _("Look-back in days"), 1, 365, integer=True)
     rules["max_per_run"] = _number(form, "max_per_run", _("Max. mails per run"), 1, 5000, integer=True)
     _set(rules, "expired_folder", _folder(form, "expired_folder", _("Default folder for expired mail")))
-    login = _login_changes(box, form)
+    login = _login_changes(box, form, auth)
+    if (login or any(oauth.values())) and not secrets_writable(box.secrets_path):
+        raise EditError(_("%(file)s is not writable, so the login cannot be stored.", file=SECRETS_FILE))
     text = _checked_text(box, doc, shared_path)
     taken = {p.name for p in box.workspace.parent.iterdir() if p.is_dir()} - {box.id}
     new_id = mailbox_id_for(name, taken)
@@ -201,25 +204,58 @@ def save_settings(box: Mailbox, shared_path: Path, form: dict, busy: bool = Fals
         _write(box.config_file, text)
     else:
         _move_mailbox(box, new_id, text, busy)
-    if login:  # the secrets file moved along with the folder
-        write_secrets(box.workspace.with_name(new_id) / SECRETS_FILE, "imap", login)
+    secrets = box.workspace.with_name(new_id) / SECRETS_FILE  # it moved along with the folder
+    if login:
+        write_secrets(secrets, "imap", login)
+    if oauth:
+        write_secrets(secrets, "oauth", oauth)
     return new_id
 
 
-def _login_changes(box: Mailbox, form: dict) -> dict:
+def _login_changes(box: Mailbox, form: dict, auth: str) -> dict:
     """What the settings form changes in the stored login: {} for nothing. The user field shows the
-    stored user (empty: none stored); the password field is write-only, empty keeps it."""
+    stored user (empty: none stored); the password field is write-only, empty keeps it, and it is
+    only used with auth "password"."""
     if "imap_user" not in form:  # not sent: the login fields are disabled (read-only)
         return {}
     stored = _stored(box.secrets_path, "imap")
     user = _secret_text(form, "imap_user", _("User"), strip=True)
-    password = _secret_text(form, "imap_password", _("Password"))
+    password = _secret_text(form, "imap_password", _("Password")) if auth == "password" else ""
     changes = {} if user == stored.get("user", "") else {"user": user or None}
     if password:
         changes["password"] = password
-    if changes and not secrets_writable(box.secrets_path):
-        raise EditError(_("%(file)s is not writable, so the login cannot be stored.", file=SECRETS_FILE))
     return changes
+
+
+_CLIENT_ID_RE = re.compile(r"^[A-Za-z0-9._-]{8,200}$")  # Google: …apps.googleusercontent.com, Microsoft: a GUID
+_TENANT_RE = re.compile(r"^[A-Za-z0-9.-]{1,100}$")
+
+
+def _sign_in_method(form: dict, imap: Table, before: Config | None) -> tuple[str, dict]:
+    """Set [imap] auth, oauth_client_id and oauth_tenant from the form. Returns the method and the
+    changes for the [oauth] secrets: a new client secret, and no refresh token any more when the
+    method, app or tenant changed (that needs a new sign-in)."""
+    auth = _text(form, "imap_auth", 20) or "password"
+    if auth not in IMAP_AUTHS:
+        raise EditError(_("Unknown sign-in method."))
+    _set(imap, "auth", auth, default="password")
+    if auth == "password":
+        return auth, {}
+    client_id = _text(form, "oauth_client_id", 200)
+    if not _CLIENT_ID_RE.match(client_id):
+        raise EditError(_("Client ID: please copy it from your OAuth app."))
+    imap["oauth_client_id"] = client_id
+    tenant = _text(form, "oauth_tenant", 100) if auth == "microsoft" else ""
+    if tenant and not _TENANT_RE.match(tenant):
+        raise EditError(_("Tenant: \"common\", \"consumers\", \"organizations\" or your tenant's ID or domain."))
+    _set(imap, "oauth_tenant", tenant, default="")
+    oauth = {}
+    secret = _secret_text(form, "oauth_client_secret", _("Client secret"), strip=True) if auth == "google" else ""
+    if secret:
+        oauth["client_secret"] = secret
+    if before is None or (before.imap_auth, before.oauth_client_id, before.oauth_tenant) != (auth, client_id, tenant):
+        oauth["refresh_token"] = None
+    return auth, oauth
 
 
 def _move_mailbox(box: Mailbox, new_id: str, text: str, busy: bool) -> None:
@@ -402,16 +438,21 @@ def create_mailbox(base_dir: Path, shared_path: Path, template_file: Path, templ
     if not host or " " in host:
         raise EditError(_("IMAP server: please enter a host name."))
     user = _secret_text(form, "imap_user", _("User"), strip=True)
-    password = _secret_text(form, "imap_password", _("Password"))
-    if not user or not password:
+    imap = tomlkit.table()
+    auth, oauth = _sign_in_method(form, imap, None)
+    password = _secret_text(form, "imap_password", _("Password")) if auth == "password" else ""
+    if auth == "password" and (not user or not password):
         raise EditError(_("Please enter the user and the password of the mailbox."))
+    if not user:
+        raise EditError(_("Please enter the user (the e-mail address) of the mailbox."))
+    if auth == "google" and not oauth.get("client_secret"):
+        raise EditError(_("Please enter the client secret of your Google OAuth app."))
 
     source = tomlkit.parse(template_file.read_text(encoding="utf-8"))
     doc = tomlkit.document()
     doc.add(tomlkit.comment(f'Mailbox "{name}" - created in the web UI, categories from "{template_name}"'))
     doc.add(tomlkit.nl())
     doc["name"] = name
-    imap = tomlkit.table()
     imap["host"] = host
     imap["port"] = _number(form, "imap_port", _("Port"), 1, 65535, integer=True)
     imap["source_folder"] = _folder(form, "source_folder", _("Inbox")) or "INBOX"
@@ -429,7 +470,9 @@ def create_mailbox(base_dir: Path, shared_path: Path, template_file: Path, templ
         raise EditError(_("Not created: %(e)s", e=e)) from None
     folder.mkdir(parents=True)
     (folder / "mailbox.toml").write_text(text, encoding="utf-8")
-    write_secrets(folder / SECRETS_FILE, "imap", {"user": user, "password": password})
+    write_secrets(folder / SECRETS_FILE, "imap", {"user": user, "password": password or None})
+    if oauth:
+        write_secrets(folder / SECRETS_FILE, "oauth", oauth)
     return box_id
 
 
@@ -495,38 +538,8 @@ def _secret_text(form: dict, name: str, label: str, strip: bool = False) -> str:
     return value
 
 
-def secrets_writable(path: Path) -> bool:
-    return os.access(path.parent, os.W_OK) and (not path.exists() or os.access(path, os.W_OK))
-
-
 def _stored(path: Path, section: str) -> dict:
     try:
         return dict(read_secrets(path).get(section, {}))
     except ConfigError as e:
         raise EditError(str(e)) from None
-
-
-def write_secrets(path: Path, section: str, values: dict) -> None:
-    """Set (a string) or remove (None) keys of [section] in a secrets file - atomically, mode 0600
-    and without a .bak copy. The file is deleted once nothing is left in it."""
-    data = {k: dict(v) for k, v in read_secrets(path).items() if isinstance(v, dict)}
-    table = data.setdefault(section, {})
-    for key, value in values.items():
-        if value:
-            table[key] = value
-        else:
-            table.pop(key, None)
-    data = {k: v for k, v in data.items() if v}
-    if not data:
-        path.unlink(missing_ok=True)
-        return
-    doc = tomlkit.document()
-    doc.add(tomlkit.comment("Written by the Sortroom admin UI. Keep it private and include it in your backup."))
-    for key, value in data.items():
-        doc[key] = value
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.unlink(missing_ok=True)
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)  # never readable by others, not even briefly
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write(tomlkit.dumps(doc))
-    os.replace(tmp, path)

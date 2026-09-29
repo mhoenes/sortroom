@@ -15,9 +15,10 @@ from ..check import check_imap, check_model
 from ..classifier import ClassifierClient, ClassifierError
 from .. import i18n
 from ..config import (EXAMPLE_MAILBOXES, INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, _read_toml,
-                      classifier_key, load_credentials, stored_credentials)
+                      classifier_key, imap_credentials, load_credentials)
 from ..i18n import _
 from ..maintenance import relocate_category, rename_category, rename_folder
+from ..oauth import PROVIDERS
 from ..manual import ManualError, move_mail
 from ..reconcile import run_reconcile
 from ..resort import run_resort
@@ -27,7 +28,7 @@ from ..store import Store
 from . import _box, _boxes, _sidebar, queries, require_login, router
 from .editing import (EditError, add_sender_rule, can_add_mailbox, create_mailbox, rename_category_key,
                       rename_folder_refs, save_shared, secrets_writable, shared_writable, writable)
-from .editor import _flash, _form, _page, _shared_path, form_number, without_secrets
+from .editor import _flash, _form, _page, _shared_path, auth_methods, form_number, without_secrets
 
 log = logging.getLogger(__name__)
 
@@ -73,13 +74,16 @@ def _job_for(request: Request, box: Mailbox, task: str, form: dict):
     cfg, ws, live = box.cfg, box.workspace, _flag(form, "live")
     mode = "" if live else f" ({_('dry run')})"
     if task == "check":  # only the mailbox; the model is checked under Global settings
-        stored = stored_credentials(box)
-        if not stored["imap_user"] or not stored["imap_password"]:
-            raise ConfigError(_("The login of this mailbox is not set yet."))
+        try:
+            creds = imap_credentials(box)
+        except ConfigError:
+            if cfg.imap_auth == "password":
+                raise ConfigError(_("The login of this mailbox is not set yet.")) from None
+            raise ConfigError(_("Sign in with %(provider)s first, in the login section.",
+                                provider=PROVIDERS[cfg.imap_auth].label)) from None
 
         def run_check() -> dict:
-            ok = check_imap(cfg, stored["imap_user"], stored["imap_password"],
-                            out=lambda line: log.info("%s", line.strip("\n")))
+            ok = check_imap(cfg, creds, out=lambda line: log.info("%s", line.strip("\n")))
             return {"ok": ok, "exit_code": 0 if ok else 1}
         return _("Check connection"), run_check, False
     creds = load_credentials(box)
@@ -273,7 +277,7 @@ def _set_expiry(box: Mailbox, key: str, form: dict) -> str:
 # ---------------------------------------------------------------- new mailbox
 
 def _new_mailbox_page(request: Request, form: dict | None = None, error: str | None = None, status: int = 200,
-                      retype: bool = False):
+                      retype: bool = False, retype_secret: bool = False):
     boxes = _boxes(request)
     blocked = can_add_mailbox(request.app.state.base_dir)
     root = request.app.state.base_dir / "mailboxes"
@@ -281,9 +285,10 @@ def _new_mailbox_page(request: Request, form: dict | None = None, error: str | N
         **_sidebar(request, boxes, None, "all"), "boxes": boxes, "blocked": blocked, "error": error,
         "example_categories": {code: len(tomllib.loads(path.read_text(encoding="utf-8"))["categories"])
                                for code, path in EXAMPLE_MAILBOXES.items()},
-        "languages": i18n.LANGUAGES, "retype": retype, "secrets_file": SECRETS_FILE,
+        "languages": i18n.LANGUAGES, "retype": retype, "retype_secret": retype_secret, "secrets_file": SECRETS_FILE,
+        "auth_methods": auth_methods(),
         "taken_ids": sorted(p.name for p in root.iterdir() if p.is_dir()) if root.is_dir() else [],
-        "form": form or {"imap_port": "993", "source_folder": "INBOX",
+        "form": form or {"imap_port": "993", "source_folder": "INBOX", "imap_auth": "password",
                          "template": next(iter(boxes), EXAMPLE + i18n.language())}},
         status)
 
@@ -314,7 +319,12 @@ async def mailbox_create(request: Request):
         box_id = create_mailbox(base, _shared_path(request), template_file, template_name, form)
     except EditError as e:
         form, retype = without_secrets(form, "imap_password")
-        return _new_mailbox_page(request, form=form, error=str(e), status=422, retype=retype)
+        form, retype_secret = without_secrets(form, "oauth_client_secret")
+        return _new_mailbox_page(request, form=form, error=str(e), status=422, retype=retype,
+                                 retype_secret=retype_secret)
+    if str(form.get("imap_auth") or "password") != "password":  # next: the sign-in with the account
+        _flash(request, _("Mailbox created. Now sign in with your account."))
+        return RedirectResponse(f"/ui/m/{box_id}/oauth", status_code=303)
     _flash(request, _('Mailbox created. "Save & check" in the login section tests it.'))
     return RedirectResponse(f"/ui/m/{box_id}/settings", status_code=303)
 

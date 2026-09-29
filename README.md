@@ -44,9 +44,14 @@ anywhere else.
 ## What you need
 
 - A machine that runs Docker (amd64 or arm64, e.g. a home server, NAS or Raspberry Pi).
-- An IMAP login per mailbox. For Gmail and other accounts with two-factor
-  authentication this is an **app password**, not your normal one; Gmail also needs
-  IMAP to be enabled in its settings.
+- Access to each mailbox:
+  - **Microsoft** (Outlook.com, Hotmail, Microsoft 365) no longer accepts passwords for
+    IMAP: you sign in with your account through your own, free OAuth app – see
+    [Signing in with Google or Microsoft](#signing-in-with-google-or-microsoft).
+  - **Gmail**: the same OAuth sign-in, or an **app password** (needs two-factor
+    authentication).
+  - **Any other provider**: the IMAP user and password (an app password where the
+    provider asks for one).
 - An API key for the classification endpoint, e.g. from
   [OpenRouter](https://openrouter.ai/settings/keys) – or your own TypeSafe-API server.
 
@@ -75,8 +80,10 @@ anywhere else.
 5. Under **Global settings** enter the API key and press **Save & check** – it sends the
    model one sample mail and shows the answer.
 6. Under **Add mailbox** enter the name, IMAP server and login and pick the standard
-   categories (or copy those of another mailbox). In the new mailbox's **Settings**,
-   **Save & check** logs in and lists which target folders exist.
+   categories (or copy those of another mailbox). For Google and Microsoft choose the
+   OAuth sign-in (see below); Sortroom then takes you to the sign-in with your account.
+   In the new mailbox's **Settings**, **Save & check** logs in and lists which target
+   folders exist.
 
 That's it: the mailbox is sorted every 10 minutes from now on. New mail waits 24 hours
 in the inbox first, so you still see it there – see [Schedule](#schedule).
@@ -150,12 +157,63 @@ They are set in the UI and stored in plain text, readable only by the container 
 (mode `0600`). The fields are write-only: a stored password or key is never shown
 again; leave the field empty to keep it.
 
-- `mailboxes/<id>/secrets.toml` – the mailbox's IMAP user and password
+- `mailboxes/<id>/secrets.toml` – the mailbox's IMAP user and password, or with an OAuth
+  sign-in the client secret and the token of the sign-in (no password)
 - `config/secrets.toml` – the API key of the classification endpoint
 
 They are read at the start of every run, so a change needs no restart. They are not
 copied as `.bak` and are excluded from git and the Docker build – **include them in your
 backup**. `.env` holds only `ADMIN_PASSWORD`, `API_TOKEN` and the Docker settings.
+
+## Signing in with Google or Microsoft
+
+Microsoft accepts only OAuth for IMAP, and for Gmail it is the alternative to an app
+password. Sortroom has no shared OAuth app: **you create your own**, once, for free – that
+keeps your mail access in your hands and needs no approval by Google or Microsoft. A
+mailbox then gets the sign-in method *Google (OAuth)* or *Microsoft (OAuth)* under
+Settings → Login, with the app's client ID.
+
+**The sign-in.** **Save & sign in** opens the provider's sign-in in a new tab. Sign in
+with the mailbox's account and allow the access. The provider then sends the browser to
+an address starting with `http://localhost` – when the admin UI runs on another computer
+(the usual case), that page doesn't load. That's expected: copy the whole address from
+the address bar into the field Sortroom shows, and the sign-in is done. If you use the UI
+on the Docker host itself (`http://localhost:8765`), it finishes by itself. Sortroom
+keeps only the token of the sign-in; you need to sign in again after changing the
+method, the client ID or the tenant, or when you revoke the access in your account.
+
+### Google
+
+1. In the [Google Cloud console](https://console.cloud.google.com/) create a project, e.g.
+   "Sortroom", and enable the **Gmail API** for it.
+2. Under **Google Auth Platform** set up the consent screen: an app name, your address as
+   support and developer contact, audience **External**. Under **Data access** add the
+   scope `https://mail.google.com/`.
+3. Under **Audience** press **Publish app** (status *In production*). This is important:
+   while an app is in *Testing*, Google ends its sign-ins after 7 days. A published app
+   doesn't need Google's verification for your own use; the sign-in just shows a
+   warning that the app isn't verified – continue via **Advanced**.
+4. Under **Clients** create a client of type **Desktop app** and copy its **client ID**
+   and **client secret** into the mailbox's settings.
+
+### Microsoft
+
+1. In the [Microsoft Entra admin center](https://entra.microsoft.com/) (with any Microsoft
+   account) open **App registrations → New registration**: a name, e.g. "Sortroom", and
+   the account types – *Personal Microsoft accounts only* for Outlook.com/Hotmail, or
+   *any organizational directory and personal Microsoft accounts*.
+2. As redirect URI choose the platform **Public client/native (mobile & desktop)** and
+   enter `http://localhost/oauth/callback`.
+3. Under **API permissions** add the delegated permissions `offline_access` and
+   `IMAP.AccessAsUser.All` (Microsoft Graph). Sortroom asks for them at the sign-in anyway;
+   listed here, an administrator can grant them for a whole organization.
+4. Copy the **Application (client) ID** into the mailbox's settings. There is no client
+   secret. **Tenant**: leave it empty (personal and work accounts); for an app with
+   personal accounts only enter `consumers`, for one of your organization only its tenant
+   ID.
+
+In a Microsoft 365 organization, IMAP must also be allowed for the mailbox, and the
+organization may require an administrator to approve the app.
 
 ## Schedule
 
@@ -288,7 +346,7 @@ config/secrets.toml       # the API key
 mailboxes/
   me-example-com/
     mailbox.toml          # name, [imap], [rules], [schedule], [[sender_rules]], [categories.*]
-    secrets.toml          # the IMAP login
+    secrets.toml          # the IMAP login (password or OAuth token)
     data/state.db         # the log of processed mail and runs
     reports/              # dry-run CSV reports
   work/
@@ -356,7 +414,7 @@ answers 409.
 | `config/config.toml` | shared settings: endpoint, model, UI language |
 | `config/secrets.toml` | the API key (mode 0600) |
 | `mailboxes/<id>/mailbox.toml` | a mailbox's settings; `.bak` is the previous version |
-| `mailboxes/<id>/secrets.toml` | the mailbox's IMAP login (mode 0600) |
+| `mailboxes/<id>/secrets.toml` | the mailbox's IMAP login: password, or OAuth client secret and token (mode 0600) |
 | `mailboxes/<id>/data/state.db` | SQLite log of every processed mail and run (runs are kept 180 days) |
 | `mailboxes/<id>/reports/dry-run-*.csv` | dry-run results incl. the runner-up category |
 | `logs/sortroom.log` | the application log (rotating, 5 × 1 MB) |
@@ -369,7 +427,14 @@ answers 409.
 - **"not set: IMAP password (mailbox settings) …"** – the login or the API key is missing;
   enter it under Settings or Global settings.
 - **The IMAP check fails** – check server, port (993) and login. Gmail and accounts with
-  two-factor authentication need an app password.
+  two-factor authentication need an app password or the OAuth sign-in; Microsoft only
+  accepts the OAuth sign-in.
+- **"The sign-in with Google has expired or was revoked"** – sign in again under the
+  mailbox's Settings. If it happens every week, the Google app is still in *Testing*:
+  publish it (see [Google](#google)).
+- **The sign-in shows an error from Microsoft (AADSTS…)** – usually the redirect URI
+  (`http://localhost/oauth/callback`, platform *Public client*), the account types of the
+  app or the tenant don't fit the account.
 - **The model check fails with HTTP 401, 402 or 403** – the API key is wrong, or the
   provider account has no credit left.
 - **Mail stays in the inbox** – it is younger than the waiting time, the model was

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Sign in with %(provider)s', provider=provider) }} · {{ box.name }}{% endblock %}
+{% block content %}
+<div class="head">
+  <div class="title">
+    <h1>{{ _('Sign in with %(provider)s', provider=provider) }} · {{ box.name }}</h1>
+    <div class="sub">{{ _('Sortroom gets access to this mailbox through your own OAuth app – no password is stored.') }}</div>
+  </div>
+  <a class="btn" href="/ui/m/{{ box.id }}/settings">{{ _('Cancel') }}</a>
+</div>
+
+{% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
+
+<section class="card stack">
+  <ol class="signin-steps">
+    <li>
+      <h2>{{ _('Open the sign-in') }}</h2>
+      <p class="muted hint">{{ _('It opens in a new tab. Sign in with the account of this mailbox and allow the access. With an app that is not verified, Google first shows a warning – continue via "Advanced".') }}</p>
+      <p><a class="btn primary" href="{{ url }}" target="_blank" rel="noopener">{{ _('Sign in with %(provider)s', provider=provider) }}</a></p>
+    </li>
+    <li>
+      <h2>{{ _('Paste the address') }}</h2>
+      {% if direct %}
+      <p class="muted hint">{{ _('As you use this interface on this computer, the sign-in usually finishes by itself: the new tab comes back to the mailbox settings. If it shows an error page instead, copy its address and paste it here.') }}</p>
+      {% else %}
+      <p class="muted hint">{{ _('Afterwards the new tab shows an error page for an address that starts with "http://localhost" – that is expected, because this interface runs on another computer. Copy the whole address from the address bar and paste it here.') }}</p>
+      {% endif %}
+      <form method="post" action="/ui/m/{{ box.id }}/oauth" class="stack">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="state" value="{{ state }}">
+        <label class="f"><span class="lt">{{ _('Address of the error page') }}</span>
+          <input type="text" name="response_url" required autocomplete="off" spellcheck="false" class="mono" placeholder="http://localhost…/oauth/callback?state=…&amp;code=…"></label>
+        <div class="actions"><button class="btn primary" type="submit">{{ _('Finish sign-in') }}</button>
+          <span class="muted hint">{{ _('The sign-in is valid for 15 minutes.') }}</span></div>
+      </form>
+    </li>
+  </ol>
+</section>
+{% endblock %}

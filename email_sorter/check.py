@@ -11,6 +11,7 @@ from imap_tools import MailBox
 
 from .config import Config, Credentials
 from .classifier import ClassifierClient, ClassifierError, Decision
+from .oauth import sign_in
 from .sorter import IMAP_TIMEOUT, _delimiter, server_folder
 
 SAMPLE_STATE = {
@@ -24,12 +25,12 @@ SAMPLE_STATE = {
 }
 
 
-def check_imap(cfg: Config, user: str, password: str, out: Callable[[str], None] = print) -> bool:
+def check_imap(cfg: Config, creds: Credentials, out: Callable[[str], None] = print) -> bool:
     """Log in, look at the inbox and list which target folders exist."""
-    out(f"IMAP  {cfg.imap_host}:{cfg.imap_port} as {user}")
+    how = f" with {cfg.imap_auth.capitalize()} (OAuth)" if creds.oauth else ""
+    out(f"IMAP  {cfg.imap_host}:{cfg.imap_port} as {creds.imap_user}{how}")
     try:
-        with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(user, password,
-                                                                               initial_folder=cfg.source_folder) as mb:
+        with sign_in(MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT), creds, cfg.source_folder) as mb:
             delim = _delimiter(mb)
             existing = {f.name for f in mb.folder.list()}
             status = mb.folder.status(cfg.source_folder)
@@ -53,7 +54,7 @@ def check_model(client: ClassifierClient, descriptions: dict[str, str]) -> Decis
 
 def check(cfg: Config, creds: Credentials, out: Callable[[str], None] = print) -> int:
     """--check: the mailbox and the model."""
-    ok = check_imap(cfg, creds.imap_user, creds.imap_password, out)
+    ok = check_imap(cfg, creds, out)
     out(f"\nModel {cfg.classifier_model} via {cfg.classifier_endpoint}")
     try:
         d = check_model(cfg.classifier_client(creds.classifier_api_key), cfg.descriptions)

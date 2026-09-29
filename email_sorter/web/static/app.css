@@ -247,7 +247,13 @@ div.f { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-w
 .hint { font-size: 13px; margin: 0; }
 .rename-note { color: var(--warn); font-weight: 400; }
 .f .hint:has(.pill) { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-weight: 400; }
-.login-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.login-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+[data-auth][hidden] { display: none !important; }  /* fields of another sign-in method */
+.signin-steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 22px; }
+.signin-steps li { padding-left: 4px; }
+.signin-steps li::marker { font-weight: 600; }
+.signin-steps h2 { margin-bottom: 4px; }
+.signin-steps p { margin: 6px 0 0; }
 .btn.danger { color: var(--err); border-color: #E3B5AE; }
 .btn.danger:hover { background: var(--err-bg); color: var(--err); }
 .banner.ok { background: var(--ok-bg); color: var(--ok); }
