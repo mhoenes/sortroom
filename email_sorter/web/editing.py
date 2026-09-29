@@ -425,6 +425,23 @@ def _top_level_labels(doc) -> None:
                 table[key] = value.split("/", 1)[1]
 
 
+# "Add mailbox" starts with the type of mailbox; Gmail and Outlook fix the server and the sign-in
+MAILBOX_KINDS = {
+    "gmail": {"imap_host": "imap.gmail.com", "imap_port": "993", "source_folder": "INBOX", "imap_auth": "google"},
+    "outlook": {"imap_host": "outlook.office365.com", "imap_port": "993", "source_folder": "INBOX",
+                "imap_auth": "microsoft"},
+    "imap": {"imap_auth": "password"},
+}
+
+
+def with_kind(form: dict) -> dict:
+    """The "Add mailbox" form with the server and sign-in its mailbox type sets."""
+    kind = str(form.get("kind") or "imap")
+    if kind not in MAILBOX_KINDS:
+        raise EditError(_("Please choose the type of mailbox."))
+    return {**form, "kind": kind, **MAILBOX_KINDS[kind]}
+
+
 def create_mailbox(base_dir: Path, shared_path: Path, template_file: Path, template_name: str, form: dict) -> str:
     """Write mailboxes/<id>/mailbox.toml with the rules, schedule and categories of `template_file`
     (another mailbox or the built-in example). The id comes from the display name. Returns it."""

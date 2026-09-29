@@ -218,15 +218,35 @@ def test_sign_in_needs_the_method_first(client):
     assert r.status_code == 303 and r.headers["location"] == "/ui/m/privat/settings"
 
 
-def test_new_microsoft_mailbox_goes_to_the_sign_in(client, setup):
+def test_new_outlook_mailbox_goes_to_the_sign_in(client, setup):
     html = client.get("/ui/mailboxes/new").text
-    assert "Microsoft (OAuth)" in html and "login-method.js" in html
-    form = {"csrf": _csrf(html), "name": "Work", "imap_host": "outlook.office365.com", "imap_port": "993",
-            "source_folder": "INBOX", "imap_user": "me@work.example", "imap_auth": "microsoft",
+    assert 'name="kind" value="outlook" data-auth-value="microsoft"' in html and "login-method.js" in html
+    form = {"csrf": _csrf(html), "name": "Work", "kind": "outlook", "imap_host": "", "imap_port": "",
+            "source_folder": "", "imap_user": "me@work.example", "imap_password": "",
             "oauth_client_id": MS_ID, "oauth_tenant": "consumers", "template": "privat"}
     r = client.post("/ui/mailboxes/new", data=form, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/ui/m/work/oauth"
     raw = tomllib.loads((setup / "mailboxes" / "work" / "mailbox.toml").read_text(encoding="utf-8"))
-    assert raw["imap"]["auth"] == "microsoft" and raw["imap"]["oauth_tenant"] == "consumers"
+    assert raw["imap"] == {"host": "outlook.office365.com", "port": 993, "source_folder": "INBOX",
+                           "auth": "microsoft", "oauth_client_id": MS_ID, "oauth_tenant": "consumers"}
     assert _secrets(setup / "mailboxes" / "work" / "secrets.toml") == {"imap": {"user": "me@work.example"}}
     assert "consumers/oauth2/v2.0/authorize" in client.get(r.headers["location"]).text
+
+
+def test_new_gmail_mailbox_sets_the_server(client, setup):
+    html = client.get("/ui/mailboxes/new").text
+    form = {"csrf": _csrf(html), "name": "Gmail", "kind": "gmail", "imap_host": "imap.example.com",
+            "imap_user": "me@gmail.example", "imap_password": "ignored", "oauth_client_id": GOOGLE_ID,
+            "oauth_client_secret": "gs", "template": "privat"}
+    r = client.post("/ui/mailboxes/new", data=form, follow_redirects=False)
+    assert r.headers["location"] == "/ui/m/gmail/oauth"
+    raw = tomllib.loads((setup / "mailboxes" / "gmail" / "mailbox.toml").read_text(encoding="utf-8"))
+    assert raw["imap"]["host"] == "imap.gmail.com" and raw["imap"]["auth"] == "google"  # the type wins
+    assert raw["categories"]["werbung"]["folder"] == "Werbung"  # Gmail: top-level labels
+    assert _secrets(setup / "mailboxes" / "gmail" / "secrets.toml") == {
+        "imap": {"user": "me@gmail.example"}, "oauth": {"client_secret": "gs"}}  # no password kept
+
+    r = client.post("/ui/mailboxes/new", data={**form, "name": "Gmail 2", "oauth_client_secret": ""})
+    assert r.status_code == 422 and "Client-Secret" in r.text
+    r = client.post("/ui/mailboxes/new", data={**form, "name": "Gmail 3", "kind": "yahoo"})
+    assert r.status_code == 422 and "Art des Postfachs" in r.text

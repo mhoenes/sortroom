@@ -79,11 +79,11 @@ anywhere else. Details: [PRIVACY.md](PRIVACY.md).
 4. Open `http://<docker-host>:8765` and log in with `ADMIN_PASSWORD`.
 5. Under **Global settings** enter the API key and press **Save & check** – it sends the
    model one sample mail and shows the answer.
-6. Under **Add mailbox** enter the name, IMAP server and login and pick the standard
-   categories (or copy those of another mailbox). For Google and Microsoft choose the
-   OAuth sign-in (see below); Sortroom then takes you to the sign-in with your account.
-   In the new mailbox's **Settings**, **Save & check** logs in and lists which target
-   folders exist.
+6. Under **Add mailbox** choose the type – Gmail, Outlook.com / Microsoft 365 or another IMAP
+   server; Gmail and Outlook fill in the server and use the sign-in with your account
+   (see [below](#signing-in-with-google-or-microsoft)), otherwise enter server, user and
+   password. Pick the standard categories (or copy those of another mailbox). In the new
+   mailbox's **Settings**, **Save & check** logs in and lists which target folders exist.
 
 That's it: the mailbox is sorted every 10 minutes from now on. New mail waits 24 hours
 in the inbox first, so you still see it there – see [Schedule](#schedule).

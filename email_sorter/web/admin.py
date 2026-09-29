@@ -26,7 +26,7 @@ from ..runtime import single_instance
 from ..sorter import RunResult, expired_target, run, run_backfill, run_recheck_expiry
 from ..store import Store
 from . import _box, _boxes, _sidebar, queries, require_login, router
-from .editing import (EditError, add_sender_rule, can_add_mailbox, create_mailbox, rename_category_key,
+from .editing import (EditError, add_sender_rule, can_add_mailbox, create_mailbox, rename_category_key, with_kind,
                       rename_folder_refs, save_shared, secrets_writable, shared_writable, writable)
 from .editor import _flash, _form, _page, _shared_path, auth_methods, form_number, without_secrets
 
@@ -286,9 +286,14 @@ def _new_mailbox_page(request: Request, form: dict | None = None, error: str | N
         "example_categories": {code: len(tomllib.loads(path.read_text(encoding="utf-8"))["categories"])
                                for code, path in EXAMPLE_MAILBOXES.items()},
         "languages": i18n.LANGUAGES, "retype": retype, "retype_secret": retype_secret, "secrets_file": SECRETS_FILE,
-        "auth_methods": auth_methods(),
+        "kinds": {"gmail": {"label": _("Gmail"), "detail": _("imap.gmail.com · sign-in with Google"),
+                            "auth": "google"},
+                  "outlook": {"label": _("Outlook.com / Microsoft 365"),
+                              "detail": _("outlook.office365.com · sign-in with Microsoft"), "auth": "microsoft"},
+                  "imap": {"label": _("Other IMAP server"), "detail": _("any provider · user and password"),
+                           "auth": "password"}},
         "taken_ids": sorted(p.name for p in root.iterdir() if p.is_dir()) if root.is_dir() else [],
-        "form": form or {"imap_port": "993", "source_folder": "INBOX", "imap_auth": "password",
+        "form": form or {"imap_port": "993", "source_folder": "INBOX",
                          "template": next(iter(boxes), EXAMPLE + i18n.language())}},
         status)
 
@@ -307,6 +312,7 @@ async def mailbox_create(request: Request):
         reason = can_add_mailbox(base)
         if reason:
             raise EditError(reason)
+        form = with_kind(form)
         choice = str(form.get("template") or "")
         if choice.startswith(EXAMPLE) and choice[len(EXAMPLE):] in EXAMPLE_MAILBOXES:
             lang = choice[len(EXAMPLE):]

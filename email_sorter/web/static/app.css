@@ -249,6 +249,13 @@ div.f { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-w
 .f .hint:has(.pill) { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-weight: 400; }
 .login-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 [data-auth][hidden] { display: none !important; }  /* fields of another sign-in method */
+.kinds { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.kind { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid var(--line-strong);
+  border-radius: 10px; background: var(--surface); cursor: pointer; }
+.kind:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.kind input { margin: 3px 0 0; accent-color: var(--accent); }
+.kind b { display: block; font-weight: 600; }
+.kind small { display: block; margin-top: 2px; font-size: 13px; color: var(--muted); }
 .signin-steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 22px; }
 .signin-steps li { padding-left: 4px; }
 .signin-steps li::marker { font-weight: 600; }
