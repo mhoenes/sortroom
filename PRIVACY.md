@@ -44,8 +44,8 @@ All of it stays on the machine that runs Sortroom, in its folders:
   date, category, confidence, target folder, expiry date and cost; and a log of the
   runs. Mail text is not stored.
 - `mailboxes/<id>/reports/` – dry-run reports with sender, subject and category.
-- `logs/sortroom.log` – the application log; with verbose logging it also contains
-  subjects.
+- `logs/sortroom.log` – the application log; it can contain subjects (of mails moved by
+  hand, and of every mail with verbose logging).
 - `mailboxes/<id>/secrets.toml` and `config/secrets.toml` – the IMAP login or the OAuth
   sign-in token, and the API key of the endpoint; plain text, readable only by the
   user that runs Sortroom (mode `0600`).
