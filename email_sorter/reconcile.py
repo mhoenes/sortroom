@@ -19,6 +19,7 @@ from .i18n import _
 from .mailtext import message_key
 from .sorter import IMAP_TIMEOUT, UID_CHUNK, _delimiter
 from .store import Store
+from .oauth import sign_in
 
 log = logging.getLogger(__name__)
 
@@ -51,9 +52,7 @@ def mail_folders(mb: MailBox) -> tuple[list[str], list[str]]:
 def run_reconcile(cfg: Config, creds: Credentials, base_dir: Path, live: bool) -> dict:
     store = Store(base_dir / "data" / "state.db")
     try:
-        with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(
-            creds.imap_user, creds.imap_password, initial_folder=cfg.source_folder
-        ) as mb:
+        with sign_in(MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT), creds, cfg.source_folder) as mb:
             delim = _delimiter(mb)
             source = cfg.source_folder.strip("/")
             found: dict[str, str | None] = {}  # message key -> folder (config notation); None: only in a view

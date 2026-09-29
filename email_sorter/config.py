@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import os
 import re
 import tomllib
 import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
+
+import tomlkit
 
 _KEY_RE = re.compile(r"^[a-z0-9_]+$")
 
@@ -35,10 +38,12 @@ class SenderRule:
     action: str  # INBOX_ACTION or a category key
 
 
-# Logins and the API key, set in the admin UI: mailboxes/<id>/secrets.toml ([imap] user, password)
-# and secrets.toml next to config.toml ([classifier] api_key of the classification endpoint).
-# Plain text, mode 0600, never backed up as .bak.
+# Logins and the API key, set in the admin UI: mailboxes/<id>/secrets.toml ([imap] user, password;
+# [oauth] client_secret, refresh_token) and secrets.toml next to config.toml ([classifier] api_key of
+# the classification endpoint). Plain text, mode 0600, never backed up as .bak.
 SECRETS_FILE = "secrets.toml"
+
+IMAP_AUTHS = ("password", "google", "microsoft")  # [imap] auth: password or OAuth2 (XOAUTH2)
 
 
 @dataclass(frozen=True)
@@ -59,6 +64,9 @@ class Config:
     min_age_hours: float
     max_per_run: int
     categories: dict[str, Category]
+    imap_auth: str = "password"      # "password", or "google" / "microsoft" for OAuth2 (see oauth.py)
+    oauth_client_id: str = ""        # the user's own OAuth client (not secret); Microsoft: "" = Sortroom's
+    oauth_tenant: str = ""           # Microsoft only: "common" (default), "consumers" or a tenant id
     sender_rules: tuple[SenderRule, ...] = ()  # checked in order, first match wins
     sort_read_at_once: bool = False  # mail already read skips the min_age_hours wait
     schedule_enabled: bool = True    # built-in schedule: a normal run every schedule_minutes
@@ -87,6 +95,7 @@ class Credentials:
     imap_user: str
     imap_password: str = field(repr=False)
     classifier_api_key: str = field(repr=False)
+    oauth: object | None = field(default=None, repr=False)  # an oauth.OAuthLogin instead of the password
 
 
 def default_label(key: str) -> str:
@@ -131,6 +140,9 @@ def config_from_raw(raw: dict, where: str) -> Config:
             imap_host=imap["host"],
             imap_port=int(imap.get("port", 993)),
             source_folder=imap.get("source_folder", "INBOX"),
+            imap_auth=str(imap.get("auth", "password")),
+            oauth_client_id=str(imap.get("oauth_client_id", "")).strip(),
+            oauth_tenant=str(imap.get("oauth_tenant", "")).strip(),
             classifier_endpoint=classifier["endpoint"],
             classifier_model=classifier["model"],
             max_body_chars=int(classifier.get("max_body_chars", 3000)),
@@ -154,6 +166,8 @@ def config_from_raw(raw: dict, where: str) -> Config:
     except KeyError as e:
         raise ConfigError(f"{where}: missing setting {e}") from None
 
+    if cfg.imap_auth not in IMAP_AUTHS:
+        raise ConfigError(f"{where}: imap.auth must be one of {', '.join(IMAP_AUTHS)}")
     if len(cfg.categories) < 2:
         raise ConfigError(f"{where}: at least two categories are required")
     if not 1 <= cfg.schedule_minutes <= 1440:
@@ -270,6 +284,37 @@ def read_secrets(path: Path | None) -> dict:
         raise ConfigError(f"{path} is not valid TOML") from None
 
 
+def secrets_writable(path: Path) -> bool:
+    return os.access(path.parent, os.W_OK) and (not path.exists() or os.access(path, os.W_OK))
+
+
+
+def write_secrets(path: Path, section: str, values: dict) -> None:
+    """Set (a string) or remove (None) keys of [section] in a secrets file - atomically, mode 0600
+    and without a .bak copy. The file is deleted once nothing is left in it."""
+    data = {k: dict(v) for k, v in read_secrets(path).items() if isinstance(v, dict)}
+    table = data.setdefault(section, {})
+    for key, value in values.items():
+        if value:
+            table[key] = value
+        else:
+            table.pop(key, None)
+    data = {k: v for k, v in data.items() if v}
+    if not data:
+        path.unlink(missing_ok=True)
+        return
+    doc = tomlkit.document()
+    doc.add(tomlkit.comment("Written by the Sortroom admin UI. Keep it private and include it in your backup."))
+    for key, value in data.items():
+        doc[key] = value
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.unlink(missing_ok=True)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)  # never readable by others, not even briefly
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(tomlkit.dumps(doc))
+    os.replace(tmp, path)
+
+
 def _value(table, key: str) -> str:
     value = table.get(key) if isinstance(table, dict) else None
     return value if isinstance(value, str) else ""
@@ -281,20 +326,56 @@ def classifier_key(shared_secrets: Path | None) -> str:
 
 
 def stored_credentials(box: Mailbox) -> dict[str, str]:
-    """imap_user, imap_password and classifier_api_key of a mailbox, "" for what is not set.
+    """What is stored for a mailbox, "" for what is not set: imap_user, imap_password,
+    oauth_client_secret, oauth_refresh_token and classifier_api_key.
     Read on every call, so a change applies from the next run without a restart."""
-    imap = read_secrets(box.secrets_path).get("imap")
+    stored = read_secrets(box.secrets_path)
+    imap, oauth = stored.get("imap"), stored.get("oauth")
     return {"imap_user": _value(imap, "user"), "imap_password": _value(imap, "password"),
+            "oauth_client_secret": _value(oauth, "client_secret"),
+            "oauth_refresh_token": _value(oauth, "refresh_token"),
             "classifier_api_key": classifier_key(box.shared_secrets)}
 
 
-_WHERE = {"imap_user": "IMAP user (mailbox settings)", "imap_password": "IMAP password (mailbox settings)",
-          "classifier_api_key": "API key (Global settings)"}
+def _imap_login(box: Mailbox, found: dict[str, str]) -> tuple[Credentials, list[str]]:
+    """The mailbox's login (password or OAuth) and what is missing for it."""
+    cfg, missing = box.cfg, []
+    if not found["imap_user"]:
+        missing.append("IMAP user (mailbox settings)")
+    oauth = None
+    if cfg.imap_auth == "password":
+        if not found["imap_password"]:
+            missing.append("IMAP password (mailbox settings)")
+    else:
+        from .oauth import PROVIDERS, OAuthLogin, client_id_for
+        label = PROVIDERS[cfg.imap_auth].label
+        client_id = client_id_for(cfg.imap_auth, cfg.oauth_client_id)
+        if not client_id:
+            missing.append(f"{label} client ID (mailbox settings)")
+        if PROVIDERS[cfg.imap_auth].needs_secret and not found["oauth_client_secret"]:
+            missing.append(f"{label} client secret (mailbox settings)")
+        if not found["oauth_refresh_token"]:
+            missing.append(f"sign-in with {label} (mailbox settings)")
+        oauth = OAuthLogin(cfg.imap_auth, client_id, cfg.oauth_tenant, found["oauth_client_secret"],
+                           found["oauth_refresh_token"], box.secrets_path)
+    creds = Credentials(found["imap_user"], "" if oauth else found["imap_password"],
+                        found["classifier_api_key"], oauth)
+    return creds, missing
+
+
+def imap_credentials(box: Mailbox) -> Credentials:
+    """The mailbox's IMAP login only (for checks and reconciles that don't ask the model)."""
+    creds, missing = _imap_login(box, stored_credentials(box))
+    if missing:
+        raise ConfigError(f"not set: {'; '.join(missing)}")
+    return creds
 
 
 def load_credentials(box: Mailbox) -> Credentials:
     found = stored_credentials(box)
-    missing = [_WHERE[k] for k, v in found.items() if not v]
+    creds, missing = _imap_login(box, found)
+    if not found["classifier_api_key"]:
+        missing.append("API key (Global settings)")
     if missing:
         raise ConfigError(f"not set: {'; '.join(missing)}")
-    return Credentials(**found)
+    return creds

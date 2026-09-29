@@ -17,6 +17,7 @@ from .runtime import BASE_DIR
 from .sorter import (IMAP_TIMEOUT, RunResult, move_uids, server_folder, _chunks, _delimiter, _ensure_folder,
                      _find_uids, _group_by_folder)
 from .store import Store
+from .oauth import sign_in
 
 log = logging.getLogger(__name__)
 
@@ -44,9 +45,7 @@ def rename_folder(cfg: Config, creds: Credentials, old: str, new: str, live: boo
     """
     store = Store(base_dir / "data" / "state.db")
     try:
-        with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(
-            creds.imap_user, creds.imap_password, initial_folder=cfg.source_folder
-        ) as mb:
+        with sign_in(MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT), creds, cfg.source_folder) as mb:
             delim = _delimiter(mb)
             old_srv, new_srv = server_folder(old, delim), server_folder(new, delim)
             if not mb.folder.exists(old_srv):
@@ -100,9 +99,7 @@ def relocate_category(cfg: Config, creds: Credentials, category: str, live: bool
         log.info("%d %s mail(s) in the log are not in %s", len(rows), category, cat.folder)
         if not rows:
             return RunResult(exit_code=0, live=live)
-        with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(
-            creds.imap_user, creds.imap_password, initial_folder=cfg.source_folder
-        ) as mb:
+        with sign_in(MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT), creds, cfg.source_folder) as mb:
             delim = _delimiter(mb)
             target = server_folder(cat.folder, delim)
             moved = missing = 0

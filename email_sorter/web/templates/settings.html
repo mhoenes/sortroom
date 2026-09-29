@@ -46,16 +46,39 @@
         <p class="muted hint">{{ _('Stored in <span class="mono">mailboxes/%(id)s/%(file)s</span>, readable only by Sortroom. The password is never shown again.', id=box.id, file=secrets_file) }}</p></div>
       {% if login_error %}<div class="banner err" role="alert">{{ login_error }}</div>{% endif %}
       {% if not login_writable %}<div class="banner" role="status">{{ _('%(file)s is not writable, so the login cannot be stored.', file=secrets_file) }}</div>{% endif %}
-      <div class="grid cols-3">
+      {% if form.imap_auth == 'password' and oauth_hint == 'microsoft' %}<div class="banner" role="status">{{ _('Microsoft no longer accepts passwords for IMAP. Choose "Microsoft (OAuth)" as the sign-in method.') }}</div>{% endif %}
+      <div class="grid cols-3" data-auth-scope>
+        <label class="f"><span class="lt">{{ _('Sign-in') }} {{ help(_('Password: the IMAP login of your provider (for Gmail an app password). Google and Microsoft: sign in with your account through your own OAuth app – Microsoft only accepts this. The README explains how to create the app.')) }}</span>
+          <select name="imap_auth" data-auth-select {% if not login_writable %}disabled{% endif %}>
+            {% for key, label in auth_methods.items() %}<option value="{{ key }}" {% if form.imap_auth == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+        </label>
         <label class="f"><span class="lt">{{ _('User') }} {{ help(_('Usually the full e-mail address.')) }}</span>
           <input type="text" name="imap_user" value="{{ form.imap_user }}" autocomplete="off" spellcheck="false" {% if not login_writable %}disabled{% endif %}>
           <span class="hint">{{ source(login.imap_user) }}</span>
         </label>
-        <label class="f"><span class="lt">{{ _('Password') }} {{ help(_('For Gmail an app password. Leave empty to keep the current one.')) }}</span>
+        <label class="f" data-auth="password"><span class="lt">{{ _('Password') }} {{ help(_('For Gmail an app password. Leave empty to keep the current one.')) }}</span>
           <input type="password" name="imap_password" autocomplete="new-password" {% if not login_writable %}disabled{% endif %}
             {% if login.imap_password %}placeholder="{{ _('unchanged') }}"{% endif %}>
           <span class="hint">{% if retype %}<span class="pill warn">{{ _('Please enter it again') }}</span>{% else %}{{ source(login.imap_password) }}{% endif %}</span>
         </label>
+        <label class="f" data-auth="oauth"><span class="lt">{{ _('Client ID') }} {{ help(_('From your OAuth app: at Google under APIs & Services → Credentials (type "Desktop app"). Microsoft: leave it empty to use Sortroom\'s own app, or enter the "Application (client) ID" of your own app registration.')) }}</span>
+          <input type="text" name="oauth_client_id" value="{{ form.oauth_client_id }}" autocomplete="off" spellcheck="false" class="mono" data-ms-placeholder="{{ _('Sortroom\'s app') }}" {% if not login_writable %}disabled{% endif %}>
+        </label>
+        <label class="f" data-auth="google"><span class="lt">{{ _('Client secret') }} {{ help(_('Google gives desktop apps a client secret too. It is stored like a password and never shown again; leave empty to keep the current one.')) }}</span>
+          <input type="password" name="oauth_client_secret" autocomplete="new-password" {% if not login_writable %}disabled{% endif %}
+            {% if login.oauth_client_secret %}placeholder="{{ _('unchanged') }}"{% endif %}>
+          <span class="hint">{% if retype_secret %}<span class="pill warn">{{ _('Please enter it again') }}</span>{% else %}{{ source(login.oauth_client_secret) }}{% endif %}</span>
+        </label>
+        <label class="f" data-auth="microsoft"><span class="lt">{{ _('Tenant') }} {{ help(_('Empty: personal and work accounts. "consumers": only personal accounts (Outlook.com, Hotmail). For a work account also the tenant ID or domain of your organization.')) }}</span>
+          <input type="text" name="oauth_tenant" value="{{ form.oauth_tenant }}" placeholder="common" autocomplete="off" spellcheck="false" class="mono" {% if not login_writable %}disabled{% endif %}>
+        </label>
+        {% if editable %}<div class="f" data-auth="oauth"><span class="lt">{{ _('Signed in') }} {{ help(_('Saves the settings, then opens the sign-in with your account. Needed once, and again after changing the method, client ID or tenant.')) }}</span>
+          <div class="login-actions">
+            {% if login.oauth_refresh_token and cfg.imap_auth == form.imap_auth %}<span class="pill ok">{{ _('yes') }}</span>{% else %}<span class="pill err">{{ _('not yet') }}</span>{% endif %}
+            <button class="btn" type="submit" name="then" value="oauth">{{ _('Save & sign in') }}</button>
+          </div>
+        </div>{% endif %}
         {% if editable %}<div class="f"><span class="lt">{{ _('Test') }} {{ help(_('Saves the settings, then logs in to the IMAP server and lists the target folders. Moves nothing. The model is checked under Global settings.')) }}</span>
           <div class="login-actions">
             <button class="btn" type="submit" name="then" value="check">{{ _('Save & check') }}</button>
@@ -166,6 +189,7 @@
   </fieldset>
 </form>
 <script src="{{ asset('mailbox-id.js') }}"></script>
+<script src="{{ asset('login-method.js') }}"></script>
 <script>
   // add and remove rule rows in place; nothing is saved until "Save rules"
   (() => {

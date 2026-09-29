@@ -17,6 +17,7 @@ from .expiry import resolve_expiry
 from .classifier import Decision, ClassifierAuthError, ClassifierClient, ClassifierError
 from .mailtext import build_state, full_text, message_key, sent_date
 from .store import GONE, MOVED, Store
+from .oauth import sign_in
 
 log = logging.getLogger(__name__)
 
@@ -550,9 +551,7 @@ def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int 
     report = None if live else ReportWriter(base_dir / "reports")
     started = datetime.now()
     try:
-        with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(
-            creds.imap_user, creds.imap_password, initial_folder=cfg.source_folder
-        ) as mb:
+        with sign_in(MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT), creds, cfg.source_folder) as mb:
             since = date.today() - timedelta(days=cfg.lookback_days)
             try:
                 outcomes, failed, _moving = classify_new(mb, cfg, classifier, store, limit, since,
@@ -607,9 +606,7 @@ def run_backfill(cfg: Config, creds: Credentials, base_dir: Path, live: bool,
     seen: set[str] = set()  # dry run records nothing; don't classify the same mail twice
     started, detail = datetime.now(), f"since {since}"
     try:
-        with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(
-            creds.imap_user, creds.imap_password, initial_folder=cfg.source_folder
-        ) as mb:
+        with sign_in(MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT), creds, cfg.source_folder) as mb:
             for start, end in month_windows(since, date.today() + timedelta(days=1)):
                 while remaining is None or remaining > 0:
                     batch = min(cfg.max_per_run, remaining) if remaining is not None else cfg.max_per_run
@@ -658,9 +655,7 @@ def run_recheck_expiry(cfg: Config, creds: Credentials, base_dir: Path, live: bo
     classifier = cfg.classifier_client(creds.classifier_api_key)
     started = datetime.now()
     try:
-        with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(
-            creds.imap_user, creds.imap_password, initial_folder=cfg.source_folder
-        ) as mb:
+        with sign_in(MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT), creds, cfg.source_folder) as mb:
             try:
                 found = recheck_expiry(mb, cfg, classifier, store)
             except ClassifierAuthError as e:

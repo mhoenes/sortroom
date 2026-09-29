@@ -15,10 +15,12 @@ import uuid
 from urllib.parse import quote
 
 from fastapi import Depends, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from .. import jobs
-from ..config import INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, load_credentials, stored_credentials
+from .. import jobs, oauth
+from ..config import (INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, load_credentials, stored_credentials,
+                      write_secrets)
 from ..classifier import ClassifierAuthError
 from ..i18n import _
 from ..trial import OTHER_SAMPLE, OWN_SAMPLE, run_trial
@@ -77,7 +79,8 @@ def credential_view(box: Mailbox) -> tuple[dict, str | None]:
     try:
         found = stored_credentials(box)
     except ConfigError as e:
-        return {"imap_user": False, "imap_password": False, "classifier_api_key": False, "stored_user": ""}, str(e)
+        return {"imap_user": False, "imap_password": False, "oauth_client_secret": False,
+                "oauth_refresh_token": False, "classifier_api_key": False, "stored_user": ""}, str(e)
     return {**{k: bool(v) for k, v in found.items()}, "stored_user": found["imap_user"]}, None
 
 
@@ -227,8 +230,13 @@ def categories_test_result(request: Request, box_id: str, job_id: str):
 
 # ---------------------------------------------------------------- settings
 
+def auth_methods() -> dict[str, str]:
+    return {"password": _("Password"), "google": _("Google (OAuth)"), "microsoft": _("Microsoft (OAuth)")}
+
+
 def _settings_page(request: Request, box_id: str, form: dict | None = None, error: str | None = None,
-                   rules: list[tuple[str, str]] | None = None, status: int = 200, retype: bool = False):
+                   rules: list[tuple[str, str]] | None = None, status: int = 200, retype: bool = False,
+                   retype_secret: bool = False):
     boxes, box = _box(request, box_id)
     cfg = box.cfg
     login, login_error = credential_view(box)
@@ -241,7 +249,8 @@ def _settings_page(request: Request, box_id: str, form: dict | None = None, erro
                 "schedule_enabled": cfg.schedule_enabled, "schedule_minutes": cfg.schedule_minutes,
                 "reconcile_enabled": cfg.reconcile_enabled, "reconcile_hours": cfg.reconcile_hours,
                 "lookback_days": cfg.lookback_days, "max_per_run": cfg.max_per_run,
-                "expired_folder": cfg.expired_folder or "", "imap_user": login["stored_user"]}
+                "expired_folder": cfg.expired_folder or "", "imap_user": login["stored_user"],
+                "imap_auth": cfg.imap_auth, "oauth_client_id": cfg.oauth_client_id, "oauth_tenant": cfg.oauth_tenant}
     if rules is None:
         rules = [(r.match, r.action) for r in cfg.sender_rules]
     return _page(request, "settings.html", {
@@ -249,7 +258,8 @@ def _settings_page(request: Request, box_id: str, form: dict | None = None, erro
         "schedule": request.app.state.scheduler.status(box),
         "rules": rules, "editable": writable(box),
         "login": login, "login_error": login_error, "login_writable": secrets_writable(box.secrets_path),
-        "secrets_file": SECRETS_FILE, "retype": retype,
+        "secrets_file": SECRETS_FILE, "retype": retype, "retype_secret": retype_secret,
+        "auth_methods": auth_methods(), "oauth_hint": oauth.provider_for_host(cfg.imap_host),
         "config_name": box.config_file.name if box.config_file else "–",
         "taken_ids": sorted(p.name for p in box.workspace.parent.iterdir() if p.is_dir() and p.name != box.id)},
         status)
@@ -270,11 +280,15 @@ async def settings_save(request: Request, box_id: str):
         new_id = save_settings(box, _shared_path(request), form, busy=busy)
     except EditError as e:
         form, retype = without_secrets(form, "imap_password")
-        return _settings_page(request, box_id, form=form, error=str(e), status=422, retype=retype)
+        form, retype_secret = without_secrets(form, "oauth_client_secret")
+        return _settings_page(request, box_id, form=form, error=str(e), status=422, retype=retype,
+                              retype_secret=retype_secret)
     if new_id != box.id:
         _flash(request, _("Settings saved. The mailbox folder is now mailboxes/%(id)s.", id=new_id))
     else:
         _flash(request, _("Settings saved. They apply from the next run."))
+    if form.get("then") == "oauth":  # "Save & sign in"
+        return RedirectResponse(f"/ui/m/{new_id}/oauth", status_code=303)
     if form.get("then") == "check":  # "Save and check connection": test what was just saved
         from .admin import start_check
         try:
@@ -300,3 +314,99 @@ async def sender_rules_save(request: Request, box_id: str):
         return _settings_page(request, box_id, error=str(e), rules=[r for r in rules if r[0].strip()], status=422)
     _flash(request, _("Sender rules saved. They apply from the next run."))
     return RedirectResponse(f"/ui/m/{box.id}/settings#regeln", status_code=303)
+
+
+# ---------------------------------------------------------------- OAuth sign-in (see oauth.py)
+
+OAUTH_TTL = 15 * 60
+_sign_ins: dict[str, dict] = {}  # state -> the sign-in waiting for its code
+_sign_ins_lock = threading.Lock()
+
+
+def _oauth_page(request: Request, box: Mailbox, state: str, error: str | None = None, status: int = 200):
+    boxes = request.app.state.load_mailboxes()
+    return _page(request, "oauth.html", {
+        **_sidebar(request, boxes, box, "settings"), "box": box, "state": state, "url": _sign_ins[state]["url"],
+        "provider": oauth.PROVIDERS[box.cfg.imap_auth].label, "error": error,
+        "direct": request.url.hostname in ("localhost", "127.0.0.1", "::1")}, status)
+
+
+@router.get("/ui/m/{box_id}/oauth", response_class=HTMLResponse, dependencies=[Depends(require_login)])
+def oauth_start(request: Request, box_id: str):
+    """Start a sign-in: the link to the provider and a field for the address it sends the browser to."""
+    _all_boxes, box = _box(request, box_id)
+    cfg = box.cfg
+    client_id = "" if cfg.imap_auth == "password" else oauth.client_id_for(cfg.imap_auth, cfg.oauth_client_id)
+    if not client_id:
+        _flash(request, _("Choose Google or Microsoft as the sign-in method and enter the client ID first."), "warn")
+        return RedirectResponse(f"/ui/m/{box.id}/settings", status_code=303)
+    verifier, challenge = oauth.pkce_pair()
+    state, redirect = secrets.token_urlsafe(24), oauth.redirect_uri(request.url.port)
+    url = oauth.authorize_url(cfg.imap_auth, client_id, cfg.oauth_tenant, redirect, state, challenge,
+                              login_hint=stored_credentials(box)["imap_user"])
+    with _sign_ins_lock:
+        now = time.time()
+        for old in [s for s, v in _sign_ins.items() if v["created"] < now - OAUTH_TTL]:
+            del _sign_ins[old]
+        _sign_ins[state] = {"box": box.id, "verifier": verifier, "redirect": redirect, "url": url, "created": now}
+    return _oauth_page(request, box, state)
+
+
+def _complete_sign_in(box: Mailbox, state: str, code: str) -> None:
+    """Exchange the code for the tokens and keep the refresh token in the mailbox's secrets.toml."""
+    pending = _sign_ins[state]
+    tokens = oauth.exchange_code(box.cfg.imap_auth, oauth.client_id_for(box.cfg.imap_auth, box.cfg.oauth_client_id),
+                                 stored_credentials(box)["oauth_client_secret"], box.cfg.oauth_tenant, code,
+                                 pending["redirect"], pending["verifier"])
+    write_secrets(box.secrets_path, "oauth", {"refresh_token": tokens["refresh_token"]})
+    with _sign_ins_lock:
+        _sign_ins.pop(state, None)
+
+
+def _pending(state: str, box_id: str | None = None) -> dict | None:
+    with _sign_ins_lock:
+        found = _sign_ins.get(state)
+    if not found or found["created"] < time.time() - OAUTH_TTL or (box_id and found["box"] != box_id):
+        return None
+    return found
+
+
+def _signed_in(request: Request, box: Mailbox):
+    _flash(request, _('Signed in with %(provider)s. "Save & check" tests the connection.',
+                      provider=oauth.PROVIDERS[box.cfg.imap_auth].label))
+    return RedirectResponse(f"/ui/m/{box.id}/settings", status_code=303)
+
+
+@router.post("/ui/m/{box_id}/oauth", response_class=HTMLResponse, dependencies=[Depends(require_login)])
+async def oauth_finish(request: Request, box_id: str):
+    """The address the provider sent the browser to, pasted by the user."""
+    form = await _form(request)
+    _all_boxes, box = _box(request, box_id)
+    state = str(form.get("state") or "")
+    if not _pending(state, box.id):
+        _flash(request, _("This sign-in has expired. Please start it again."), "warn")
+        return RedirectResponse(f"/ui/m/{box.id}/oauth", status_code=303)
+    try:
+        code, sent_state = oauth.parse_redirect(str(form.get("response_url") or ""))
+        if sent_state != state:
+            raise oauth.OAuthError("that address belongs to another sign-in – use the one you just opened")
+        await run_in_threadpool(_complete_sign_in, box, state, code)
+    except oauth.OAuthError as e:
+        return _oauth_page(request, box, state, error=_("Not signed in: %(e)s", e=e), status=422)
+    return _signed_in(request, box)
+
+
+@router.get(oauth.REDIRECT_PATH, response_class=HTMLResponse, dependencies=[Depends(require_login)])
+async def oauth_callback(request: Request):
+    """Where the provider sends the browser when the admin UI itself runs on localhost."""
+    state = request.query_params.get("state", "")
+    pending = _pending(state)
+    if not pending:
+        raise HTTPException(404, _("This sign-in has expired. Please start it again."))
+    _all_boxes, box = _box(request, pending["box"])
+    try:
+        code, _state = oauth.parse_redirect(str(request.url))
+        await run_in_threadpool(_complete_sign_in, box, state, code)
+    except oauth.OAuthError as e:
+        return _oauth_page(request, box, state, error=_("Not signed in: %(e)s", e=e), status=422)
+    return _signed_in(request, box)

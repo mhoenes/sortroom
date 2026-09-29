@@ -15,7 +15,7 @@ import threading
 from datetime import datetime, timedelta
 from typing import Callable
 
-from .config import ConfigError, Credentials, Mailbox, load_credentials, stored_credentials
+from .config import ConfigError, Mailbox, imap_credentials, load_credentials
 from .runtime import single_instance
 from .sorter import run
 from .store import last_reconcile
@@ -186,16 +186,16 @@ def reconcile_scheduled(box: Mailbox) -> bool:
     mailbox was busy, so it is tried again soon."""
     from .reconcile import run_reconcile
 
-    stored = stored_credentials(box)
-    if not stored["imap_user"] or not stored["imap_password"]:
-        log.error("[%s] scheduled reconcile skipped: the login is not set", box.id)
+    try:
+        creds = imap_credentials(box)  # only the IMAP login, the model isn't asked
+    except ConfigError as e:
+        log.error("[%s] scheduled reconcile skipped: %s", box.id, e)
         return True
     with single_instance(box.lock_path) as acquired:
         if not acquired:
             log.info("[%s] scheduled reconcile postponed, another run is active", box.id)
             return False
         log.info("[%s] starting scheduled reconcile", box.id)
-        result = run_reconcile(box.cfg, Credentials(stored["imap_user"], stored["imap_password"], ""),
-                               box.workspace, live=True)
+        result = run_reconcile(box.cfg, creds, box.workspace, live=True)
         log.info("[%s] reconcile: %s", box.id, result["summary"])
     return True

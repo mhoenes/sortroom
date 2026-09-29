@@ -14,10 +14,16 @@
 <div class="banner" role="status">{{ blocked }}</div>
 {% else %}
 {% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
-<form method="post" action="/ui/mailboxes/new" class="stack">
+<form method="post" action="/ui/mailboxes/new" class="stack" data-auth-scope>
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <section class="card stack">
-    <h2>{{ _('1 · Name') }}</h2>
+    <h2>{{ _('1 · Mailbox') }}</h2>
+    <div class="kinds" data-auth-select role="radiogroup" aria-label="{{ _('Type of mailbox') }}">
+      {% for key, k in kinds.items() %}
+      <label class="kind"><input type="radio" name="kind" value="{{ key }}" data-auth-value="{{ k.auth }}" required {% if form.kind == key %}checked{% endif %}>
+        <span><b>{{ k.label }}</b><small>{{ k.detail }}</small></span></label>
+      {% endfor %}
+    </div>
     <div class="grid cols-3">
       <label class="f"><span class="lt">{{ _('Display name') }} {{ help(_('What the mailbox is called in the interface, e.g. "Gmail".')) }}</span>
         <input type="text" name="name" value="{{ form.name }}" maxlength="60" required
@@ -27,32 +33,42 @@
     </div>
   </section>
 
-  <section class="card stack">
-    <h2>{{ _('2 · IMAP server') }}</h2>
+  <section class="card stack" data-auth="password">
+    <h2>{{ _('IMAP server') }}</h2>
     <div class="grid cols-3">
-      <label class="f"><span class="lt">{{ _('Server') }} {{ help(_("Host name of your provider's IMAP server, e.g. imap.gmail.com or imap.example.com")) }}</span>
-        <input type="text" name="imap_host" value="{{ form.imap_host }}" required></label>
+      <label class="f"><span class="lt">{{ _('Server') }} {{ help(_("Host name of your provider's IMAP server, e.g. imap.example.com")) }}</span>
+        <input type="text" name="imap_host" value="{{ form.imap_host }}"></label>
       <label class="f"><span class="lt">{{ _('Port') }} {{ help(_('Usually 993 (IMAP over SSL).')) }}</span>
-        <input type="number" name="imap_port" min="1" max="65535" step="1" value="{{ form.imap_port }}" required></label>
+        <input type="number" name="imap_port" min="1" max="65535" step="1" value="{{ form.imap_port }}"></label>
       <label class="f"><span class="lt">{{ _('Inbox') }} {{ help(_('Folder that mails are sorted from. Usually INBOX.')) }}</span>
         <input type="text" name="source_folder" value="{{ form.source_folder }}"></label>
     </div>
   </section>
 
   <section class="card stack">
-    <h2>{{ _('3 · Login') }}</h2>
+    <h2>{{ _('2 · Login') }}</h2>
     <div class="grid cols-3">
       <label class="f"><span class="lt">{{ _('User') }} {{ help(_('Usually the full e-mail address.')) }}</span>
         <input type="text" name="imap_user" value="{{ form.imap_user }}" required autocomplete="off" spellcheck="false"></label>
-      <label class="f"><span class="lt">{{ _('Password') }} {{ help(_('For Gmail an app password.')) }}</span>
-        <input type="password" name="imap_password" required autocomplete="new-password">
+      <label class="f" data-auth="password"><span class="lt">{{ _('Password') }} {{ help(_('The IMAP password; with two-factor authentication an app password.')) }}</span>
+        <input type="password" name="imap_password" autocomplete="new-password">
         {% if retype %}<span class="hint"><span class="pill warn">{{ _('Please enter it again') }}</span></span>{% endif %}</label>
+      <label class="f" data-auth="oauth"><span class="lt">{{ _('Client ID') }} {{ help(_('From your OAuth app: at Google under APIs & Services → Credentials (type "Desktop app"). Microsoft: leave it empty to use Sortroom\'s own app, or enter the "Application (client) ID" of your own app registration.')) }}</span>
+        <input type="text" name="oauth_client_id" value="{{ form.oauth_client_id }}" autocomplete="off" spellcheck="false" class="mono" data-ms-placeholder="{{ _('Sortroom\'s app') }}"></label>
+      <label class="f" data-auth="google"><span class="lt">{{ _('Client secret') }} {{ help(_('Google gives desktop apps a client secret too. It is stored like a password and never shown again; leave empty to keep the current one.')) }}</span>
+        <input type="password" name="oauth_client_secret" autocomplete="new-password">
+        {% if retype_secret %}<span class="hint"><span class="pill warn">{{ _('Please enter it again') }}</span></span>{% endif %}</label>
+      <label class="f" data-auth="microsoft"><span class="lt">{{ _('Tenant') }} {{ help(_('Empty: personal and work accounts. "consumers": only personal accounts (Outlook.com, Hotmail). For a work account also the tenant ID or domain of your organization.')) }}</span>
+        <input type="text" name="oauth_tenant" value="{{ form.oauth_tenant }}" placeholder="common" autocomplete="off" spellcheck="false" class="mono"></label>
     </div>
+    <p class="muted hint" data-auth="google">{{ _('Sortroom signs in with your account through your own OAuth app – how to create it, once and for free, is described in the <a href="%(url)s" target="_blank" rel="noopener">README</a>. After "Create mailbox" you sign in; Sortroom then keeps only a token, no password.', url=source_url ~ '#signing-in-with-google-or-microsoft') }}</p>
+    <p class="muted hint" data-auth="microsoft">{{ _('Sortroom signs in with your Microsoft account through its own app – just leave the client ID empty. After "Create mailbox" you sign in; Sortroom then keeps only a token, no password.') }}</p>
+    <p class="muted hint" data-auth="google">{{ _('Rather use an app password? Choose "Other IMAP server" with imap.gmail.com.') }}</p>
     <p class="muted hint">{{ _('Stored in <span class="mono">mailboxes/…/%(file)s</span>, readable only by Sortroom. You can change it later under Settings.', file=secrets_file) }}</p>
   </section>
 
   <section class="card stack">
-    <h2>{{ _('4 · Categories') }} {{ help(_('The new mailbox starts with the categories, thresholds and schedule of an existing mailbox or with the standard categories. Everything can be changed independently afterwards. Sender rules are not copied.')) }}</h2>
+    <h2>{{ _('3 · Categories') }} {{ help(_('The new mailbox starts with the categories, thresholds and schedule of an existing mailbox or with the standard categories. Everything can be changed independently afterwards. Sender rules are not copied.')) }}</h2>
     <label class="f" style="max-width:360px">{{ _('Copy from') }}
       <select name="template">{% for id, b in boxes.items() %}<option value="{{ id }}" {% if form.template == id %}selected{% endif %}>{{ b.name }} ({{ ngettext('%(num)s category', '%(num)s categories', b.cfg.categories|length) }})</option>{% endfor %}
         {% for code, n in example_categories.items() %}<option value="_example_{{ code }}" {% if form.template == '_example_' ~ code %}selected{% endif %}>{{ _('Standard categories, %(language)s', language=languages[code]) }} ({{ ngettext('%(num)s category', '%(num)s categories', n) }})</option>{% endfor %}</select>
@@ -64,5 +80,6 @@
     <span class="muted hint">{{ _('Nothing is sorted yet: the next scheduled run picks up the mailbox automatically as soon as the login works.') }}</span></div>
 </form>
 <script src="{{ asset('mailbox-id.js') }}"></script>
+<script src="{{ asset('login-method.js') }}"></script>
 {% endif %}
 {% endblock %}

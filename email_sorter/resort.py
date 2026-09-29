@@ -25,6 +25,7 @@ from .sorter import (IMAP_TIMEOUT, Outcome, ReportWriter, RunResult, UID_CHUNK, 
                      plan, ready_to_sort, rule_outcome, server_folder, _auth_failed, _chunks,
                      _delimiter, _ensure_folder, _finish)
 from .store import Store
+from .oauth import sign_in
 
 log = logging.getLogger(__name__)
 
@@ -109,9 +110,7 @@ def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, liv
     report = None if live else ReportWriter(base_dir / "reports")
     started = datetime.now()
     try:
-        with MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT).login(
-            creds.imap_user, creds.imap_password, initial_folder=cfg.source_folder
-        ) as mb:
+        with sign_in(MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT), creds, cfg.source_folder) as mb:
             delim = _delimiter(mb)
             # accept "INBOX/Reisen" (config notation) as well as "INBOX.Reisen" (server notation)
             folder = "/".join(p for p in folder.replace(delim, "/").split("/") if p)
