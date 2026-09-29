@@ -48,7 +48,7 @@
       {% if not login_writable %}<div class="banner" role="status">{{ _('%(file)s is not writable, so the login cannot be stored.', file=secrets_file) }}</div>{% endif %}
       {% if form.imap_auth == 'password' and oauth_hint == 'microsoft' %}<div class="banner" role="status">{{ _('Microsoft no longer accepts passwords for IMAP. Choose "Microsoft (OAuth)" as the sign-in method.') }}</div>{% endif %}
       <div class="grid cols-3" data-auth-scope>
-        <label class="f"><span class="lt">{{ _('Sign-in') }} {{ help(_('Password: the IMAP login of your provider (for Gmail an app password). Google and Microsoft: sign in with your account through your own OAuth app – Microsoft only accepts this. The README explains how to create the app.')) }}</span>
+        <label class="f"><span class="lt">{{ _('Sign-in') }} {{ help(_('Password: the IMAP login of your provider (for Gmail an app password). Google and Microsoft: sign in with your account – Microsoft only accepts this. Google needs your own OAuth app, see the wiki page Gmail; for Microsoft, Sortroom brings its own.')) }}</span>
           <select name="imap_auth" data-auth-select {% if not login_writable %}disabled{% endif %}>
             {% for key, label in auth_methods.items() %}<option value="{{ key }}" {% if form.imap_auth == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
           </select>

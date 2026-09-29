@@ -61,7 +61,7 @@
       <label class="f" data-auth="microsoft"><span class="lt">{{ _('Tenant') }} {{ help(_('Empty: personal and work accounts. "consumers": only personal accounts (Outlook.com, Hotmail). For a work account also the tenant ID or domain of your organization.')) }}</span>
         <input type="text" name="oauth_tenant" value="{{ form.oauth_tenant }}" placeholder="common" autocomplete="off" spellcheck="false" class="mono"></label>
     </div>
-    <p class="muted hint" data-auth="google">{{ _('Sortroom signs in with your account through your own OAuth app – how to create it, once and for free, is described in the <a href="%(url)s" target="_blank" rel="noopener">README</a>. After "Create mailbox" you sign in; Sortroom then keeps only a token, no password.', url=source_url ~ '#signing-in-with-google-or-microsoft') }}</p>
+    <p class="muted hint" data-auth="google">{{ _('Sortroom signs in with your account through your own OAuth app – how to create it, once and for free, is described in the <a href="%(url)s" target="_blank" rel="noopener">wiki</a>. After "Create mailbox" you sign in; Sortroom then keeps only a token, no password.', url=source_url ~ '/wiki/Gmail') }}</p>
     <p class="muted hint" data-auth="microsoft">{{ _('Sortroom signs in with your Microsoft account through its own app – just leave the client ID empty. After "Create mailbox" you sign in; Sortroom then keeps only a token, no password.') }}</p>
     <p class="muted hint" data-auth="google">{{ _('Rather use an app password? Choose "Other IMAP server" with imap.gmail.com.') }}</p>
     <p class="muted hint">{{ _('Stored in <span class="mono">mailboxes/…/%(file)s</span>, readable only by Sortroom. You can change it later under Settings.', file=secrets_file) }}</p>
