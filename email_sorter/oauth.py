@@ -43,13 +43,15 @@ class Provider:
     scope: str
     extra: dict = field(default_factory=dict)
     needs_secret: bool = False  # Google's desktop clients send their (not secret) client secret
+    revoke: str = ""  # where a refresh token can be revoked (Google); Microsoft has no such endpoint
     default_client_id: str = ""  # Sortroom's own app, used when a mailbox sets no client ID
 
 
 PROVIDERS = {
     "google": Provider(
         "google", "Google", "https://accounts.google.com/o/oauth2/v2/auth", "https://oauth2.googleapis.com/token",
-        "https://mail.google.com/", {"access_type": "offline", "prompt": "consent"}, needs_secret=True),
+        "https://mail.google.com/", {"access_type": "offline", "prompt": "consent"}, needs_secret=True,
+        revoke="https://oauth2.googleapis.com/revoke"),
     "microsoft": Provider(
         "microsoft", "Microsoft", "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize",
         "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token",
@@ -186,6 +188,21 @@ class OAuthLogin:
             with _cache_lock:
                 _cache[(self.provider, self.client_id, rotated)] = (token, expires)
         return token
+
+
+def revoke(provider: str, refresh_token: str) -> bool:
+    """End a sign-in at the provider, where it offers that (Google). False if it didn't work."""
+    url = PROVIDERS[provider].revoke
+    if not url or not refresh_token:
+        return False
+    try:
+        r = requests.post(url, data={"token": refresh_token}, timeout=TIMEOUT)
+    except requests.RequestException as e:
+        log.warning("%s: revoking the sign-in failed: %s", PROVIDERS[provider].label, e)
+        return False
+    if r.status_code != 200:
+        log.warning("%s: revoking the sign-in failed: HTTP %s", PROVIDERS[provider].label, r.status_code)
+    return r.status_code == 200
 
 
 def sign_in(mailbox, creds, initial_folder: str | None = "INBOX"):

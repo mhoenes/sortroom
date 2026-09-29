@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextvars
 import logging
+import os
 import secrets
 import threading
 import time
@@ -23,6 +24,7 @@ from ..config import (INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, load_cre
                       write_secrets)
 from ..classifier import ClassifierAuthError
 from ..i18n import _
+from ..removal import MailboxBusy, delete_mailbox
 from ..trial import OTHER_SAMPLE, OWN_SAMPLE, run_trial
 from . import _box, _sidebar, queries, require_login, router, templates
 from .editing import (EditError, delete_category, save_category, save_sender_rules,
@@ -260,6 +262,7 @@ def _settings_page(request: Request, box_id: str, form: dict | None = None, erro
         "login": login, "login_error": login_error, "login_writable": secrets_writable(box.secrets_path),
         "secrets_file": SECRETS_FILE, "retype": retype, "retype_secret": retype_secret,
         "auth_methods": auth_methods(), "oauth_hint": oauth.provider_for_host(cfg.imap_host),
+        "deletable": os.access(box.workspace.parent, os.W_OK),
         "config_name": box.config_file.name if box.config_file else "–",
         "taken_ids": sorted(p.name for p in box.workspace.parent.iterdir() if p.is_dir() and p.name != box.id)},
         status)
@@ -274,8 +277,7 @@ def settings(request: Request, box_id: str):
 async def settings_save(request: Request, box_id: str):
     form = await _form(request)
     _all_boxes, box = _box(request, box_id)
-    busy = (request.app.state.is_busy(box) or jobs.running(box.id)
-            or any(j["box"] == box.id and j["status"] == "running" for j in _trials.values()))
+    busy = _busy(request, box)
     try:
         new_id = save_settings(box, _shared_path(request), form, busy=busy)
     except EditError as e:
@@ -315,6 +317,41 @@ async def sender_rules_save(request: Request, box_id: str):
     _flash(request, _("Sender rules saved. They apply from the next run."))
     return RedirectResponse(f"/ui/m/{box.id}/settings#regeln", status_code=303)
 
+
+
+def _busy(request: Request, box: Mailbox) -> bool:
+    """A run, job or model test is active for the mailbox."""
+    return (request.app.state.is_busy(box) or jobs.running(box.id)
+            or any(j["box"] == box.id and j["status"] == "running" for j in _trials.values()))
+
+
+@router.post("/ui/m/{box_id}/delete", dependencies=[Depends(require_login)])
+async def mailbox_delete(request: Request, box_id: str):
+    form = await _form(request)
+    _all_boxes, box = _box(request, box_id)
+    back = RedirectResponse(f"/ui/m/{box.id}/settings", status_code=303)
+    if str(form.get("confirm") or "").strip() != box.name:
+        _flash(request, _("Not deleted: please type the name of the mailbox exactly."), "err")
+        return back
+    if _busy(request, box):
+        _flash(request, _("Not deleted: something is running for this mailbox. Please try again when it is done."), "warn")
+        return back
+    try:
+        result = await run_in_threadpool(delete_mailbox, box)
+    except MailboxBusy:
+        _flash(request, _("Not deleted: something is running for this mailbox. Please try again when it is done."), "warn")
+        return back
+    except OSError as e:
+        log.exception("[%s] deleting the mailbox failed", box.id)
+        _flash(request, _("The mailbox could not be deleted completely: %(e)s", e=e), "err")
+        return RedirectResponse("/ui", status_code=303)
+    text = _('Mailbox "%(name)s" deleted.', name=box.name)
+    if result["revoked"] is True:
+        text += " " + _("The sign-in with Google was revoked.")
+    elif result["revoked"] is False:
+        text += " " + _("Revoking the sign-in with Google failed – remove Sortroom's access at myaccount.google.com/connections.")
+    _flash(request, text, "ok" if result["revoked"] is not False else "warn")
+    return RedirectResponse("/ui", status_code=303)
 
 # ---------------------------------------------------------------- OAuth sign-in (see oauth.py)
 

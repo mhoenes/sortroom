@@ -111,6 +111,13 @@ def rename_mailbox(old: str, new: str) -> None:
             job["mailbox"] = new
 
 
+def remove_mailbox(box_id: str) -> None:
+    """Forget the jobs of a deleted mailbox (a running one keeps going until it ends)."""
+    with _lock:
+        for job_id in [i for i, j in _jobs.items() if j["mailbox"] == box_id and j["status"] != "running"]:
+            del _jobs[job_id]
+
+
 def public(job: dict) -> dict:
     """The job as the API returns it (without the log)."""
     return {k: v for k, v in job.items() if k != "log"}

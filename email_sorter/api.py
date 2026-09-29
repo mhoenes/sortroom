@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 from . import __version__, i18n, jobs
 from .config import ConfigError, Mailbox, load_credentials, load_mailboxes
 from .i18n import _
+from .removal import MailboxBusy, delete_mailbox
 from .runtime import BASE_DIR, _lock_is_stale, default_config_path, setup_logging, single_instance
 from .scheduler import Scheduler, enabled_by_env
 from .sorter import run, run_backfill, run_recheck_expiry
@@ -146,6 +147,21 @@ def health() -> dict:
 @app.get("/mailboxes", dependencies=[Depends(_require_token)])
 def mailboxes() -> list[dict]:
     return [{"id": b.id, "name": b.name, "busy": _busy(b)} for b in _mailboxes().values()]
+
+
+@app.delete("/mailboxes/{box_id}", dependencies=[Depends(_require_token)])
+def mailbox_delete(box_id: str) -> dict:
+    """Delete a mailbox for good (settings, login, log, reports; nothing on the IMAP server).
+    "revoked": whether its Google sign-in was revoked (null: nothing to revoke)."""
+    box = _pick(_mailboxes(), box_id)
+    if _busy(box) or jobs.running(box.id):
+        raise HTTPException(409, f"[{box.id}] something is running for this mailbox")
+    try:
+        result = delete_mailbox(box)
+    except MailboxBusy:
+        raise HTTPException(409, f"[{box.id}] something is running for this mailbox") from None
+    log.info("API: mailbox %s deleted", box.id)
+    return {"deleted": box.id, **result}
 
 
 @app.post("/run", dependencies=[Depends(_require_token)])

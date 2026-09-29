@@ -142,7 +142,8 @@ the logins and API key (`secrets.toml`, see below) and each mailbox's log `state
   mailbox. Every task has a **Dry run** that changes nothing. Jobs are listed until the
   container restarts.
 - **Settings** – name, IMAP server and login, thresholds, waiting time, schedule and the
-  sender rules.
+  sender rules. At its end, **Delete mailbox** removes the mailbox from Sortroom for good
+  (settings, login, log, reports; nothing on the IMAP server) and revokes a Google sign-in.
 - **Global settings** (bottom of the sidebar) – UI language (English or German), the
   endpoint and model, the API key.
 
@@ -392,6 +393,7 @@ python -m email_sorter --rename-folder INBOX/Newsletter INBOX/Promotions --live
 python -m email_sorter --rename-category newsletter promotions --live
 python -m email_sorter --recheck-expiry --live
 python -m email_sorter --reconcile --live
+python -m email_sorter --delete-mailbox <id>          # asks first; --yes for scripts
 ```
 
 Without `--live` every command is a dry run. Normal runs and `--check` cover every
@@ -420,6 +422,7 @@ answers 409.
 | `GET /jobs/{id}` | status and summary of a backfill job |
 | `POST /recheck-expiry` `{"live": true}` | find expiry dates of already sorted offers |
 | `GET /mailboxes` | the configured mailboxes |
+| `DELETE /mailboxes/{id}` | delete a mailbox for good (409 while something runs for it) |
 | `GET /health` | liveness, no auth |
 
 ## Files
