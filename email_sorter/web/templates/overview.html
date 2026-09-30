@@ -35,6 +35,7 @@
     <span class="k">{{ _('Sorted today') }}</span>
     <span class="v">{{ stats.sorted_today|num }}</span>
     <span class="d">{{ _('%(n)s starred in 7 days', n=stats.flagged_7d|num) }}</span>
+    {% if filed_30d %}<span class="d">{{ _('%(pct)s corrected by hand in 30 days', pct=percent(corrected_30d, filed_30d)) }}</span>{% endif %}
   </div>
   <a class="card kpi link" href="/ui/m/{{ box.id }}/mails?uncertain=1&amp;period=30d">
     <span class="k">{{ _('To review') }}</span>

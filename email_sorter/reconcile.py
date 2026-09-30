@@ -3,7 +3,8 @@
 Mails you deleted (or that sit in the trash) are marked `gone`: they stay in the log, so cost and
 history are kept and nothing is classified twice, but they no longer show up for review. Mails the
 sorter left in the inbox and you filed by hand get the folder they are in now. The unsubscribe links
-of logged mails are noted for the senders page.
+of logged mails are noted for the senders page. A mail the model filed that you moved into the folder of
+another category, or back into the inbox, counts as corrected for the Categories page.
 
 Reads every folder's headers; changes nothing on the server.
 """
@@ -50,6 +51,34 @@ def mail_folders(mb: MailBox) -> tuple[list[str], list[str]]:
     return out, views
 
 
+def _corrections(cfg: Config, store: Store, found: dict[str, str | None]) -> list[tuple[str, str, str | None]]:
+    """(key, model category, corrected to or None) for the model's decisions, from where the mails are now.
+
+    Corrected: in the folder of another category, or back in the inbox. Mails in other folders (an
+    archive, say) or only in a view count neither way; None means the mail is where the model put it."""
+    source = cfg.source_folder.strip("/")
+    by_folder: dict[str, list[str]] = {}  # folder -> its categories (several can share one)
+    for name, c in cfg.categories.items():
+        if c.folder:
+            by_folder.setdefault(c.folder.strip("/"), []).append(name)
+    out = []
+    for key, category, moved_to in store.model_decisions(cfg.min_confidence):
+        where = found.get(key)
+        if where is None:
+            continue
+        # where the model's category puts mail (the log's place is updated when you file by hand)
+        cat = cfg.categories.get(category)
+        expected = ((cat.folder if cat else moved_to) or source).strip("/")
+        others = by_folder.get(where, [])
+        if where == expected or category in others:
+            out.append((key, category, None))
+        elif where == source:
+            out.append((key, category, "inbox"))
+        elif others:
+            out.append((key, category, others[0]))
+    return out
+
+
 def run_reconcile(cfg: Config, creds: Credentials, base_dir: Path, live: bool) -> dict:
     store = Store(base_dir / "data" / "state.db")
     try:
@@ -85,6 +114,9 @@ def run_reconcile(cfg: Config, creds: Credentials, base_dir: Path, live: bool) -
             where = found[key]
             if moved_to is None and where and where != source:
                 filed[key] = where  # left in the inbox by the sorter, filed by hand since
+        corrected = _corrections(cfg, store, found)
+        log.info("%d mail(s) filed by the model were moved by hand into another category",
+                 sum(1 for c in corrected if c[2]))
         log.info("%d folder(s), %d mail(s) on the server; log: %d no longer there, %d back again, "
                  "%d filed by hand", len(folders), len(found), len(gone), len(back), len(filed))
         if live:
@@ -93,6 +125,8 @@ def run_reconcile(cfg: Config, creds: Credentials, base_dir: Path, live: bool) -
             for key, where in filed.items():
                 store.set_moved_to([key], where)
             store.note_unsubscribe(v for k, v in links.items() if k in logged)
+            for key, category, corrected_to in corrected:
+                store.set_correction(key, category, corrected_to, "reconcile")
             store.set_meta("last_reconcile", datetime.now().isoformat(timespec="seconds"))
         else:
             log.info("dry run - log not changed")

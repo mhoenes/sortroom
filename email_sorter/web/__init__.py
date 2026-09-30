@@ -124,6 +124,7 @@ for _name, _fn in (("num", i18n.num), ("conf", i18n.conf), ("dt", i18n.dt), ("da
                    ("usd", usd), ("ago", i18n.ago)):
     templates.env.filters[_name] = _fn
 templates.env.globals["version"] = __version__
+templates.env.globals["percent"] = i18n.percent
 
 
 def _asset_urls(static: Path) -> dict[str, str]:
@@ -272,6 +273,7 @@ def overview(request: Request, box_id: str):
         dist = queries.distribution(db, 7)
         runs = queries.recent_runs(db, 8)
         review = queries.uncertain_mails(db, cfg.min_confidence, 5, days=30)  # as stats().uncertain
+        filed, corrected = map(sum, zip(*queries.corrections(db, cfg.min_confidence).values() or [(0, 0)]))
         expired = queries.expired_moved(db, 7)
     finally:
         if db:
@@ -283,6 +285,7 @@ def overview(request: Request, box_id: str):
     return templates.TemplateResponse(request, "overview.html", {
         **_sidebar(request, boxes, box, "overview"), "box": box, "stats": st, "bars": bars,
         "total_7d": total_7d, "runs": runs, "review": review, "expired_7d": expired,
+        "filed_30d": filed, "corrected_30d": corrected,
         "schedule": request.app.state.scheduler.status(box), "label": lambda k: _label(box, k)})
 
 

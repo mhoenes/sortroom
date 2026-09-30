@@ -106,6 +106,7 @@ def _category_page(request: Request, box_id: str, cat: str = "", new: bool = Fal
     db = queries.connect(box.workspace)
     try:
         counts = queries.category_counts(db)
+        rates = queries.corrections(db, box.cfg.min_confidence)
     finally:
         if db:
             db.close()
@@ -129,7 +130,7 @@ def _category_page(request: Request, box_id: str, cat: str = "", new: bool = Fal
     rules_using = {r.action for r in box.cfg.sender_rules}
     return _page(request, "categories.html", {
         **_sidebar(request, boxes, box, "categories"), "box": box, "cat": cat, "new": new, "form": form,
-        "counts": counts, "error": error, "editable": writable(box), "rules_using": rules_using,
+        "counts": counts, "rates": rates, "error": error, "editable": writable(box), "rules_using": rules_using,
         "sample": (OWN_SAMPLE, OTHER_SAMPLE)}, status)
 
 

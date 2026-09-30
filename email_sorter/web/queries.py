@@ -98,6 +98,26 @@ def category_counts(db: sqlite3.Connection | None, days: int = 30, now: datetime
                            "GROUP BY category", (since,)).fetchall())
 
 
+def corrections(db: sqlite3.Connection | None, min_confidence: float, days: int = 30,
+                now: datetime | None = None) -> dict[str, tuple[int, int]]:
+    """{category: (mails the model filed there, of those corrected by hand)} for mail received in the last
+    `days` days. Mails deleted without a correction, sender rules and uncertain mails don't count."""
+    if db is None:
+        return {}
+    since = _received_since(now or datetime.now(), timedelta(days=days))
+    model = "(p.source = 'classifier' AND p.confidence >= ? AND p.gone = 0)"
+    if not _has_table(db, "corrections"):
+        rows = db.execute(f"SELECT p.category, COUNT(*), 0 FROM processed p WHERE {RECEIVED} >= julianday(?) "
+                          f"AND {model} GROUP BY p.category", (since, min_confidence))
+    else:
+        rows = db.execute(
+            f"SELECT COALESCE(c.category, p.category) AS cat, COUNT(*), COUNT(c.message_key) "
+            f"FROM processed p LEFT JOIN corrections c ON c.message_key = p.message_key "
+            f"WHERE {RECEIVED} >= julianday(?) AND (c.message_key IS NOT NULL OR {model}) GROUP BY cat",
+            (since, min_confidence))
+    return {cat: (n, corrected) for cat, n, corrected in rows}
+
+
 def expired_moved(db: sqlite3.Connection | None, days: int = 7, now: datetime | None = None) -> int:
     if db is None:
         return 0
