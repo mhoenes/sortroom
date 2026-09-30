@@ -8,7 +8,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Iterator
 
 from imap_tools import AND, MailBox, MailMessage, MailMessageFlags
 
@@ -421,6 +421,26 @@ def _find_uids(mb: MailBox, folder: str, wanted: dict[str, str | None], fallback
         if key in wanted:
             found[key] = head.uid
     return found
+
+
+# the header lines a message key, a sender rule and the senders page need (see mailtext)
+HEADER_FIELDS = ("MESSAGE-ID", "FROM", "SUBJECT", "DATE", "LIST-UNSUBSCRIBE", "LIST-UNSUBSCRIBE-POST")
+
+
+def header_fields(mb: MailBox, fields: Iterable[str] = HEADER_FIELDS) -> Iterator[MailMessage]:
+    """Every mail of the selected folder with only these header lines, UID_CHUNK mails per FETCH.
+
+    A reconcile reads every folder, Gmail's "All Mail" included: the whole header of each mail is
+    several KB (Received lines, DKIM signatures), a few lines are a few hundred bytes. That keeps a big
+    mailbox well within Gmail's daily IMAP download limit."""
+    parts = f"(UID BODY.PEEK[HEADER.FIELDS ({' '.join(fields)})])"
+    for chunk in _chunks(mb.uids()):
+        typ, data = mb.client.uid("FETCH", ",".join(chunk), parts)
+        if typ != "OK":
+            raise RuntimeError(f"header fetch failed: {typ} {data!r}")
+        for item in data:
+            if isinstance(item, tuple):  # (b'1 (UID 7 BODY[HEADER.FIELDS (…)] {123}', header bytes)
+                yield MailMessage([item])
 
 
 def _group_by_folder(rows, cfg: Config, delim: str) -> dict[str, dict[str, str | None]]:

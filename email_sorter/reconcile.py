@@ -6,7 +6,7 @@ sorter left in the inbox and you filed by hand get the folder they are in now. T
 of logged mails are noted for the senders page. A mail the model filed that you moved into the folder of
 another category, or back into the inbox, counts as corrected for the Categories page.
 
-Reads every folder's headers; changes nothing on the server.
+Reads a few header lines of every mail in every folder; changes nothing on the server.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from imap_tools import MailBox
 from .config import Config, Credentials
 from .i18n import _
 from .mailtext import message_key, received_of, unsubscribe_links
-from .sorter import IMAP_TIMEOUT, UID_CHUNK, _delimiter
+from .sorter import IMAP_TIMEOUT, _delimiter, header_fields
 from .store import Store
 from .oauth import sign_in
 
@@ -92,7 +92,7 @@ def run_reconcile(cfg: Config, creds: Credentials, base_dir: Path, live: bool) -
                 path = name.replace(delim, "/") if delim else name
                 mb.folder.set(name)
                 n = 0
-                for head in mb.fetch(mark_seen=False, headers_only=True, bulk=UID_CHUNK):
+                for head in header_fields(mb):
                     key = message_key(head)
                     found.setdefault(key, None if name in views else path)
                     unsubscribe = unsubscribe_links(head)

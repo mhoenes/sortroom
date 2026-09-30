@@ -7,7 +7,7 @@ from email_sorter.config import Credentials
 from email_sorter.classifier import Decision
 from email_sorter.store import Store
 from email_sorter.web import queries
-from support import example_config
+from support import HeaderFetch, example_config, raw_headers
 
 CFG = example_config()
 CREDS = Credentials("u", "p", "k")
@@ -24,7 +24,7 @@ class FakeFolders:
         self.current = name
 
 
-class FakeMailBox:
+class FakeMailBox(HeaderFetch):
     def __init__(self, mails, flags=None):
         self.folder = FakeFolders(mails, flags)
 
@@ -37,9 +37,8 @@ class FakeMailBox:
     def __exit__(self, *exc):
         return False
 
-    def fetch(self, *a, **kw):
-        for mid in self.folder.mails[self.folder.current]:
-            yield SimpleNamespace(headers={"message-id": (mid,)}, from_="s", subject="x", date_str="")
+    def raw_mails(self):
+        return [raw_headers(mid) for mid in self.folder.mails[self.folder.current]]
 
 
 def _record(store, key, moved_to, confidence=0.9):
@@ -124,3 +123,22 @@ def test_old_source_name_is_renamed_when_the_log_is_opened(tmp_path):
     db = sqlite3.connect(tmp_path / "state.db")
     assert db.execute("SELECT source FROM processed").fetchall() == [("classifier",)]
     db.close()
+
+
+def test_only_a_few_header_lines_are_fetched_in_batches():
+    from email_sorter import sorter
+    from email_sorter.mailtext import message_key, unsubscribe_links
+
+    class Folder(HeaderFetch):
+        def raw_mails(self):
+            return [raw_headers(f"<m{i}@x>", "News <news@shop.example>", list_unsubscribe="<https://shop/u>")
+                    for i in range(sorter.UID_CHUNK + 5)]
+
+    mb = Folder()
+    heads = list(sorter.header_fields(mb))
+    assert [message_key(h) for h in heads[:2]] == ["<m0@x>", "<m1@x>"] and len(heads) == sorter.UID_CHUNK + 5
+    assert heads[0].from_ == "news@shop.example" and unsubscribe_links(heads[0]) == (["https://shop/u"], False)
+    assert heads[0].date.year == 2026
+    assert len(mb.fetch_commands) == 2  # UID_CHUNK per FETCH
+    assert mb.fetch_commands[0] == ("(UID BODY.PEEK[HEADER.FIELDS (MESSAGE-ID FROM SUBJECT DATE "
+                                    "LIST-UNSUBSCRIBE LIST-UNSUBSCRIBE-POST)])")  # PEEK: nothing becomes read
