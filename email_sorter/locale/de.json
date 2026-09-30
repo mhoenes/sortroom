@@ -503,6 +503,10 @@
  "To maintenance": "Zur Wartung",
  "To review": "Zur Prüfung",
  "Today": "Heute",
+ "Too many failed logins. Please try again in %(num)s minute.": [
+  "Zu viele fehlgeschlagene Anmeldungen. Bitte in %(num)s Minute erneut versuchen.",
+  "Zu viele fehlgeschlagene Anmeldungen. Bitte in %(num)s Minuten erneut versuchen."
+ ],
  "Track expiry date": "Ablaufdatum verfolgen",
  "Type \"%(name)s\" to confirm": "Zum Bestätigen „%(name)s“ eintippen",
  "Type of mailbox": "Art des Postfachs",

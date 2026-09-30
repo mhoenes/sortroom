@@ -30,7 +30,6 @@ def _mail(store, key, category, conf, moved_to, subject, sender="shop@example.de
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("ADMIN_PASSWORD", PASSWORD)
-    monkeypatch.setattr(web.time, "sleep", lambda s: None)  # no login throttling in tests
     web._failed_logins.clear()
     boxes = {"privat": Mailbox("privat", "Privat", tmp_path / "privat", CFG),
              "gmail": Mailbox("gmail", "Gmail", tmp_path / "gmail", CFG)}
@@ -70,12 +69,33 @@ def test_wrong_password(client):
     assert client.get("/ui", follow_redirects=False).status_code == 303
 
 
-def test_failed_logins_are_throttled(client, monkeypatch):
-    waits = []
-    monkeypatch.setattr(web.time, "sleep", waits.append)
-    for _ in range(3):
-        client.post("/login", data={"password": "falsch"})
-    assert waits == [0, 1, 2]
+def _clock(monkeypatch, start=1000.0):
+    now = [start]
+    monkeypatch.setattr(web, "_clock", lambda: now[0])
+    return now
+
+
+def test_failed_logins_lock_the_address_for_a_while(client, monkeypatch):
+    now = _clock(monkeypatch)
+    monkeypatch.setattr(web.time, "sleep", lambda s: pytest.fail("a login must never wait in a worker thread"))
+    for _ in range(web.MAX_FAILED_PER_ADDRESS):
+        assert client.post("/login", data={"password": "falsch"}).status_code == 401
+        now[0] += 10
+    r = client.post("/login", data={"password": PASSWORD}, follow_redirects=False)  # even the right one
+    assert r.status_code == 429 and "Zu viele fehlgeschlagene Anmeldungen" in r.text and "15 Minuten" in r.text
+    assert client.get("/ui", follow_redirects=False).status_code == 303
+    now[0] = 1000.0 + web.FAILED_WINDOW + 1  # the first failure is old enough now
+    r = client.post("/login", data={"password": PASSWORD}, follow_redirects=False)
+    assert r.status_code == 303 and not web._failed_logins  # a login clears the address
+
+
+def test_failed_logins_from_many_addresses_lock_everyone(client, monkeypatch):
+    now = _clock(monkeypatch)
+    web._failed_logins.update({f"10.0.0.{i}": [now[0]] for i in range(web.MAX_FAILED_TOTAL)})
+    assert client.post("/login", data={"password": PASSWORD}).status_code == 429
+    now[0] += web.FAILED_WINDOW
+    assert client.post("/login", data={"password": PASSWORD}, follow_redirects=False).status_code == 303
+    assert "10.0.0.1" not in web._failed_logins  # old entries are dropped
 
 
 def test_login_and_logout(client):

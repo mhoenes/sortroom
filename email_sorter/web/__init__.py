@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import math
 import os
 import threading
 import time
@@ -32,8 +33,14 @@ templates.env.globals["lang"] = i18n.language
 router = APIRouter()
 
 SESSION_DAYS = 7
-_failed_logins: dict[str, list[float]] = {}
+# failed logins: after MAX_FAILED_PER_ADDRESS from one address, or MAX_FAILED_TOTAL from all of them,
+# within FAILED_WINDOW seconds, further attempts are refused at once until the oldest one is old enough
+FAILED_WINDOW = 15 * 60
+MAX_FAILED_PER_ADDRESS = 5
+MAX_FAILED_TOTAL = 50
+_failed_logins: dict[str, list[float]] = {}  # address -> times of its recent failed logins
 _failed_lock = threading.Lock()
+_clock = time.monotonic
 
 
 # ---------------------------------------------------------------- auth
@@ -70,12 +77,27 @@ def require_login(request: Request) -> None:
         raise LoginRequired(str(request.url.path) + (f"?{request.url.query}" if request.url.query else ""))
 
 
-def _throttle(ip: str) -> None:
-    """After failed logins from an address, each further attempt waits a little longer (max 10 s)."""
+def _locked_for(ip: str) -> float:
+    """Seconds until a login from this address may be tried again; 0 when it may be tried now.
+
+    Refused attempts are answered at once instead of waiting: a waiting request would hold one of the
+    server's worker threads, and a few dozen at a time would stall the whole UI."""
+    now = _clock()
     with _failed_lock:
-        recent = [t for t in _failed_logins.get(ip, []) if time.time() - t < 900]
-        _failed_logins[ip] = recent
-    time.sleep(min(len(recent), 10))
+        for address in list(_failed_logins):
+            recent = [t for t in _failed_logins[address] if now - t < FAILED_WINDOW]
+            if recent:
+                _failed_logins[address] = recent
+            else:
+                del _failed_logins[address]
+        mine = _failed_logins.get(ip, [])
+        everyone = sorted(t for times in _failed_logins.values() for t in times)
+    waits = [0.0]
+    if len(mine) >= MAX_FAILED_PER_ADDRESS:
+        waits.append(mine[-MAX_FAILED_PER_ADDRESS] + FAILED_WINDOW - now)
+    if len(everyone) >= MAX_FAILED_TOTAL:  # many addresses guessing together
+        waits.append(everyone[-MAX_FAILED_TOTAL] + FAILED_WINDOW - now)
+    return max(waits)
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -88,7 +110,14 @@ def login_form(request: Request, next: str = "/ui"):
 def login(request: Request, password: str = Form(""), next: str = Form("/ui")):
     ip = request.client.host if request.client else "?"
     configured = len(admin_password()) >= 8
-    _throttle(ip)
+    wait = _locked_for(ip)
+    if wait > 0:  # not even the right password gets in now, or guessing would just go on
+        minutes = max(1, math.ceil(wait / 60))
+        return templates.TemplateResponse(request, "login.html", {
+            "next": _safe_next(next), "configured": configured,
+            "error": i18n.ngettext("Too many failed logins. Please try again in %(num)s minute.",
+                                   "Too many failed logins. Please try again in %(num)s minutes.", minutes)},
+            status_code=429)
     if configured and hmac.compare_digest(password.encode(), admin_password().encode()):
         with _failed_lock:
             _failed_logins.pop(ip, None)
@@ -97,7 +126,7 @@ def login(request: Request, password: str = Form(""), next: str = Form("/ui")):
         request.session["since"] = int(time.time())
         return RedirectResponse(_safe_next(next), status_code=303)
     with _failed_lock:
-        _failed_logins.setdefault(ip, []).append(time.time())
+        _failed_logins.setdefault(ip, []).append(_clock())
     return templates.TemplateResponse(request, "login.html", {
         "next": _safe_next(next), "configured": configured,
         "error": _("Wrong password.") if configured else None}, status_code=401)
