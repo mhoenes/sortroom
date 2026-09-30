@@ -80,15 +80,28 @@ def test_classifier_in_a_mailbox_file_is_rejected(tmp_path):
     _box(tmp_path, "privat")
     f = tmp_path / "mailboxes" / "privat" / "mailbox.toml"
     f.write_text(f.read_text(encoding="utf-8") + SHARED, encoding="utf-8")
-    with pytest.raises(ConfigError, match="shared by all mailboxes"):
-        load_mailboxes(tmp_path, tmp_path / "config.toml")
+    boxes = load_mailboxes(tmp_path, tmp_path / "config.toml")
+    assert "privat" not in boxes and "shared by all mailboxes" in boxes.broken["privat"]
 
 
 def test_bad_mailbox_folder_name(tmp_path):
     (tmp_path / "config.toml").write_text(SHARED, encoding="utf-8")
     _box(tmp_path, "Privat Box")
-    with pytest.raises(ConfigError, match="lowercase"):
-        load_mailboxes(tmp_path, tmp_path / "config.toml")
+    boxes = load_mailboxes(tmp_path, tmp_path / "config.toml")
+    assert boxes == {} and "lowercase" in boxes.broken["Privat Box"]
+
+
+def test_a_broken_mailbox_leaves_the_others_alone(tmp_path):
+    (tmp_path / "config.toml").write_text(SHARED, encoding="utf-8")
+    _box(tmp_path, "privat")
+    _box(tmp_path, "arbeit")
+    (tmp_path / "mailboxes" / "arbeit" / "mailbox.toml").write_text("name = 'Arbeit'\n[imap\n", encoding="utf-8")
+    boxes = load_mailboxes(tmp_path, tmp_path / "config.toml")
+    assert list(boxes) == ["privat"] and list(boxes.broken) == ["arbeit"]
+    (tmp_path / "mailboxes" / "arbeit" / "mailbox.toml").write_text(
+        (tmp_path / "mailboxes" / "privat" / "mailbox.toml").read_text(encoding="utf-8").replace(
+            'host = "imap.example.org"', 'host = "imap.example.org"\nport = "abc"'), encoding="utf-8")
+    assert "arbeit" in load_mailboxes(tmp_path, tmp_path / "config.toml").broken  # a ValueError, too
 
 
 def test_no_mailbox_yet(tmp_path):
@@ -167,7 +180,10 @@ def _cfg_with(tmp_path, extra: str):
     _box(tmp_path, "privat")
     f = tmp_path / "mailboxes" / "privat" / "mailbox.toml"
     f.write_text(f.read_text(encoding="utf-8") + extra, encoding="utf-8")
-    return load_mailboxes(tmp_path, tmp_path / "config.toml")["privat"].cfg
+    boxes = load_mailboxes(tmp_path, tmp_path / "config.toml")
+    if "privat" in boxes.broken:
+        raise ConfigError(boxes.broken["privat"])
+    return boxes["privat"].cfg
 
 
 def test_sender_rules_in_order(tmp_path):
@@ -202,3 +218,21 @@ def test_default_config_path(tmp_path, monkeypatch):
     assert runtime.default_config_path() == tmp_path / "config" / "config.toml"
     monkeypatch.setenv("SORTROOM_CONFIG", "/x/new.toml")
     assert runtime.default_config_path() == Path("/x/new.toml")
+
+
+def test_cli_runs_the_other_mailboxes_and_reports_the_broken_one(tmp_path, monkeypatch, caplog):
+    from email_sorter import __main__ as cli
+    (tmp_path / "config.toml").write_text(SHARED, encoding="utf-8")
+    _box(tmp_path, "privat")
+    (tmp_path / "mailboxes" / "arbeit").mkdir()
+    (tmp_path / "mailboxes" / "arbeit" / "mailbox.toml").write_text("[imap\n", encoding="utf-8")
+    monkeypatch.setattr(cli, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(cli, "setup_logging", lambda verbose: None)
+    ran = []
+    monkeypatch.setattr(cli, "_run_one", lambda box, args: ran.append(box.id) or 0)
+    with caplog.at_level("ERROR", logger="email_sorter"):
+        code = cli.main(["--config", str(tmp_path / "config.toml")])
+    assert ran == ["privat"] and code == 2
+    assert any("[arbeit] configuration error, skipped" in r.getMessage() for r in caplog.records)
+    assert cli.main(["--config", str(tmp_path / "config.toml"), "--mailbox", "arbeit"]) == 2
+    assert cli.main(["--config", str(tmp_path / "config.toml"), "--mailbox", "privat"]) == 0

@@ -86,6 +86,9 @@ def _busy(box: Mailbox) -> bool:
 
 def _pick(boxes: dict[str, Mailbox], box_id: str | None) -> Mailbox:
     """The mailbox a single-mailbox task works on: the one named, or the only one."""
+    broken = getattr(boxes, "broken", {})
+    if box_id in broken:
+        raise HTTPException(500, f"[{box_id}] configuration error: {broken[box_id]}")
     if box_id:
         if box_id not in boxes:
             raise HTTPException(404, f"unknown mailbox {box_id!r}")
@@ -146,7 +149,10 @@ def health() -> dict:
 
 @app.get("/mailboxes", dependencies=[Depends(_require_token)])
 def mailboxes() -> list[dict]:
-    return [{"id": b.id, "name": b.name, "busy": _busy(b)} for b in _mailboxes().values()]
+    """The mailboxes; one whose settings don't load has "error" instead of "name" and "busy"."""
+    boxes = _mailboxes()
+    return ([{"id": b.id, "name": b.name, "busy": _busy(b)} for b in boxes.values()]
+            + [{"id": box_id, "error": error} for box_id, error in getattr(boxes, "broken", {}).items()])
 
 
 @app.delete("/mailboxes/{box_id}", dependencies=[Depends(_require_token)])
@@ -179,6 +185,9 @@ def run_now(req: RunRequest | None = None) -> dict:
                 raise HTTPException(409, f"[{box.id}] another run is active")
             result = {"ok": True, "skipped": "another run is active"}
         results[box.id] = result
+    if not req.mailbox:
+        for box_id, error in getattr(boxes, "broken", {}).items():
+            results[box_id] = {"ok": False, "error": f"configuration error: {error}"}
     return {"ok": all(r["ok"] for r in results.values()), "results": results}
 
 

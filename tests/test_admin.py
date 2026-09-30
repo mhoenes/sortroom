@@ -379,3 +379,19 @@ def test_correction_rate_on_categories_and_overview(client, setup):
     assert 'title="1 von 4 korrigiert">25 %</td>' in html
     assert "In den letzten 30 Tagen hat das Modell 4 Mails hier einsortiert; 1 davon (25 %)" in html
     assert "25 % in 30 Tagen von Hand korrigiert" in client.get("/ui/m/privat").text
+
+
+def test_a_broken_mailbox_is_shown_and_the_rest_works(client, setup):
+    broken = setup / "mailboxes" / "arbeit"
+    broken.mkdir()
+    (broken / "mailbox.toml").write_text("name = 'Arbeit'\n[imap\n", encoding="utf-8")
+    html = client.get("/ui/m/privat").text
+    assert "Die Einstellungen des Postfachs arbeit lassen sich nicht laden" in html
+    assert "mailboxes/arbeit/mailbox.toml korrigieren" in html
+    r = client.get("/ui/m/arbeit")
+    assert r.status_code == 500 and "lassen sich nicht laden" in r.text
+    html = client.get("/ui/settings").text  # a mailbox broken before doesn't block the global settings
+    form = {"csrf": _csrf(html), "endpoint": "https://example.invalid/decisions", "model": "example/model-3",
+            "max_body_chars": "3000", "timeout_seconds": "20", "min_interval_seconds": "0"}
+    assert client.post("/ui/settings", data=form, follow_redirects=False).status_code == 303
+    assert _box(setup).cfg.classifier_model == "example/model-3"
