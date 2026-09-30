@@ -7,8 +7,9 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-COPY requirements.txt requirements-api.txt ./
-RUN pip install -r requirements-api.txt
+# requirements-lock.txt pins every package (also the indirect ones) to the versions the tests ran with
+COPY requirements.txt requirements-api.txt requirements-lock.txt ./
+RUN pip install -r requirements-api.txt -c requirements-lock.txt
 
 COPY email_sorter ./email_sorter
 COPY config ./config
