@@ -2,7 +2,8 @@
 
 Mails you deleted (or that sit in the trash) are marked `gone`: they stay in the log, so cost and
 history are kept and nothing is classified twice, but they no longer show up for review. Mails the
-sorter left in the inbox and you filed by hand get the folder they are in now.
+sorter left in the inbox and you filed by hand get the folder they are in now. The unsubscribe links
+of logged mails are noted for the senders page.
 
 Reads every folder's headers; changes nothing on the server.
 """
@@ -16,7 +17,7 @@ from imap_tools import MailBox
 
 from .config import Config, Credentials
 from .i18n import _
-from .mailtext import message_key
+from .mailtext import message_key, received_of, unsubscribe_links
 from .sorter import IMAP_TIMEOUT, UID_CHUNK, _delimiter
 from .store import Store
 from .oauth import sign_in
@@ -56,19 +57,25 @@ def run_reconcile(cfg: Config, creds: Credentials, base_dir: Path, live: bool) -
             delim = _delimiter(mb)
             source = cfg.source_folder.strip("/")
             found: dict[str, str | None] = {}  # message key -> folder (config notation); None: only in a view
+            links: dict[str, tuple] = {}  # message key -> (sender, links, one-click?, date), for the senders list
             folders, views = mail_folders(mb)
             for name in folders + views:  # real folders first, so they win as a mail's place
                 path = name.replace(delim, "/") if delim else name
                 mb.folder.set(name)
                 n = 0
                 for head in mb.fetch(mark_seen=False, headers_only=True, bulk=UID_CHUNK):
-                    found.setdefault(message_key(head), None if name in views else path)
+                    key = message_key(head)
+                    found.setdefault(key, None if name in views else path)
+                    unsubscribe = unsubscribe_links(head)
+                    if unsubscribe:
+                        links[key] = (head.from_, *unsubscribe, received_of(head))
                     n += 1
                 log.info("%s: %d mail(s)%s", path, n, " (view, counts as kept)" if name in views else "")
             mb.folder.set(cfg.source_folder)
 
-        gone, back, filed = [], [], {}
+        gone, back, filed, logged = [], [], {}, set()
         for key, moved_to, was_gone in store.locations():
+            logged.add(key)
             if key not in found:
                 if not was_gone:
                     gone.append(key)
@@ -85,6 +92,7 @@ def run_reconcile(cfg: Config, creds: Credentials, base_dir: Path, live: bool) -
             store.set_gone(back, False)
             for key, where in filed.items():
                 store.set_moved_to([key], where)
+            store.note_unsubscribe(v for k, v in links.items() if k in logged)
             store.set_meta("last_reconcile", datetime.now().isoformat(timespec="seconds"))
         else:
             log.info("dry run - log not changed")

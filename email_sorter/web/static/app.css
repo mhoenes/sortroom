@@ -342,7 +342,18 @@ svg.star { display: block; width: 16px; height: 16px; fill: #D99A06; }
   .task .fields { flex-wrap: wrap; }
   .task .fields .f { flex-basis: 140px; }
   .task .fields.stacked .f { flex-basis: auto; }
+  .senders .opt { display: none; }
+  /* one sender per block: address and count, the actions below */
+  table.senders thead { display: none; }
+  table.senders tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; border-bottom: 1px solid var(--line-soft); }
+  table.senders tr:last-child { border-bottom: 0; }
+  table.senders td { border-bottom: 0; }
+  table.senders td:last-child { grid-column: 1 / -1; padding-top: 0; }
+  table.senders .addr { max-width: none; }
   .review a { flex-direction: column; align-items: stretch; gap: 6px; }
   .review .what, .review .guess { width: auto; }
   .review .guess { flex-direction: row; gap: 6px; }
 }
+.senders .addr { max-width: 320px; }
+.unsub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.unsub form { display: contents; }

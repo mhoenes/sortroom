@@ -1,7 +1,9 @@
 """Read-only queries on a mailbox's state.db for the web UI."""
 from __future__ import annotations
 
+import json
 import sqlite3
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -104,9 +106,9 @@ def expired_moved(db: sqlite3.Connection | None, days: int = 7, now: datetime | 
                       (since,)).fetchone()[0]
 
 
-def _has_undo(db: sqlite3.Connection) -> bool:
-    """The log records what runs did for undo (it is added the first time a run opens the log)."""
-    return db.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'undo'").fetchone() is not None
+def _has_table(db: sqlite3.Connection, name: str) -> bool:
+    """Tables added in later versions exist once a run has opened the log."""
+    return db.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)).fetchone() is not None
 
 
 def recent_runs(db: sqlite3.Connection | None, limit: int = 8, skip_empty: bool = True) -> list[dict]:
@@ -114,18 +116,60 @@ def recent_runs(db: sqlite3.Connection | None, limit: int = 8, skip_empty: bool 
     if db is None:
         return []
     where = "WHERE NOT (kind = 'run' AND classified = 0 AND exit_code = 0)" if skip_empty else ""
-    undoable = "live = 1 AND EXISTS (SELECT 1 FROM undo WHERE undo.run = runs.started)" if _has_undo(db) else "0"
+    undoable = "live = 1 AND EXISTS (SELECT 1 FROM undo WHERE undo.run = runs.started)" if _has_table(db, "undo") else "0"
     return [dict(r) for r in db.execute(
         f"SELECT *, {undoable} AS undoable FROM runs {where} ORDER BY started DESC, id DESC LIMIT ?", (limit,))]
 
 
 def undoable_runs(db: sqlite3.Connection | None) -> list[dict]:
     """The live runs that can be undone, newest first: started, kind, detail and the number of mails."""
-    if db is None or not _has_undo(db):
+    if db is None or not _has_table(db, "undo"):
         return []
     return [dict(r) for r in db.execute(
         "SELECT u.run AS started, r.kind, r.detail, COUNT(DISTINCT u.message_key) AS mails "
         "FROM undo u JOIN runs r ON r.started = u.run AND r.live = 1 GROUP BY u.run ORDER BY u.run DESC")]
+
+
+SENDER_DAYS = 90
+
+
+def senders(db: sqlite3.Connection | None, category: str = "", now: datetime | None = None) -> list[dict]:
+    """Senders with an unsubscribe link, most mails in the last SENDER_DAYS days first.
+
+    Each: address, mails, last (received), category (the most frequent), links, one_click, unsubscribed,
+    method and `since` (mails received after you unsubscribed). With `category` only mails of that
+    category count; without it, senders you unsubscribed from stay listed when no mail came since.
+    """
+    if db is None or not _has_table(db, "senders"):
+        return []
+    known = {r["address"]: dict(r) for r in db.execute("SELECT * FROM senders WHERE unsubscribe IS NOT NULL")}
+    rows = db.execute(
+        f"SELECT lower(sender) AS address, category, received, {RECEIVED} AS jd FROM processed "
+        f"WHERE {RECEIVED} >= julianday(?)" + (" AND category = ?" if category else ""),
+        [_received_since(now or datetime.now(), timedelta(days=SENDER_DAYS))] + ([category] if category else []))
+    stats: dict[str, dict] = {}
+    for r in rows:
+        if r["address"] not in known:
+            continue
+        s = stats.setdefault(r["address"], {"mails": 0, "jd": 0.0, "last": None, "categories": Counter()})
+        s["mails"] += 1
+        s["categories"][r["category"]] += 1
+        if (r["jd"] or 0) >= s["jd"]:
+            s["jd"], s["last"] = r["jd"] or 0, r["received"]
+    out = []
+    for address, info in known.items():
+        s = stats.get(address)
+        if s is None and (category or not info["unsubscribed"]):
+            continue
+        since = 0
+        if info["unsubscribed"]:
+            since = db.execute(f"SELECT COUNT(*) FROM processed WHERE lower(sender) = ? AND {RECEIVED} > julianday(?)",
+                               (address, _iso(datetime.fromisoformat(info["unsubscribed"]).astimezone()))).fetchone()[0]
+        out.append({**info, "links": json.loads(info["unsubscribe"]), "mails": s["mails"] if s else 0,
+                    "last": s["last"] if s else None, "jd": s["jd"] if s else 0.0,
+                    "category": s["categories"].most_common(1)[0][0] if s else None, "since": since})
+    out.sort(key=lambda s: (-s["mails"], -s["jd"], s["address"]))
+    return out
 
 
 def uncertain_mails(db: sqlite3.Connection | None, min_confidence: float, limit: int = 10,

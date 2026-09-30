@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Senders') }} · {{ box.name }}{% endblock %}
+{% macro act(r, action, text, cls='', confirm=none) %}<form method="post" action="/ui/m/{{ box.id }}/senders/action">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="address" value="{{ r.address }}">
+      <input type="hidden" name="category" value="{{ category }}">
+      <button class="btn small {{ cls }}" type="submit" name="action" value="{{ action }}"
+        {% if confirm %}onclick='return confirm({{ confirm|tojson }})'{% endif %}>{{ text }}</button></form>{% endmacro %}
+{% block content %}
+<div class="head">
+  <div class="title">
+    <h1>{{ _('Senders') }} · {{ box.name }}</h1>
+    <div class="sub">{{ _('Senders whose mails carry an unsubscribe link, by mails in the last %(days)s days', days=days) }}</div>
+  </div>
+</div>
+
+<form class="filters" method="get" action="/ui/m/{{ box.id }}/senders">
+  <label class="f sel">{{ _('Category') }}
+    <select name="category" onchange="this.form.submit()">
+      <option value="">{{ _('All') }}</option>
+      {% for key, c in box.cfg.categories.items() %}<option value="{{ key }}" {% if category == key %}selected{% endif %}>{{ c.label }}</option>{% endfor %}
+    </select>
+  </label>
+</form>
+
+<section class="card stack">
+  {% if rows %}
+  <div class="scroll-x"><table class="senders">
+    <thead><tr><th scope="col">{{ _('Sender') }}</th><th scope="col" class="opt">{{ _('Category') }}</th>
+      <th scope="col" class="num">{{ _('Mails') }}</th><th scope="col" class="opt">{{ _('Last mail') }}</th><th scope="col">{{ _('Unsubscribe') }}</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td class="clip addr" title="{{ r.address }}"><a href="/ui/m/{{ box.id }}/mails?period=all&amp;q={{ r.address|urlencode }}">{{ r.address }}</a></td>
+        <td class="opt">{{ label(r.category) if r.category else '–' }}</td>
+        <td class="num">{{ r.mails|num }}</td>
+        <td class="mono opt" style="white-space:nowrap">{{ r.last|dt }}</td>
+        <td><div class="unsub">
+          {% if r.unsubscribed %}
+            <span class="pill ok">{{ _('Unsubscribed %(date)s', date=r.unsubscribed|date) }}</span>
+            {% if r.since %}<span class="pill warn">{{ ngettext('%(num)s mail since', '%(num)s mails since', r.since) }}</span>{% endif %}
+            {{ act(r, 'reset', _('Reset')) }}
+          {% elif r.one_click %}
+            {{ act(r, 'unsubscribe', _('Unsubscribe'), 'primary', _('Unsubscribe from %(sender)s? Sortroom sends the unsubscribe request to %(host)s.', sender=r.address, host=r.one_click_host)) }}
+          {% else %}
+            {% if r.web %}<a class="btn small" href="{{ r.web }}" target="_blank" rel="noopener noreferrer">{{ _('Open link') }}</a>{% endif %}
+            {% if r.mailto %}<a class="btn small" href="{{ r.mailto }}">{{ _('Write mail') }}</a>{% endif %}
+            {{ act(r, 'mark', _('Mark as unsubscribed')) }}
+          {% endif %}
+        </div></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="muted hint">{{ _('"Unsubscribe" sends the one-click request of the sender (RFC 8058) from this server. For the other senders open the link or write the mail yourself, then mark them. Unsubscribe links are read when mails are sorted and when the log is reconciled.') }}</p>
+  {% else %}<div class="empty">{{ _('No sender with an unsubscribe link in the last %(days)s days. The links are read when mails are sorted and when the log is reconciled (Maintenance).', days=days) }}</div>{% endif %}
+</section>
+{% endblock %}

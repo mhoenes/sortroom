@@ -64,6 +64,27 @@ def build_state(msg: MailMessage, max_chars: int) -> dict:
     }
 
 
+_UNSUBSCRIBE_LINK = re.compile(r"<([^>]+)>")
+
+
+def unsubscribe_links(msg: MailMessage) -> tuple[list[str], bool] | None:
+    """The List-Unsubscribe links (RFC 2369; https, http and mailto only) and whether a one-click
+    unsubscribe (RFC 8058: a POST to the https link) is offered. None without such a header."""
+    raw = " ".join(msg.headers.get("list-unsubscribe") or ())
+    links = [re.sub(r"\s+", "", link) for link in _UNSUBSCRIBE_LINK.findall(raw)]
+    links = [link for link in links if link.lower().startswith(("https://", "http://", "mailto:"))]
+    if not links:
+        return None
+    post = re.sub(r"\s+", "", " ".join(msg.headers.get("list-unsubscribe-post") or ())).lower()
+    one_click = "list-unsubscribe=one-click" in post and any(link.lower().startswith("https://") for link in links)
+    return links, one_click
+
+
+def received_of(msg: MailMessage) -> str:
+    """The mail's date as the log keeps it."""
+    return msg.date.isoformat(timespec="minutes") if msg.date else msg.date_str
+
+
 def message_key(msg: MailMessage) -> str:
     """Stable id across folder moves: Message-ID, or a hash of basic headers."""
     message_id = (msg.headers.get("message-id") or ("",))[0].strip()

@@ -25,6 +25,8 @@ server (Gmail, Outlook/Microsoft 365, your provider's mailbox, …).
 - **Tracks time-limited offers** and moves promotions to an *Expired* folder the day
   after their deadline, so they can be deleted in one go.
 - **Sender rules** file known senders without asking the model (free).
+- **Unsubscribe helper:** lists the senders with the most mail that carry an unsubscribe
+  link, and unsubscribes in one click where the sender supports it.
 - **Several mailboxes**, each with its own categories, schedule and log.
 - **Runs by itself** every few minutes; mail you read stays read.
 
@@ -39,8 +41,8 @@ For each new mail Sortroom sends the model the sender, recipient, subject, attac
 names, whether it is a mailing list and up to 3000 characters of the cleaned text.
 **With a hosted endpoint this data goes to that provider** and whoever runs the model
 behind it – check their privacy terms. With a self-hosted endpoint it stays in your
-network. Apart from that Sortroom only talks to your IMAP server; it sends nothing
-anywhere else. Details: [PRIVACY.md](PRIVACY.md).
+network. Apart from that Sortroom only talks to your IMAP server – and to a sender's
+server when you unsubscribe from it in one click. Details: [PRIVACY.md](PRIVACY.md).
 
 ## What you need
 
