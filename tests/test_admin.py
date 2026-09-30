@@ -188,6 +188,8 @@ def test_maintenance_validation_errors(client):
     r = client.post("/ui/m/privat/maintenance/rename_category", data={"csrf": token, "old": "werbung",
                                                                        "new": "finanzen"})
     assert "schon vergeben" in r.text
+    r = client.post("/ui/m/privat/maintenance/rename_category", data={"csrf": token, "old": "werbung", "new": "inbox"})
+    assert "„inbox“ ist reserviert" in r.text
     assert client.post("/ui/m/privat/maintenance/nix", data={"csrf": token}).status_code == 404
 
 

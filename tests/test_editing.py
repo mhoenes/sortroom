@@ -349,3 +349,9 @@ def test_reconcile_status_in_the_settings(client, setup, monkeypatch):
     store.close()
     html = client.get("/ui/m/privat/settings").text
     assert "zuletzt vor 3 Std · nächster" in html
+
+
+def test_inbox_is_refused_as_a_category_key(setup):
+    shared = setup / "config.toml"
+    with pytest.raises(EditError, match="„inbox“ ist reserviert"):
+        save_category(_box(setup), shared, "inbox", {"description": "Alles"}, create=True)
