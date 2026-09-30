@@ -13,6 +13,8 @@ from email_sorter.classifier import Decision
 from email_sorter.sorter import RunResult
 from email_sorter.store import Store
 from email_sorter.web import admin
+from email_sorter.web import senders as senders_web
+from email_sorter.unsubscribe import UnsubscribeError
 from email_sorter.web.editing import (EditError, rename_category_key, rename_folder_refs, save_sender_rules,
                                       write_secrets)
 
@@ -312,3 +314,53 @@ def test_undo_a_run_from_the_run_log(client, setup, monkeypatch):
     page = client.get(r.headers["location"]).text
     assert "Lauf vom 30.09." in page and "rückgängig machen (Probelauf)" in page and "zurückverschoben" in page
     assert "Jetzt ausführen" in page  # the dry run can be run for real with the same choice
+
+
+def test_senders_page_and_unsubscribe(client, setup, monkeypatch):
+    store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
+    for key, sender, links in (("<n1@x>", "news@shop.example", (["https://shop.example/u"], True)),
+                               ("<n2@x>", "club@verein.example", (["mailto:off@verein.example"], False))):
+        store.record(SimpleNamespace(key=key, received=datetime.now().astimezone().isoformat(timespec="minutes"),
+                                     sender=sender, subject="Angebot", decision=Decision("werbung", 0.9, {}, 0.1, 0.0),
+                                     folder="INBOX/Werbung", flag=False, expires=None, unsubscribe=links))
+    store.close()
+    sent = []
+    monkeypatch.setattr(senders_web, "one_click", lambda url: sent.append(url) or 200)
+
+    html = client.get("/ui/m/privat/senders").text
+    assert "Absender · Privat" in html and 'href="/ui/m/privat/senders" aria-current="page"' in html
+    assert "news@shop.example" in html and "Von news@shop.example abmelden? Sortroom schickt die Abmeldung an shop.example." in html
+    assert 'href="mailto:off@verein.example"' in html and "Als abgemeldet markieren" in html
+    token = _csrf(html)
+    r = client.post("/ui/m/privat/senders/action", data={"csrf": token, "address": "news@shop.example",
+                                                          "action": "unsubscribe", "category": "werbung"})
+    assert sent == ["https://shop.example/u"] and "Von news@shop.example abgemeldet" in r.text
+    assert "Abgemeldet am" in r.text and str(r.url).endswith("/senders?category=werbung")
+    r = client.post("/ui/m/privat/senders/action", data={"csrf": token, "address": "club@verein.example",
+                                                          "action": "unsubscribe"})
+    assert "bietet keine One-Click-Abmeldung" in r.text and len(sent) == 1
+    client.post("/ui/m/privat/senders/action", data={"csrf": token, "address": "club@verein.example", "action": "mark"})
+    store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
+    assert store.sender("club@verein.example")["method"] == "manual"
+    assert store.sender("news@shop.example")["method"] == "one-click"
+    store.close()
+    r = client.post("/ui/m/privat/senders/action", data={"csrf": token, "address": "news@shop.example", "action": "reset"})
+    assert "nicht mehr als abgemeldet markiert" in r.text
+
+
+def test_failed_unsubscribe_is_not_noted(client, setup, monkeypatch):
+    store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
+    store.note_unsubscribe([("news@shop.example", ["https://shop.example/u"], True, None)])
+    store.close()
+
+    def refuse(url):
+        raise UnsubscribeError("shop.example hat mit Fehler 500 geantwortet.")
+
+    monkeypatch.setattr(senders_web, "one_click", refuse)
+    token = _csrf(client.get("/ui/m/privat/maintenance").text)  # the sender has no mail in the log to list
+    r = client.post("/ui/m/privat/senders/action", data={"csrf": token, "address": "news@shop.example",
+                                                          "action": "unsubscribe"})
+    assert "Abmelden von news@shop.example fehlgeschlagen" in r.text
+    store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
+    assert store.sender("news@shop.example")["unsubscribed"] is None
+    store.close()

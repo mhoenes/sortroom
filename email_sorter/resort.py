@@ -17,7 +17,7 @@ from imap_tools import AND, MailBox
 
 from .config import Config, Credentials
 from .classifier import ClassifierAuthError, ClassifierClient, ClassifierError
-from .mailtext import build_state, message_key
+from .mailtext import build_state, message_key, received_of, unsubscribe_links
 from datetime import datetime
 
 from .config import INBOX_ACTION
@@ -85,10 +85,10 @@ def resort_outcomes(mb: MailBox, cfg: Config, classifier: ClassifierClient, fold
             else:
                 where, note = target, f"moves from {folder}"
             outcome = Outcome(
-                key=key, uid=msg.uid,
-                received=msg.date.isoformat(timespec="minutes") if msg.date else msg.date_str,
+                key=key, uid=msg.uid, received=received_of(msg),
                 sender=msg.from_, subject=msg.subject, decision=decision,
                 folder=where, flag=False, note=note, expires=expiry_for(decision, cfg, msg),
+                unsubscribe=unsubscribe_links(msg),
             )
             outcomes.append(outcome)
             if where != folder:

@@ -56,6 +56,14 @@ CREATE TABLE IF NOT EXISTS undo (
     before          TEXT,                        -- JSON of the processed row before the run, NULL = none
     PRIMARY KEY (run, message_key)
 );
+CREATE TABLE IF NOT EXISTS senders (
+    address         TEXT PRIMARY KEY,            -- sender address, lower case
+    unsubscribe     TEXT,                        -- JSON list of its List-Unsubscribe links (https, http, mailto)
+    one_click       INTEGER NOT NULL DEFAULT 0,  -- 1 = one-click unsubscribe (RFC 8058) offered
+    seen            TEXT,                        -- date of the mail the links come from (the newest one)
+    unsubscribed    TEXT,                        -- when you unsubscribed, NULL = not
+    method          TEXT                         -- how: 'one-click' (sent by Sortroom) or 'manual'
+);
 CREATE TABLE IF NOT EXISTS meta (
     key             TEXT PRIMARY KEY,            -- last_reconcile: when the log was last reconciled for real
     value           TEXT NOT NULL
@@ -92,6 +100,8 @@ class Store:
                 "INSERT OR REPLACE INTO undo (run, message_key, origin, moved_to, before) VALUES (?,?,?,?,?)",
                 (self._undo[0], outcome.key, self._undo[1], outcome.folder,
                  json.dumps(before, ensure_ascii=False) if before else None))
+        if getattr(outcome, "unsubscribe", None):
+            self.note_unsubscribe([(outcome.sender, *outcome.unsubscribe, outcome.received)], commit=False)
         self.db.execute(
             """INSERT OR REPLACE INTO processed
                (message_key, processed_at, received, sender, subject, category, confidence,
@@ -283,6 +293,36 @@ class Store:
                             [(run, k) for (k,) in self.db.execute("SELECT message_key FROM undo WHERE run = ?",
                                                                     (run,)).fetchall() if k not in keep])
         self.db.commit()
+
+    def note_unsubscribe(self, found: Iterable[tuple[str, list[str], bool, str | None]], commit: bool = True) -> None:
+        """Remember the unsubscribe links of senders: (address, links, one-click?, date of the mail).
+        The links of a sender's newest mail win."""
+        self.db.executemany(
+            "INSERT INTO senders (address, unsubscribe, one_click, seen) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT (address) DO UPDATE SET unsubscribe = excluded.unsubscribe, "
+            "one_click = excluded.one_click, seen = excluded.seen "
+            "WHERE COALESCE(julianday(excluded.seen), 0) >= COALESCE(julianday(senders.seen), 0)",
+            [((address or "").lower(), json.dumps(links), int(one_click), seen)
+             for address, links, one_click, seen in found if address])
+        if commit:
+            self.db.commit()
+
+    def sender(self, address: str) -> dict | None:
+        cur = self.db.execute("SELECT * FROM senders WHERE address = ?", (address.lower(),))
+        row = cur.fetchone()
+        if not row:
+            return None
+        out = dict(zip([c[0] for c in cur.description], row))
+        out["unsubscribe"] = json.loads(out["unsubscribe"] or "[]")
+        return out
+
+    def set_unsubscribed(self, address: str, method: str | None) -> bool:
+        """Note that you unsubscribed from a sender now (method 'one-click' or 'manual'), or forget it (None)."""
+        cur = self.db.execute(
+            "UPDATE senders SET unsubscribed = ?, method = ? WHERE address = ?",
+            (datetime.now().isoformat(timespec="seconds") if method else None, method, address.lower()))
+        self.db.commit()
+        return cur.rowcount == 1
 
     def set_meta(self, key: str, value: str) -> None:
         self.db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, value))

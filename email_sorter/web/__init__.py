@@ -185,7 +185,7 @@ def _box(request: Request, box_id: str) -> tuple[dict[str, Mailbox], Mailbox]:
 def _sidebar(request: Request, boxes: dict[str, Mailbox], current: Mailbox | None, active: str) -> dict:
     busy = request.app.state.is_busy
     # switching to another mailbox keeps the page: from A's mails to B's mails
-    page = {"mails": "/mails", "categories": "/categories", "maintenance": "/maintenance",
+    page = {"mails": "/mails", "senders": "/senders", "categories": "/categories", "maintenance": "/maintenance",
             "settings": "/settings"}.get(active, "")
     items = []
     for b in boxes.values():
@@ -315,4 +315,4 @@ def mails(request: Request, box_id: str, q: str = "", category: str = "", folder
         "expired_to": lambda cat: expired_target(box.cfg, cat)})
 
 
-from . import admin, editor  # noqa: E402,F401  (register their pages on router)
+from . import admin, editor, senders  # noqa: E402,F401  (register their pages on router)

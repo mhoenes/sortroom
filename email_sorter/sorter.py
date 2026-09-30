@@ -15,7 +15,7 @@ from imap_tools import AND, MailBox, MailMessage, MailMessageFlags
 from .config import INBOX_ACTION, Config, Credentials, SenderRule
 from .expiry import resolve_expiry
 from .classifier import Decision, ClassifierAuthError, ClassifierClient, ClassifierError
-from .mailtext import build_state, full_text, message_key, sent_date
+from .mailtext import build_state, full_text, message_key, received_of, sent_date, unsubscribe_links
 from .store import GONE, MOVED, Store
 from .oauth import sign_in
 
@@ -45,6 +45,7 @@ class Outcome:
     note: str = ""
     expires: date | None = None  # last valid day of a time-limited offer
     source: str = "classifier"   # "classifier" or "rule" (sender rule, no model request)
+    unsubscribe: tuple[list[str], bool] | None = None  # List-Unsubscribe links, one-click offered
 
 
 def rule_outcome(cfg: Config, rule: SenderRule, uid: str, key: str, msg: MailMessage,
@@ -52,10 +53,9 @@ def rule_outcome(cfg: Config, rule: SenderRule, uid: str, key: str, msg: MailMes
     """A mail placed by a sender rule: its category's folder (or `where`), no flag, no model cost."""
     decision = Decision(rule.action, 1.0, {rule.action: 1.0}, 0.0, 0.0)
     folder = cfg.categories[rule.action].folder if where is None else where
-    return Outcome(key=key, uid=uid,
-                   received=msg.date.isoformat(timespec="minutes") if msg.date else msg.date_str,
+    return Outcome(key=key, uid=uid, received=received_of(msg),
                    sender=msg.from_, subject=msg.subject, decision=decision, folder=folder, flag=False,
-                   note=f"sender rule: {rule.match}", source="rule")
+                   note=f"sender rule: {rule.match}", source="rule", unsubscribe=unsubscribe_links(msg))
 
 
 def plan(decision: Decision, cfg: Config) -> tuple[str | None, bool, str]:
@@ -273,7 +273,7 @@ def classify_new(
         outcome = Outcome(
             key=pending[msg_uid],
             uid=msg_uid,
-            received=msg.date.isoformat(timespec="minutes") if msg.date else msg.date_str,
+            received=received_of(msg),
             sender=msg.from_,
             subject=msg.subject,
             decision=decision,
@@ -281,6 +281,7 @@ def classify_new(
             flag=flag,
             note=note,
             expires=expiry_for(decision, cfg, msg),
+            unsubscribe=unsubscribe_links(msg),
         )
         outcomes.append(outcome)
         if on_outcome:

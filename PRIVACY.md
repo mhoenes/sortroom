@@ -37,16 +37,27 @@ and up to 3000 characters of the text (by default; quotes and signatures removed
 - With a **self-hosted** endpoint, it stays in your network.
 
 Nothing else leaves your installation, apart from the IMAP connection to your mail
-server and, when you sign in with Google or Microsoft, the requests to their sign-in
-service.
+server, when you sign in with Google or Microsoft, the requests to their sign-in
+service, and the unsubscribe requests you send (below).
+
+## Unsubscribing
+
+The *Senders* page lists senders whose mails carry an unsubscribe link (the
+`List-Unsubscribe` header). When you press **Unsubscribe** and confirm, Sortroom sends
+the sender's one-click unsubscribe request (RFC 8058): an HTTPS `POST` to the link from
+the sender's mail, from the machine that runs Sortroom. The sender learns that the
+address behind the link unsubscribed, and sees that machine's IP address. Sortroom
+sends nothing else to senders, never on its own and never to addresses in your own
+network. Links without one-click unsubscribe are only shown; you open them yourself.
 
 ## What Sortroom stores
 
 All of it stays on the machine that runs Sortroom, in its folders:
 
 - `mailboxes/<id>/data/state.db` – a log of every processed mail: sender, subject,
-  date, category, confidence, target folder, expiry date and cost; and a log of the
-  runs. Mail text is not stored.
+  date, category, confidence, target folder, expiry date and cost; the unsubscribe
+  links of senders and when you unsubscribed; and a log of the runs. Mail text is not
+  stored.
 - `mailboxes/<id>/reports/` – dry-run reports with sender, subject and category.
 - `logs/sortroom.log` – the application log; it can contain subjects (of mails moved by
   hand, and of every mail with verbose logging).

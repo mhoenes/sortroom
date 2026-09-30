@@ -1,0 +1,82 @@
+"""The senders page: who sends the most mail with an unsubscribe link, and unsubscribing from them."""
+from __future__ import annotations
+
+import logging
+from urllib.parse import urlencode, urlsplit
+
+from fastapi import Depends, Request
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import HTMLResponse, RedirectResponse
+
+from ..i18n import _
+from ..store import Store
+from ..unsubscribe import UnsubscribeError, one_click, one_click_link
+from . import _box, _label, _sidebar, queries, require_login, router
+from .editor import _flash, _form, _page
+
+log = logging.getLogger(__name__)
+
+
+def _links(sender: dict) -> dict:
+    """What the page offers for a sender: the one-click link, a web link and a mailto link."""
+    links = sender["links"]
+    return {"one_click": one_click_link(links) if sender["one_click"] else None,
+            "one_click_host": urlsplit(one_click_link(links) or "").hostname,
+            "web": next((x for x in links if x.lower().startswith(("https://", "http://"))), None),
+            "mailto": next((x for x in links if x.lower().startswith("mailto:")), None)}
+
+
+@router.get("/ui/m/{box_id}/senders", response_class=HTMLResponse, dependencies=[Depends(require_login)])
+def senders(request: Request, box_id: str, category: str = ""):
+    boxes, box = _box(request, box_id)
+    category = category if category in box.cfg.categories else ""
+    db = queries.connect(box.workspace)
+    try:
+        rows = queries.senders(db, category)
+    finally:
+        if db:
+            db.close()
+    for row in rows:
+        row.update(_links(row))
+    return _page(request, "senders.html", {
+        **_sidebar(request, boxes, box, "senders"), "box": box, "rows": rows, "category": category,
+        "days": queries.SENDER_DAYS, "label": lambda k: _label(box, k)})
+
+
+@router.post("/ui/m/{box_id}/senders/action", dependencies=[Depends(require_login)])
+async def sender_action(request: Request, box_id: str):
+    form = await _form(request)
+    _all_boxes, box = _box(request, box_id)
+    address, action = str(form.get("address") or "").strip().lower(), str(form.get("action") or "")
+    category = str(form.get("category") or "")
+    back = f"/ui/m/{box.id}/senders" + (f"?{urlencode({'category': category})}" if category else "")
+    store = Store(box.workspace / "data" / "state.db")
+    try:
+        sender = store.sender(address) if address else None
+        if sender is None:
+            _flash(request, _("Unknown sender."), "err")
+        elif action == "unsubscribe":
+            url = one_click_link(sender["unsubscribe"]) if sender["one_click"] else None
+            if not url:
+                _flash(request, _("%(sender)s offers no one-click unsubscribe.", sender=address), "err")
+            else:
+                try:
+                    await run_in_threadpool(one_click, url)
+                except UnsubscribeError as e:
+                    _flash(request, _("Unsubscribing from %(sender)s failed: %(error)s", sender=address, error=e),
+                           "err")
+                else:
+                    store.set_unsubscribed(address, "one-click")
+                    _flash(request, _("Unsubscribed from %(sender)s. If mail still arrives, the list shows it.",
+                                      sender=address))
+        elif action == "mark":
+            store.set_unsubscribed(address, "manual")
+            _flash(request, _("%(sender)s marked as unsubscribed.", sender=address))
+        elif action == "reset":
+            store.set_unsubscribed(address, None)
+            _flash(request, _("%(sender)s no longer marked as unsubscribed.", sender=address))
+        else:
+            _flash(request, _("Unknown action."), "err")
+    finally:
+        store.close()
+    return RedirectResponse(back, status_code=303)
