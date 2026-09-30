@@ -156,3 +156,17 @@ def test_stale_locks_from_previous_container_are_removed_on_startup(tmp_path, mo
     monkeypatch.setattr(api, "load_mailboxes", lambda base, path: boxes)
     with TestClient(api.app):
         assert not any(b.lock_path.exists() for b in boxes.values())
+
+
+def test_a_broken_mailbox_is_reported_and_the_others_run(make_client, monkeypatch):
+    from email_sorter.config import Mailboxes
+    c = make_client(("privat",))
+    boxes = Mailboxes(c.boxes, {"arbeit": "missing setting 'host'"})
+    monkeypatch.setattr(api, "load_mailboxes", lambda base, path: boxes)
+    assert c.get("/mailboxes", headers=AUTH).json() == [
+        {"id": "privat", "name": "Privat", "busy": False}, {"id": "arbeit", "error": "missing setting 'host'"}]
+    body = c.post("/run", headers=AUTH).json()
+    assert body["ok"] is False and body["results"]["privat"]["ok"] is True
+    assert body["results"]["arbeit"] == {"ok": False, "error": "configuration error: missing setting 'host'"}
+    r = c.post("/run", headers=AUTH, json={"mailbox": "arbeit"})
+    assert r.status_code == 500 and "missing setting" in r.json()["detail"]

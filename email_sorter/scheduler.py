@@ -48,6 +48,7 @@ class Scheduler:
         self.next_run: dict[str, datetime] = {}   # mailbox id -> when its next run is due
         self.running: set[str] = set()
         self.started_at: datetime | None = None
+        self.broken: dict[str, str] = {}  # mailbox id -> why its settings don't load, as last logged
 
     # ------------------------------------------------------------ lifecycle
     def start(self) -> None:
@@ -86,6 +87,7 @@ class Scheduler:
         except ConfigError as e:
             log.error("schedule: configuration error, no runs: %s", e)
             return []
+        self._note_broken(getattr(boxes, "broken", {}))
         started = []
         with self._lock:
             for box_id in list(self.next_run):
@@ -113,6 +115,14 @@ class Scheduler:
                 started.append(box.id)
                 threading.Thread(target=self._run, args=(box,), name=f"scheduled-{box.id}", daemon=True).start()
         return started
+
+    def _note_broken(self, broken: dict[str, str]) -> None:
+        for box_id, error in broken.items():
+            if self.broken.get(box_id) != error:
+                log.error("[%s] settings cannot be loaded, not sorted until fixed: %s", box_id, error)
+        for box_id in set(self.broken) - set(broken):
+            log.info("[%s] settings load again", box_id)
+        self.broken = dict(broken)
 
     def _reconcile_due(self, box: Mailbox, now: datetime) -> bool:
         if not box.cfg.reconcile_enabled:

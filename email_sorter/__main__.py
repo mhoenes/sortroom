@@ -166,6 +166,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.delete_mailbox:
         return _delete(boxes, args.delete_mailbox, args.yes)
+    if args.mailbox in boxes.broken:
+        log.error("[%s] configuration error: %s", args.mailbox, boxes.broken[args.mailbox])
+        return 2
+    for box_id, error in boxes.broken.items() if not args.mailbox else ():
+        log.error("[%s] configuration error, skipped: %s", box_id, error)
+    skipped = 2 if boxes.broken and not args.mailbox else 0  # the others run, the exit code still tells
     if not boxes:
         log.error("no mailbox configured yet: add one in the admin UI (Add mailbox)")
         return 2
@@ -191,10 +197,10 @@ def main(argv: list[str] | None = None) -> int:
             except ConfigError as e:
                 print(f"  FAILED: {e}")
                 codes.append(2)
-        return max(codes)
+        return max(codes + [skipped])
 
     with keep_awake():
-        return max(_run_one(box, args) for box in selected)
+        return max([_run_one(box, args) for box in selected] + [skipped])
 
 
 if __name__ == "__main__":

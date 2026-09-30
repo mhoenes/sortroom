@@ -212,6 +212,10 @@ def _boxes(request: Request) -> dict[str, Mailbox]:
 
 def _box(request: Request, box_id: str) -> tuple[dict[str, Mailbox], Mailbox]:
     boxes = _boxes(request)
+    broken = getattr(boxes, "broken", {})
+    if box_id in broken:
+        raise HTTPException(500, _("The settings of mailbox %(id)s cannot be loaded: %(e)s",
+                                   id=box_id, e=broken[box_id]))
     if box_id not in boxes:
         raise HTTPException(404, _("Unknown mailbox"))
     return boxes, boxes[box_id]
@@ -242,7 +246,8 @@ def _sidebar(request: Request, boxes: dict[str, Mailbox], current: Mailbox | Non
         items.append({"id": b.id, "name": b.name, "host": b.cfg.imap_host, "tone": tone, "status": status,
                       "uncertain": st.uncertain, "href": f"/ui/m/{b.id}{page}"})
     current_item = next((i for i in items if current and i["id"] == current.id), None)
-    return {"sidebar_boxes": items, "current": current_item, "active": active}
+    return {"sidebar_boxes": items, "current": current_item, "active": active,
+            "broken_mailboxes": getattr(boxes, "broken", {})}
 
 
 def _label(box: Mailbox, key: str) -> str:
