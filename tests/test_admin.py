@@ -1,3 +1,4 @@
+import logging
 import re
 import time
 from datetime import datetime
@@ -393,3 +394,15 @@ def test_a_broken_mailbox_is_shown_and_the_rest_works(client, setup):
             "max_body_chars": "3000", "timeout_seconds": "20", "min_interval_seconds": "0"}
     assert client.post("/ui/settings", data=form, follow_redirects=False).status_code == 303
     assert _box(setup).cfg.classifier_model == "example/model-3"
+
+
+def test_a_long_job_log_is_cut_with_a_note(setup):
+    box = _box(setup)
+
+    def chatty():
+        for i in range(jobs.MAX_LOG_LINES + 50):
+            logging.getLogger("email_sorter.test").info("line %d", i)
+        return RunResult(exit_code=0)
+
+    job = _wait(jobs.start(box, "run", "Lauf", chatty, needs_lock=False)["id"])
+    assert len(job["log"]) == jobs.MAX_LOG_LINES + 1 and job["log"][-1] == "… (more lines in logs/sortroom.log)"

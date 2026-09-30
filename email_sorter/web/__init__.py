@@ -59,7 +59,7 @@ def session_secret() -> str:
 
 
 async def language_middleware(request: Request, call_next):
-    """Every request renders in the language set under Globale Einstellungen ([ui] language)."""
+    """Every request renders in the language set under Global settings ([ui] language)."""
     token = i18n.set_language(i18n.configured_language(request.app.state.config_path))
     try:
         return await call_next(request)
