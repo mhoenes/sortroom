@@ -1,5 +1,6 @@
 import re
 import time
+from datetime import datetime
 import tomllib
 from types import SimpleNamespace
 
@@ -146,7 +147,7 @@ def test_maintenance_page_and_run_job(client, monkeypatch):
     assert "Lauf (Probelauf)" in client.get("/ui/m/privat/maintenance").text  # listed as recent job
     # "Ausführen" is the second submit button of each task; it posts live=1
     page = client.get("/ui/m/privat/maintenance").text
-    assert page.count('>Probelauf</button>') == page.count('name="live" value="1"') == 8
+    assert page.count('>Probelauf</button>') == page.count('name="live" value="1"') == 9
     r = client.post("/ui/m/privat/maintenance/run", data={"csrf": _csrf(page), "live": "1"}, follow_redirects=False)
     _wait(r.headers["location"].rsplit("/", 1)[1])
     assert calls[-1] == (True, None)
@@ -282,3 +283,32 @@ def test_first_mailbox_from_the_example(client, setup):
     box = _box(setup)
     assert box.name == "Privat" and "werbung" in box.cfg.categories and box.cfg.schedule_enabled
     assert box.cfg.sender_rules == ()
+
+
+def test_undo_a_run_from_the_run_log(client, setup, monkeypatch):
+    started = datetime(2026, 9, 30, 10, 0, 0)
+    store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
+    store.track(started)
+    store.record(SimpleNamespace(key="<m2@x>", received="2026-09-20T10:00+02:00", sender="a@b.de", subject="Rechnung",
+                                 decision=Decision("werbung", 0.9, {}, 0.1, 0.0001), folder="INBOX/Werbung",
+                                 flag=False, expires=None))
+    store.record_run("run", None, started, started, RunResult(exit_code=0, live=True, classified=1, moved=1))
+    store.close()
+    calls = []
+
+    def fake_undo(cfg, creds, ws, run, live, sort_again):
+        calls.append((run, live, sort_again))
+        return {"ok": True, "live": live, "exit_code": 0, "summary": "1 Mail(s) zurückverschoben"}
+
+    monkeypatch.setattr(admin, "run_undo", fake_undo)
+    link = "/ui/m/privat/maintenance?undo=2026-09-30T10%3A00%3A00#undo"
+    assert f'href="{link}">Rückgängig</a>' in client.get("/ui/m/privat").text
+    html = client.get(link).text
+    assert '<option value="2026-09-30T10:00:00" selected>' in html and "1 Mail" in html
+    r = client.post("/ui/m/privat/maintenance/undo", data={"csrf": _csrf(html), "run": "2026-09-30T10:00:00",
+                                                          "sort_again": "1"}, follow_redirects=False)
+    _wait(r.headers["location"].rsplit("/", 1)[1])
+    assert calls == [("2026-09-30T10:00:00", False, True)]
+    page = client.get(r.headers["location"]).text
+    assert "Lauf vom 30.09." in page and "rückgängig machen (Probelauf)" in page and "zurückverschoben" in page
+    assert "Jetzt ausführen" in page  # the dry run can be run for real with the same choice

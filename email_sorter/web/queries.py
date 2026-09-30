@@ -104,13 +104,28 @@ def expired_moved(db: sqlite3.Connection | None, days: int = 7, now: datetime | 
                       (since,)).fetchone()[0]
 
 
+def _has_undo(db: sqlite3.Connection) -> bool:
+    """The log records what runs did for undo (it is added the first time a run opens the log)."""
+    return db.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'undo'").fetchone() is not None
+
+
 def recent_runs(db: sqlite3.Connection | None, limit: int = 8, skip_empty: bool = True) -> list[dict]:
-    """Latest runs; normal runs that found nothing are left out unless they failed."""
+    """Latest runs, each with `undoable`; normal runs that found nothing are left out unless they failed."""
     if db is None:
         return []
     where = "WHERE NOT (kind = 'run' AND classified = 0 AND exit_code = 0)" if skip_empty else ""
-    return [dict(r) for r in db.execute(f"SELECT * FROM runs {where} ORDER BY started DESC, id DESC LIMIT ?",
-                                        (limit,))]
+    undoable = "live = 1 AND EXISTS (SELECT 1 FROM undo WHERE undo.run = runs.started)" if _has_undo(db) else "0"
+    return [dict(r) for r in db.execute(
+        f"SELECT *, {undoable} AS undoable FROM runs {where} ORDER BY started DESC, id DESC LIMIT ?", (limit,))]
+
+
+def undoable_runs(db: sqlite3.Connection | None) -> list[dict]:
+    """The live runs that can be undone, newest first: started, kind, detail and the number of mails."""
+    if db is None or not _has_undo(db):
+        return []
+    return [dict(r) for r in db.execute(
+        "SELECT u.run AS started, r.kind, r.detail, COUNT(DISTINCT u.message_key) AS mails "
+        "FROM undo u JOIN runs r ON r.started = u.run AND r.live = 1 GROUP BY u.run ORDER BY u.run DESC")]
 
 
 def uncertain_mails(db: sqlite3.Connection | None, min_confidence: float, limit: int = 10,

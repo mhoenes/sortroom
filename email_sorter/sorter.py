@@ -550,6 +550,8 @@ def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int 
     limit = min(limit or cfg.max_per_run, cfg.max_per_run)
     report = None if live else ReportWriter(base_dir / "reports")
     started = datetime.now()
+    if live:
+        store.track(started)
     try:
         with sign_in(MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT), creds, cfg.source_folder) as mb:
             since = date.today() - timedelta(days=cfg.lookback_days)
@@ -605,6 +607,8 @@ def run_backfill(cfg: Config, creds: Credentials, base_dir: Path, live: bool,
     failures = 0
     seen: set[str] = set()  # dry run records nothing; don't classify the same mail twice
     started, detail = datetime.now(), f"since {since}"
+    if live:
+        store.track(started)
     try:
         with sign_in(MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT), creds, cfg.source_folder) as mb:
             for start, end in month_windows(since, date.today() + timedelta(days=1)):

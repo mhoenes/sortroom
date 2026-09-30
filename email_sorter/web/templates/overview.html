@@ -87,11 +87,12 @@
         {% set st = run_status(r) %}
         <tr>
           <td class="mono">{{ r.started|dt }}</td>
-          <td>{{ run_kind(r.kind) }}{% if r.detail %} <span class="muted">{{ r.detail }}</span>{% endif %}</td>
+          <td>{{ run_kind(r.kind) }}{% if r.detail %} <span class="muted">{{ r.detail|dt if r.kind == 'undo' else r.detail }}</span>{% endif %}</td>
           <td class="num">{{ r.classified|num }}</td>
           <td class="num">{{ r.moved|num }}</td>
           <td class="num">{{ r.cost_usd|usd(4) }}</td>
-          <td><span class="pill {{ st[1] }}" {% if r.error %}title="{{ r.error }}"{% endif %}>{{ st[0] }}</span></td>
+          <td style="white-space:nowrap"><span class="pill {{ st[1] }}" {% if r.error %}title="{{ r.error }}"{% endif %}>{{ st[0] }}</span>
+            {% if r.undoable %}<a style="font-size:13px;margin-left:6px" href="/ui/m/{{ box.id }}/maintenance?undo={{ r.started|urlencode }}#undo">{{ _('Undo') }}</a>{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>

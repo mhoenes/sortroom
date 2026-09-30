@@ -54,6 +54,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--reconcile", action="store_true",
                         help="compare the log with the mailbox: mark deleted mails, note mails filed by hand "
                              "(with --live; changes nothing on the server)")
+    parser.add_argument("--undo-run", metavar="START",
+                        help="undo a live run: move its mails back where they came from and remove its stars; "
+                             "START is the run's start time as in the run log (2026-09-30T10:12:00) or 'last' "
+                             "(with --live)")
+    parser.add_argument("--sort-again", action="store_true",
+                        help="with --undo-run: sort the mails again at the next run instead of leaving them")
     parser.add_argument("--delete-mailbox", metavar="ID",
                         help="delete a mailbox for good: its settings, login, log and reports "
                              "(nothing on the IMAP server); asks for confirmation unless --yes")
@@ -64,7 +70,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _task(args) -> str:
-    for flag, name in (("reconcile", "reconcile"), ("relocate", "relocate"), ("resort_folder", "folder re-sort"),
+    for flag, name in (("undo_run", "undo"), ("reconcile", "reconcile"), ("relocate", "relocate"), ("resort_folder", "folder re-sort"),
                        ("rename_category", "category rename"), ("rename_folder", "folder rename"),
                        ("recheck_expiry", "expiry recheck"), ("since", "backfill")):
         if getattr(args, flag):
@@ -88,6 +94,10 @@ def _run_one(box: Mailbox, args) -> int:
             return 0
         log.info("[%s] starting %s %s", box.id, "LIVE" if args.live else "dry", _task(args))
         try:
+            if args.undo_run:
+                from .undo import run_undo
+                return run_undo(cfg, creds, work, args.undo_run, live=args.live,
+                                sort_again=args.sort_again)["exit_code"]
             if args.reconcile:
                 from .reconcile import run_reconcile
                 return 0 if run_reconcile(cfg, creds, work, live=args.live)["ok"] else 1
