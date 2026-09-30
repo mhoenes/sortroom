@@ -181,3 +181,23 @@ def test_category_rule_moves_in_resort_without_classifier(env):
     [entry] = store.recent_runs()
     assert entry["kind"] == "resort" and entry["detail"] == "INBOX/Reisen"
     store.close()
+
+
+@pytest.mark.parametrize("match, sender, hit", [
+    ("news@shop.de", "News@Shop.de", True),            # an address: exactly this sender
+    ("news@shop.de", "old-news@shop.de", False),
+    ("@bank.de", "service@bank.de", True),             # a domain with @: exactly this domain
+    ("@bank.de", "x@bank.de.example", False),
+    ("@bank.de", "x@bank.dev", False),
+    ("@bank.de", "x@mail.bank.de", False),
+    ("bank.de", "x@mail.bank.de", True),               # a domain without @: with its subdomains
+    ("bank.de", "x@bank.de", True),
+    ("bank.de", "x@mybank.de", False),
+    ("bank.de", "bank.de@example.org", False),
+    ("newsletter", "newsletter@shop.de", True),        # any other text: part of the address
+    ("newsletter", "Shop <info@newsletter-shop.de>", True),
+])
+def test_sender_rules_compare_whole_addresses_and_domains(match, sender, hit):
+    from email_sorter.config import SenderRule
+    cfg = Config(**{**CFG.__dict__, "sender_rules": (SenderRule(match, "inbox"),)})
+    assert (cfg.rule_for(sender) is not None) is hit

@@ -150,7 +150,7 @@
 </form>
 
 {% macro rule_row(i, match, action) %}<tr>
-            <td><input type="text" name="match_{{ i }}" value="{{ match }}" aria-label="{{ _('Sender contains') }}" placeholder="{{ _('name@company.com or @company.com') }}"></td>
+            <td><input type="text" name="match_{{ i }}" value="{{ match }}" aria-label="{{ _('Sender') }}" placeholder="{{ _('name@company.com or @company.com') }}"></td>
             <td><select name="action_{{ i }}" aria-label="{{ _('Target') }}">
               <option value="inbox" {% if action == 'inbox' %}selected{% endif %}>{{ _('Leave in the inbox') }}</option>
               {% for key, c in cfg.categories.items() %}<option value="{{ key }}" {% if action == key %}selected{% endif %}>{{ c.label }}{% if c.folder %} → {{ c.folder|folder_label }}{% endif %}</option>{% endfor %}
@@ -165,12 +165,12 @@
   <fieldset {% if not editable %}disabled{% endif %} class="stack">
     <section class="card stack rules-box">
       <div>
-        <h2>{{ _('Sender rules') }} {{ help(_('Mails from these senders are not decided by the model: they stay in the inbox or go straight into a category. A rule matches when its text is part of the sender address, e.g. "@brother.com". The first matching rule wins.')) }}</h2>
+        <h2>{{ _('Sender rules') }} {{ help(_('Mails from these senders are not decided by the model: they stay in the inbox or go straight into a category. A rule is an address (news@shop.com: exactly this sender), a domain with @ (@shop.com: every sender of this domain) or without (shop.com: also its subdomains such as mail.shop.com). Any other text matches when it is part of the address. The first matching rule wins.')) }}</h2>
         <p class="muted hint">{{ _('The first matching rule wins. New and removed rules only take effect with "Save rules".') }}</p>
       </div>
       <p class="muted no-rules">{{ _('No rules yet – the model decides every mail.') }}</p>
       <div class="scroll-x"><table class="rules">
-        <thead><tr><th scope="col">{{ _('Sender contains') }}</th><th scope="col">{{ _('Target') }}</th><th scope="col"><span class="sr-only">{{ _('Remove') }}</span></th></tr></thead>
+        <thead><tr><th scope="col">{{ _('Sender') }}</th><th scope="col">{{ _('Target') }}</th><th scope="col"><span class="sr-only">{{ _('Remove') }}</span></th></tr></thead>
         <tbody>
         {% for match, action in rules %}
           {{ rule_row(loop.index0, match, action) }}
