@@ -48,6 +48,14 @@ CREATE TABLE IF NOT EXISTS runs (
     error           TEXT
 );
 CREATE INDEX IF NOT EXISTS runs_started ON runs (started);
+CREATE TABLE IF NOT EXISTS undo (
+    run             TEXT NOT NULL,               -- runs.started of the live run that sorted the mail
+    message_key     TEXT NOT NULL,
+    origin          TEXT,                        -- folder the mail was in before (config notation), NULL = source
+    moved_to        TEXT,                        -- where the run put it, as written to processed
+    before          TEXT,                        -- JSON of the processed row before the run, NULL = none
+    PRIMARY KEY (run, message_key)
+);
 CREATE TABLE IF NOT EXISTS meta (
     key             TEXT PRIMARY KEY,            -- last_reconcile: when the log was last reconciled for real
     value           TEXT NOT NULL
@@ -66,12 +74,24 @@ class Store:
         # mails decided by the model were logged as 'jev' up to 0.7.10
         self.db.execute("UPDATE processed SET source = 'classifier' WHERE source = 'jev'")
         self.db.commit()
+        self._undo: tuple[str, str | None] | None = None
+
+    def track(self, run_started: datetime, origin: str | None = None) -> None:
+        """Remember for undo what record() changes from now on: which run, and the folder the mails
+        come from (config notation; None = the source folder)."""
+        self._undo = (run_started.isoformat(timespec="seconds"), origin)
 
     def is_processed(self, key: str) -> bool:
         return self.db.execute("SELECT 1 FROM processed WHERE message_key = ?", (key,)).fetchone() is not None
 
     def record(self, outcome) -> None:
         d = outcome.decision
+        if self._undo:
+            before = self.get(outcome.key)
+            self.db.execute(
+                "INSERT OR REPLACE INTO undo (run, message_key, origin, moved_to, before) VALUES (?,?,?,?,?)",
+                (self._undo[0], outcome.key, self._undo[1], outcome.folder,
+                 json.dumps(before, ensure_ascii=False) if before else None))
         self.db.execute(
             """INSERT OR REPLACE INTO processed
                (message_key, processed_at, received, sender, subject, category, confidence,
@@ -108,6 +128,7 @@ class Store:
         )
         cutoff = (finished - timedelta(days=RUN_RETENTION_DAYS)).isoformat(timespec="seconds")
         self.db.execute("DELETE FROM runs WHERE started < ?", (cutoff,))
+        self.db.execute("DELETE FROM undo WHERE run < ?", (cutoff,))
         self.db.commit()
 
     def recent_runs(self, limit: int = 50) -> list[dict]:
@@ -206,11 +227,13 @@ class Store:
         ).fetchone()[0]
 
     def rename_moved_to(self, old: str, new: str) -> None:
-        self.db.execute(
-            "UPDATE processed SET moved_to = ? || substr(moved_to, ?) "
-            "WHERE moved_to = ? OR moved_to LIKE ? ESCAPE '!'",
-            (new, len(old) + 1, old, _like_prefix(old)),
-        )
+        args = (new, len(old) + 1, old, _like_prefix(old))
+        self.db.execute("UPDATE processed SET moved_to = ? || substr(moved_to, ?) "
+                        "WHERE moved_to = ? OR moved_to LIKE ? ESCAPE '!'", args)
+        self.db.execute("UPDATE undo SET moved_to = ? || substr(moved_to, ?) "
+                        "WHERE moved_to = ? OR moved_to LIKE ? ESCAPE '!'", args)
+        self.db.execute("UPDATE undo SET origin = ? || substr(origin, ?) "
+                        "WHERE origin = ? OR origin LIKE ? ESCAPE '!'", args)
         self.db.commit()
 
     def misplaced(self, category: str, folder: str, min_confidence: float) -> list[tuple[str, str | None, str | None]]:
@@ -223,6 +246,42 @@ class Store:
 
     def set_moved_to(self, keys: Iterable[str], folder: str) -> None:
         self.db.executemany("UPDATE processed SET moved_to = ? WHERE message_key = ?", [(folder, k) for k in keys])
+        self.db.commit()
+
+    def undo_entries(self, run: str) -> list[dict]:
+        """What the run changed in the log, with the mail's row as it is now (None if gone from the log)
+        and whether a later run changed the mail again."""
+        cur = self.db.execute(
+            "SELECT u.message_key, u.origin, u.moved_to, u.before, "
+            "EXISTS (SELECT 1 FROM undo l WHERE l.message_key = u.message_key AND l.run > u.run) "
+            "FROM undo u WHERE u.run = ?", (run,))
+        out = []
+        for key, origin, moved_to, before, later in cur.fetchall():
+            out.append({"key": key, "origin": origin, "moved_to": moved_to,
+                        "before": json.loads(before) if before else None, "later": bool(later),
+                        "row": self.get(key)})
+        return out
+
+    def undoable_runs(self) -> list[str]:
+        """Start times of the runs that can be undone, newest first."""
+        return [r for (r,) in self.db.execute("SELECT DISTINCT run FROM undo ORDER BY run DESC")]
+
+    def undo(self, run: str, restore: list[dict], forget: list[str], back: dict[str, str | None],
+             keep: Iterable[str] = ()) -> None:
+        """Apply an undo to the log: `restore` rows as they were, `forget` keys (sorted again at the
+        next run), `back` gives other keys their old folder and takes their star. Afterwards only the
+        mails in `keep` (that could not be changed) can still be undone."""
+        for row in restore:
+            names = list(row)
+            self.db.execute(f"INSERT OR REPLACE INTO processed ({', '.join(names)}) "
+                            f"VALUES ({', '.join('?' * len(names))})", [row[n] for n in names])
+        self.db.executemany("DELETE FROM processed WHERE message_key = ?", [(k,) for k in forget])
+        self.db.executemany("UPDATE processed SET moved_to = ?, flagged = 0 WHERE message_key = ?",
+                            [(folder, k) for k, folder in back.items()])
+        keep = set(keep)
+        self.db.executemany("DELETE FROM undo WHERE run = ? AND message_key = ?",
+                            [(run, k) for (k,) in self.db.execute("SELECT message_key FROM undo WHERE run = ?",
+                                                                    (run,)).fetchall() if k not in keep])
         self.db.commit()
 
     def set_meta(self, key: str, value: str) -> None:

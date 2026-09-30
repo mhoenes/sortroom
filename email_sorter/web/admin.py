@@ -24,6 +24,7 @@ from ..reconcile import run_reconcile
 from ..resort import run_resort
 from ..runtime import single_instance
 from ..sorter import RunResult, expired_target, run, run_backfill, run_recheck_expiry
+from ..undo import run_undo
 from ..store import Store
 from . import _box, _boxes, _sidebar, queries, require_login, router
 from .editing import (EditError, add_sender_rule, can_add_mailbox, create_mailbox, rename_category_key, with_kind,
@@ -34,18 +35,20 @@ log = logging.getLogger(__name__)
 
 EXAMPLE = "_example_"  # template choice prefix: the built-in standard categories of a language
 
-TASKS = {"run", "backfill", "recheck", "resort", "relocate", "rename_folder", "rename_category", "reconcile", "check"}
+TASKS = {"run", "backfill", "recheck", "resort", "relocate", "rename_folder", "rename_category", "reconcile", "check",
+         "undo"}
 RISKY_TASKS = {"rename_folder", "rename_category"}  # change the server and the settings
 
 
 # ---------------------------------------------------------------- maintenance
 
 @router.get("/ui/m/{box_id}/maintenance", response_class=HTMLResponse, dependencies=[Depends(require_login)])
-def maintenance(request: Request, box_id: str):
+def maintenance(request: Request, box_id: str, undo: str = ""):
     boxes, box = _box(request, box_id)
     db = queries.connect(box.workspace)
     try:
         folders = queries.folders(db)
+        undoable = queries.undoable_runs(db)
     finally:
         if db:
             db.close()
@@ -53,7 +56,7 @@ def maintenance(request: Request, box_id: str):
     return _page(request, "maintenance.html", {
         **_sidebar(request, boxes, box, "maintenance"), "box": box, "tasks": TASKS,
         "jobs": jobs.recent(box.id, 15), "folders": cat_folders, "busy": request.app.state.is_busy(box),
-        "editable": writable(box), "today": date.today().isoformat()})
+        "editable": writable(box), "today": date.today().isoformat(), "undoable": undoable, "undo_run": undo})
 
 
 def _flag(form: dict, name: str) -> bool:
@@ -86,6 +89,13 @@ def _job_for(request: Request, box: Mailbox, task: str, form: dict):
             ok = check_imap(cfg, creds, out=lambda line: log.info("%s", line.strip("\n")))
             return {"ok": ok, "exit_code": 0 if ok else 1}
         return _("Check connection"), run_check, False
+    if task == "undo":  # only the mailbox, no model
+        stamp, sort_again = str(form.get("run") or ""), _flag(form, "sort_again")
+        if not stamp:
+            raise EditError(_("Please choose a run."))
+        creds = imap_credentials(box)
+        return (_("Undo the run of %(when)s", when=i18n.dt(stamp)) + mode,
+                lambda: run_undo(cfg, creds, ws, stamp, live=live, sort_again=sort_again), True)
     creds = load_credentials(box)
     shared = _shared_path(request)
     if task == "run":

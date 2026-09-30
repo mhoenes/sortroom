@@ -114,6 +114,8 @@ def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, liv
             delim = _delimiter(mb)
             # accept "INBOX/Reisen" (config notation) as well as "INBOX.Reisen" (server notation)
             folder = "/".join(p for p in folder.replace(delim, "/").split("/") if p)
+            if live:
+                store.track(started, None if folder == cfg.source_folder.strip("/") else folder)
             if cfg.expired_folder and folder == cfg.expired_folder.strip("/"):
                 log.error("%s holds expired offers; re-sorting it would move them back out", folder)
                 return RunResult(exit_code=2, error=f"{folder} is the expired-offers folder")
