@@ -85,9 +85,17 @@ def test_login_and_logout(client):
     assert client.get("/ui", follow_redirects=False).status_code == 303
 
 
-def test_login_does_not_redirect_elsewhere(client):
-    r = client.post("/login", data={"password": PASSWORD, "next": "//evil.example/x"}, follow_redirects=False)
+@pytest.mark.parametrize("target", ["//evil.example/x", "/\\evil.example", "/\\/evil.example", "/\t/evil.example",
+                                    "/\n/evil.example", "https://evil.example", "evil.example"])
+def test_login_does_not_redirect_elsewhere(client, target):
+    r = client.post("/login", data={"password": PASSWORD, "next": target}, follow_redirects=False)
     assert r.headers["location"] == "/ui"
+
+
+def test_login_returns_to_the_page_asked_for(client):
+    r = client.post("/login", data={"password": PASSWORD, "next": "/ui/m/privat/mails?q=a%20b&period=all"},
+                    follow_redirects=False)
+    assert r.headers["location"] == "/ui/m/privat/mails?q=a%20b&period=all"
 
 
 def test_locked_without_admin_password(client, monkeypatch):
