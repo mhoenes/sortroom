@@ -364,3 +364,19 @@ def test_failed_unsubscribe_is_not_noted(client, setup, monkeypatch):
     store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
     assert store.sender("news@shop.example")["unsubscribed"] is None
     store.close()
+
+
+def test_correction_rate_on_categories_and_overview(client, setup):
+    store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
+    received = datetime.now().astimezone().isoformat(timespec="minutes")
+    for i in range(4):
+        store.record(SimpleNamespace(key=f"<w{i}@x>", received=received, sender="a@b.de", subject="Angebot",
+                                     decision=Decision("werbung", 0.9, {}, 0.1, 0.0), folder="INBOX/Werbung",
+                                     flag=False, expires=None, source="classifier"))
+    store.set_correction("<w0@x>", "werbung", "finanzen", "ui")
+    store.set_manual("<w0@x>", "finanzen", "INBOX/Finanzen")
+    store.close()
+    html = client.get("/ui/m/privat/categories?cat=werbung").text
+    assert 'title="1 von 4 korrigiert">25 %</td>' in html
+    assert "In den letzten 30 Tagen hat das Modell 4 Mails hier einsortiert; 1 davon (25 %)" in html
+    assert "25 % in 30 Tagen von Hand korrigiert" in client.get("/ui/m/privat").text

@@ -17,7 +17,8 @@
 <div class="grid catgrid">
   <section class="card" style="padding:6px 12px" aria-label="{{ _('All categories') }}">
     <div class="scroll-x"><table>
-      <thead><tr><th scope="col">{{ _('Category') }}</th><th scope="col">{{ _('Folder') }}</th><th scope="col" class="num">{{ _('30 days') }}</th></tr></thead>
+      <thead><tr><th scope="col">{{ _('Category') }}</th><th scope="col">{{ _('Folder') }}</th><th scope="col" class="num">{{ _('30 days') }}</th>
+        <th scope="col" class="num"><span class="lt" style="justify-content:flex-end">{{ _('Corrected') }} {{ help(_('Share of the mails the model filed in this category in the last 30 days that were put into another category by hand – on the Mails page, or moved into the folder of another category or back into the inbox (found by the reconcile).')) }}</span></th></tr></thead>
       <tbody>
       {% for key, c in box.cfg.categories.items() %}
         <tr class="link {% if key == cat and not new %}sel{% endif %}">
@@ -25,6 +26,8 @@
             {% if c.flag %} <span class="pill info">{{ _('Star') }}</span>{% endif %}{% if c.track_expiry %} <span class="pill">{{ _('Expiry') }}</span>{% endif %}</a></td>
           <td class="clip" style="width:40%"><a class="rowlink" href="/ui/m/{{ box.id }}/categories?cat={{ key }}">{{ c.folder|folder_label if c.folder else _('stays in the inbox') }}</a></td>
           <td class="num">{{ (counts.get(key) or 0)|num }}</td>
+          {% set r = rates.get(key) %}
+          <td class="num" {% if r and r[0] %}title="{{ _('%(corrected)s of %(filed)s corrected', corrected=r[1]|num, filed=r[0]|num) }}"{% endif %}>{{ percent(r[1], r[0]) if r else '–' }}</td>
         </tr>
       {% endfor %}
       </tbody>
@@ -33,6 +36,8 @@
 
   <section class="card editor" aria-label="{{ _('New category') if new else _('Edit category') }}">
     <h2>{{ _('New category') if new else form.label or form.key }}</h2>
+    {% set r = rates.get(cat) if not new else none %}
+    {% if r and r[0] %}<p class="muted" style="margin:0">{{ ngettext('In the last 30 days the model filed %(num)s mail here; %(corrected)s of them (%(pct)s) were put elsewhere by hand.', 'In the last 30 days the model filed %(num)s mails here; %(corrected)s of them (%(pct)s) were put elsewhere by hand.', r[0], corrected=r[1]|num, pct=percent(r[1], r[0])) }}</p>{% endif %}
     {% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
     <form method="post" action="/ui/m/{{ box.id }}/categories" class="stack">
       <input type="hidden" name="csrf" value="{{ csrf }}">

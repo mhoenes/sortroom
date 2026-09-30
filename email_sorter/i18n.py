@@ -100,6 +100,15 @@ def num(value, decimals: int = 0) -> str:
     return s.replace(",", " ").replace(".", ",") if language() == "de" else s
 
 
+def percent(part: int, whole: int) -> str:
+    """part of whole in percent: '2.5%' (en) / '2,5 %' (de); one decimal below 10 %."""
+    if not whole:
+        return "–"
+    value = 100 * part / whole
+    s = num(value, 1 if 0 < value < 10 else 0)
+    return f"{s} %" if language() == "de" else f"{s}%"
+
+
 def conf(value) -> str:
     """A probability with two decimals: '0.46' (en) / '0,46' (de)."""
     if value is None:

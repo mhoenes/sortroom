@@ -64,6 +64,13 @@ CREATE TABLE IF NOT EXISTS senders (
     unsubscribed    TEXT,                        -- when you unsubscribed, NULL = not
     method          TEXT                         -- how: 'one-click' (sent by Sortroom) or 'manual'
 );
+CREATE TABLE IF NOT EXISTS corrections (
+    message_key     TEXT PRIMARY KEY,            -- a mail the model filed confidently, corrected by hand
+    category        TEXT NOT NULL,               -- the model's category
+    corrected_to    TEXT NOT NULL,               -- the category it was put in, or 'inbox'
+    at              TEXT NOT NULL,
+    how             TEXT NOT NULL                -- 'ui' (Mails page) or 'reconcile' (moved by hand, found by a reconcile)
+);
 CREATE TABLE IF NOT EXISTS meta (
     key             TEXT PRIMARY KEY,            -- last_reconcile: when the log was last reconciled for real
     value           TEXT NOT NULL
@@ -100,6 +107,8 @@ class Store:
                 "INSERT OR REPLACE INTO undo (run, message_key, origin, moved_to, before) VALUES (?,?,?,?,?)",
                 (self._undo[0], outcome.key, self._undo[1], outcome.folder,
                  json.dumps(before, ensure_ascii=False) if before else None))
+        # a new decision (e.g. a re-sort): a correction of the old one no longer applies
+        self.db.execute("DELETE FROM corrections WHERE message_key = ?", (outcome.key,))
         if getattr(outcome, "unsubscribe", None):
             self.note_unsubscribe([(outcome.sender, *outcome.unsubscribe, outcome.received)], commit=False)
         self.db.execute(
@@ -323,6 +332,31 @@ class Store:
             (datetime.now().isoformat(timespec="seconds") if method else None, method, address.lower()))
         self.db.commit()
         return cur.rowcount == 1
+
+    def correction(self, key: str) -> dict | None:
+        cur = self.db.execute("SELECT * FROM corrections WHERE message_key = ?", (key,))
+        row = cur.fetchone()
+        return dict(zip([c[0] for c in cur.description], row)) if row else None
+
+    def set_correction(self, key: str, category: str, corrected_to: str | None, how: str) -> None:
+        """Note that a decision of the model for `category` was corrected to `corrected_to`; None: it stood
+        after all (the mail is back where the model put it). A reconcile never overrides the Mails page."""
+        if corrected_to is None:
+            self.db.execute("DELETE FROM corrections WHERE message_key = ?" + (" AND how = 'reconcile'"
+                            if how == "reconcile" else ""), (key,))
+        else:
+            self.db.execute(
+                f"INSERT OR {'IGNORE' if how == 'reconcile' else 'REPLACE'} INTO corrections "
+                "(message_key, category, corrected_to, at, how) VALUES (?, ?, ?, ?, ?)",
+                (key, category, corrected_to, datetime.now().isoformat(timespec="seconds"), how))
+        self.db.commit()
+
+    def model_decisions(self, min_confidence: float) -> list[tuple[str, str, str | None]]:
+        """(key, category, moved_to) of mails the model filed confidently that are still where Sortroom
+        keeps them (not deleted, not moved to an expired folder)."""
+        return self.db.execute(
+            "SELECT message_key, category, moved_to FROM processed WHERE source = 'classifier' "
+            "AND confidence >= ? AND gone = 0 AND expired_tagged != ?", (min_confidence, MOVED)).fetchall()
 
     def set_meta(self, key: str, value: str) -> None:
         self.db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, value))

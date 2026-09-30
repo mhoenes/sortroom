@@ -2,6 +2,7 @@
  "\"%(name)s\" is too long (max. %(n)s characters).": "„%(name)s“ ist zu lang (max. %(n)s Zeichen).",
  "\"Test with the model\" files the last %(own)s mails of this category and %(other)s others again with the description from the field – without moving or saving anything (about %(cost)s).": "„Mit dem Modell testen“ ordnet die letzten %(own)s Mails dieser Kategorie und %(other)s andere mit der Beschreibung aus dem Feld neu ein – ohne etwas zu verschieben oder zu speichern (ca. %(cost)s).",
  "\"Unsubscribe\" sends the one-click request of the sender (RFC 8058) from this server. For the other senders open the link or write the mail yourself, then mark them. Unsubscribe links are read when mails are sorted and when the log is reconciled.": "„Abmelden“ schickt die One-Click-Abmeldung des Absenders (RFC 8058) von diesem Server aus. Bei den anderen Absendern öffnest du den Link oder schreibst die Mail selbst und markierst sie danach. Abmelde-Links werden beim Sortieren und beim Abgleich des Logs gelesen.",
+ "%(corrected)s of %(filed)s corrected": "%(corrected)s von %(filed)s korrigiert",
  "%(failed)s could not be changed, see the log": "%(failed)s konnten nicht geändert werden, siehe Log",
  "%(file)s is not writable, so the API key cannot be stored.": "%(file)s ist nicht beschreibbar, der API-Schlüssel kann nicht gespeichert werden.",
  "%(file)s is not writable, so the login cannot be stored.": "%(file)s ist nicht beschreibbar, die Zugangsdaten können nicht gespeichert werden.",
@@ -60,6 +61,7 @@
   "%(num)s Lauf mit Fehlern heute.",
   "%(num)s Läufe mit Fehlern heute."
  ],
+ "%(pct)s corrected by hand in 30 days": "%(pct)s in 30 Tagen von Hand korrigiert",
  "%(sender)s marked as unsubscribed.": "%(sender)s als abgemeldet markiert.",
  "%(sender)s no longer marked as unsubscribed.": "%(sender)s nicht mehr als abgemeldet markiert.",
  "%(sender)s offers no one-click unsubscribe.": "%(sender)s bietet keine One-Click-Abmeldung an.",
@@ -131,6 +133,7 @@
  "Configuration error: %(e)s": "Konfigurationsfehler: %(e)s",
  "Copy from": "Übernehmen von",
  "Correct": "Korrigieren",
+ "Corrected": "Korrigiert",
  "Cost": "Kosten",
  "Cost this month": "Kosten diesen Monat",
  "Cost this month, total": "Kosten diesen Monat, gesamt",
@@ -193,6 +196,10 @@
  "If the result looks right, the same task can now run for real with the same settings.": "Passt das Ergebnis, lässt sich dieselbe Aufgabe mit denselben Angaben jetzt echt ausführen.",
  "In %(folder)s": "In %(folder)s",
  "In the inbox": "Im Posteingang",
+ "In the last 30 days the model filed %(num)s mail here; %(corrected)s of them (%(pct)s) were put elsewhere by hand.": [
+  "In den letzten 30 Tagen hat das Modell %(num)s Mail hier einsortiert; %(corrected)s davon (%(pct)s) wurden von Hand umsortiert.",
+  "In den letzten 30 Tagen hat das Modell %(num)s Mails hier einsortiert; %(corrected)s davon (%(pct)s) wurden von Hand umsortiert."
+ ],
  "Inbox": "Posteingang",
  "Interface": "Oberfläche",
  "Internal name under which the model and the log keep the category. Lowercase letters, digits and _ only. Can only be renamed later under \"Maintenance\".": "Interner Name, unter dem das Modell und das Protokoll die Kategorie führen. Nur Kleinbuchstaben, Ziffern und _. Lässt sich später nur über „Wartung“ umbenennen.",
@@ -394,6 +401,7 @@
  "Settings are read-only": "Einstellungen schreibgeschützt",
  "Settings saved. The mailbox folder is now mailboxes/%(id)s.": "Einstellungen gespeichert. Der Ordner des Postfachs heißt jetzt mailboxes/%(id)s.",
  "Settings saved. They apply from the next run.": "Einstellungen gespeichert. Gilt ab dem nächsten Lauf.",
+ "Share of the mails the model filed in this category in the last 30 days that were put into another category by hand – on the Mails page, or moved into the folder of another category or back into the inbox (found by the reconcile).": "Anteil der Mails, die das Modell in den letzten 30 Tagen hier einsortiert hat und die von Hand in eine andere Kategorie kamen – auf der Mails-Seite, oder in den Ordner einer anderen Kategorie bzw. zurück in den Posteingang verschoben (vom Abgleich erkannt).",
  "Show all %(n)s": "Alle %(n)s anzeigen",
  "Show deleted": "Gelöschte anzeigen",
  "Sign in with %(provider)s": "Mit %(provider)s anmelden",

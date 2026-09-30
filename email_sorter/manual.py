@@ -34,6 +34,19 @@ def target_for(cfg: Config, category: str) -> str | None:
     return cat.folder
 
 
+def _note_correction(cfg: Config, store: Store, row: dict, category: str) -> None:
+    """Count a changed decision of the model for the correction rate (Categories page)."""
+    before = store.correction(row["message_key"])
+    if before:
+        model = before["category"]
+    elif row["source"] == "classifier" and row["confidence"] >= cfg.min_confidence:
+        model = row["category"]
+    else:
+        return  # a sender rule, an uncertain suggestion, or a mail you had already set by hand
+    stays = category == model or (category == INBOX_ACTION and not target_for(cfg, model))
+    store.set_correction(row["message_key"], model, None if stays else category, "ui")
+
+
 def move_mail(cfg: Config, creds: Credentials, base_dir: Path, key: str, category: str) -> str | None:
     """Put one logged mail into `category` (or back into the inbox with 'inbox'). Returns its folder."""
     store = Store(base_dir / "data" / "state.db")
@@ -58,6 +71,7 @@ def move_mail(cfg: Config, creds: Credentials, base_dir: Path, key: str, categor
                 move_uids(mb, [uids[key]], dst)
                 mb.folder.set(cfg.source_folder)
             log.info("moved %r by hand: %s -> %s", row["subject"], src, dst)
+        _note_correction(cfg, store, row, category)
         store.set_manual(key, row["category"] if category == INBOX_ACTION else category, target)
         return target
     finally:
