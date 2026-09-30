@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 import html
 import re
-from datetime import date
+from datetime import date, timedelta
 
 from imap_tools import MailMessage
 
@@ -44,8 +44,12 @@ def _body(msg: MailMessage) -> str:
 
 
 def sent_date(msg: MailMessage) -> date:
-    # imap_tools returns 1900-01-01 when the Date header is missing or broken
-    return msg.date.date() if msg.date and msg.date.year > 1970 else date.today()
+    """The day the mail was sent; today when the Date header is missing, broken (imap_tools then gives
+    1900-01-01) or far in the future (spam dated 9999 would break every date counted from it)."""
+    today = date.today()
+    if msg.date and msg.date.year > 1970 and msg.date.date() <= today + timedelta(days=1):
+        return msg.date.date()
+    return today
 
 
 def full_text(msg: MailMessage) -> str:

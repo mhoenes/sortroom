@@ -59,9 +59,9 @@ def _build(day: int, month: int, year: str | None, sent: date) -> date | None:
         d = date(y, month, day)
         if not year and d < sent - timedelta(days=1):  # "bis 05.01." sent in December
             d = date(y + 1, month, day)
-    except ValueError:
-        return None
-    if not sent - timedelta(days=1) <= d <= sent + timedelta(days=MAX_DAYS_AHEAD):
+        if not sent - timedelta(days=1) <= d <= sent + timedelta(days=MAX_DAYS_AHEAD):
+            return None
+    except (ValueError, OverflowError):  # no such day, or beyond the last date Python knows
         return None
     return d
 
@@ -91,7 +91,10 @@ def find_deadline(text: str, sent: date) -> date | None:
 
 def window_deadline(window: str | None, sent: date) -> date | None:
     days = WINDOW_DAYS.get(window or "")
-    return None if days is None else sent + timedelta(days=days)
+    try:
+        return None if days is None else sent + timedelta(days=days)
+    except OverflowError:
+        return None
 
 
 def resolve_expiry(text: str, sent: date, window: str | None) -> date | None:

@@ -139,10 +139,23 @@ def old_enough(times: dict[str, datetime], uids: list[str], min_age_hours: float
 
 
 def expiry_for(decision: Decision, cfg: Config, msg: MailMessage) -> date | None:
-    """End date of a time-limited offer, for categories that track it."""
+    """End date of a time-limited offer, for categories that track it. A mail whose date can't be
+    worked out keeps its (paid) decision, just without an expiry date."""
     if not cfg.categories[decision.category].track_expiry or decision.has_expiry < cfg.expiry_threshold:
         return None
-    return resolve_expiry(full_text(msg), sent_date(msg), decision.expiry_window)
+    try:
+        return resolve_expiry(full_text(msg), sent_date(msg), decision.expiry_window)
+    except Exception:
+        log.exception("could not work out the expiry date of %r", msg.subject)
+        return None
+
+
+def mail_failed(msg: MailMessage, e: Exception, what: str = "classify") -> None:
+    """Log a mail that failed on its own. The run goes on; the mail is tried again next time."""
+    if isinstance(e, ClassifierError):
+        log.warning("could not %s %r: %s", what, msg.subject, e)
+    else:  # a bug or a mail we can't read: keep the traceback in the log file
+        log.exception("could not %s %r (%s)", what, msg.subject, type(e).__name__)
 
 
 def server_folder(path: str, delim: str) -> str:
@@ -261,28 +274,28 @@ def classify_new(
             continue  # unsolicited FETCH without a mail we asked for
         done.add(pending[uid])
         msg_uid = uid
-        try:
+        try:  # whatever goes wrong with one mail, the others are still sorted
             decision = classifier.decide(build_state(msg, cfg.max_body_chars), descriptions)
+            folder, flag, note = plan(decision, cfg)
+            outcome = Outcome(
+                key=pending[msg_uid],
+                uid=msg_uid,
+                received=received_of(msg),
+                sender=msg.from_,
+                subject=msg.subject,
+                decision=decision,
+                folder=folder,
+                flag=flag,
+                note=note,
+                expires=expiry_for(decision, cfg, msg),
+                unsubscribe=unsubscribe_links(msg),
+            )
         except ClassifierAuthError:
             raise
-        except ClassifierError as e:
+        except Exception as e:
             failed.append(pending[msg_uid])
-            log.warning("could not classify %r: %s", msg.subject, e)
+            mail_failed(msg, e)
             continue
-        folder, flag, note = plan(decision, cfg)
-        outcome = Outcome(
-            key=pending[msg_uid],
-            uid=msg_uid,
-            received=received_of(msg),
-            sender=msg.from_,
-            subject=msg.subject,
-            decision=decision,
-            folder=folder,
-            flag=flag,
-            note=note,
-            expires=expiry_for(decision, cfg, msg),
-            unsubscribe=unsubscribe_links(msg),
-        )
         outcomes.append(outcome)
         if on_outcome:
             on_outcome(outcome)
@@ -464,15 +477,15 @@ def recheck_expiry(mb: MailBox, cfg: Config, classifier: ClassifierClient, store
                     continue  # unsolicited FETCH from the server
                 try:
                     decision = classifier.decide(build_state(msg, cfg.max_body_chars), cfg.descriptions)
+                    # the category was decided earlier; only the expiry answers matter here
+                    expires = None
+                    if decision.has_expiry >= cfg.expiry_threshold:
+                        expires = resolve_expiry(full_text(msg), sent_date(msg), decision.expiry_window)
                 except ClassifierAuthError:
                     raise
-                except ClassifierError as e:
-                    log.warning("could not check %r: %s", msg.subject, e)
+                except Exception as e:
+                    mail_failed(msg, e, "check")
                     continue  # stays unchecked, retried next time
-                # the category was decided earlier; only the expiry answers matter here
-                expires = None
-                if decision.has_expiry >= cfg.expiry_threshold:
-                    expires = resolve_expiry(full_text(msg), sent_date(msg), decision.expiry_window)
                 store.set_expiry(key_by_uid[msg.uid], expires)
                 if expires:
                     found += 1

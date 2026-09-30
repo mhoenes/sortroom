@@ -270,3 +270,39 @@ def test_crashed_run_is_logged_with_error(env, monkeypatch):
     [entry] = store.recent_runs()
     assert entry["exit_code"] == 1 and entry["error"] == "boom"
     store.close()
+
+
+class BrokenClassifier(FakeClassifier):
+    """Fails on one mail with an error that isn't a ClassifierError (a bug, an odd mail)."""
+
+    def decide(self, state, categories):
+        if state["subject"] == "Angebot 6":
+            self.calls += 1
+            raise KeyError("unexpected")
+        return super().decide(state, categories)
+
+
+def test_one_broken_mail_does_not_stop_the_run(env):
+    _use_classifier(env, BrokenClassifier())
+    small = Config(**{**env.cfg.__dict__, "max_per_run": 10})
+    result = sorter.run(small, CREDS, env.tmp, live=True, limit=None)
+    assert result.exit_code == 1 and result.failed == 1 and result.moved == 6
+    store = Store(env.tmp / "data" / "state.db")
+    assert not store.is_processed("<m6@x>") and store.is_processed("<m7@x>")
+    store.close()
+
+
+def test_expiry_errors_keep_the_decision(env):
+    class OfferClassifier(FakeClassifier):
+        def decide(self, state, categories):
+            self.calls += 1
+            return Decision("werbung", 1.0, {"werbung": 1.0}, 0.0, 0.0, has_expiry=1.0, expiry_window="within_week")
+
+    def boom(*a):
+        raise OverflowError("date value out of range")
+
+    _use_classifier(env, OfferClassifier())
+    env.monkeypatch.setattr(sorter, "resolve_expiry", boom)
+    small = Config(**{**env.cfg.__dict__, "max_per_run": 10})
+    result = sorter.run(small, CREDS, env.tmp, live=True, limit=None)
+    assert result.exit_code == 0 and result.moved == 7 and result.time_limited_offers == 0
