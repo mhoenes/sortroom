@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from email_sorter import api, jobs, manual, web
+from email_sorter import api, jobs, manual
 from email_sorter.config import load_mailboxes
 from email_sorter.classifier import Decision
 from email_sorter.sorter import RunResult
@@ -115,7 +115,6 @@ def test_rename_category_key_updates_rules(setup):
 @pytest.fixture
 def client(setup, monkeypatch):
     monkeypatch.setenv("ADMIN_PASSWORD", PASSWORD)
-    monkeypatch.setattr(web.time, "sleep", lambda s: None)
     monkeypatch.setattr(api, "BASE_DIR", setup)
     monkeypatch.setattr(api, "CONFIG_PATH", setup / "config.toml")
     monkeypatch.setattr(api.app.state, "config_path", setup / "config.toml")

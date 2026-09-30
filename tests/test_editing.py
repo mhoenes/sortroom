@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from email_sorter import api, trial, web
+from email_sorter import api, trial
 from email_sorter.config import load_mailboxes
 from email_sorter.classifier import Decision
 from email_sorter.store import Store
@@ -191,7 +191,6 @@ def test_trial_descriptions_and_sample(tmp_path):
 @pytest.fixture
 def client(setup, monkeypatch):
     monkeypatch.setenv("ADMIN_PASSWORD", PASSWORD)
-    monkeypatch.setattr(web.time, "sleep", lambda s: None)
     monkeypatch.setattr(api, "BASE_DIR", setup)
     monkeypatch.setattr(api, "CONFIG_PATH", setup / "config.toml")
     monkeypatch.setattr(api.app.state, "config_path", setup / "config.toml")
@@ -268,7 +267,7 @@ def test_trial_job_page(client, setup, monkeypatch):
     job = r.headers["location"].rsplit("/", 1)[1]
     deadline = time.monotonic() + 5
     while editor._trials[job]["status"] == "running" and time.monotonic() < deadline:
-        pass  # the worker thread finishes at once; time.sleep is patched out
+        pass  # the worker thread finishes at once
     html = client.get(r.headers["location"]).text
     assert "Kämen neu dazu" in html and "Rechnung" in html and "nicht mehr im Ordner" in html
     html = client.get(f"/ui/m/privat/categories?cat=werbung&draft={job}").text
