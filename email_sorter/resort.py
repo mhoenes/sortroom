@@ -21,7 +21,7 @@ from .mailtext import build_state, message_key, received_of, unsubscribe_links
 from datetime import datetime
 
 from .config import INBOX_ACTION
-from .sorter import (IMAP_TIMEOUT, Outcome, ReportWriter, RunResult, UID_CHUNK, expiry_for, move_uids,
+from .sorter import (BODY_CHUNK, IMAP_TIMEOUT, Outcome, ReportWriter, RunResult, expiry_for, move_uids,
                      mail_failed, plan, ready_to_sort, rule_outcome, server_folder, _auth_failed, _chunks,
                      _delimiter, _ensure_folder, _finish)
 from .store import Store
@@ -49,7 +49,7 @@ def resort_outcomes(mb: MailBox, cfg: Config, classifier: ClassifierClient, fold
     kept = 0
     for chunk in _chunks(uids):
         wanted = set(chunk)
-        for msg in mb.fetch(AND(uid=chunk), mark_seen=False, bulk=UID_CHUNK):
+        for msg in mb.fetch(AND(uid=chunk), mark_seen=False, bulk=BODY_CHUNK):
             if msg.uid not in wanted or msg.uid in seen:
                 continue  # unsolicited FETCH response
             seen.add(msg.uid)
