@@ -51,6 +51,14 @@ class ClassifierAuthError(ClassifierError):
     """Key/credit problem: abort the run instead of failing every mail."""
 
 
+class ClassifierOutage(ClassifierError):
+    """The endpoint failed for several mails in a row, retries included: stop classifying for this
+    run instead of retrying every remaining mail for minutes. What was classified is still applied."""
+
+
+MAX_FAILURES_IN_A_ROW = 3
+
+
 @dataclass(frozen=True)
 class Decision:
     category: str
@@ -144,6 +152,8 @@ class ClassifierClient:
         self.retries = retries
         self.min_interval = min_interval
         self._last_request = 0.0
+        self.failures_in_a_row = 0
+        self.outage: str | None = None  # set once the endpoint is taken as down; every later decide() fails fast
         self.session = session or requests.Session()
         self.session.headers.update(
             {
@@ -153,6 +163,8 @@ class ClassifierClient:
         )
 
     def decide(self, state: dict, categories: dict[str, str]) -> Decision:
+        if self.outage:
+            raise ClassifierOutage(self.outage)
         payload = build_request(self.model, state, categories)
         last_error = ""
         for attempt in range(1, self.retries + 1):
@@ -164,16 +176,29 @@ class ClassifierClient:
                 last_error = repr(e)
             else:
                 if r.status_code == 200:
-                    return parse_response(r.json(), categories)
-                if r.status_code in AUTH_STATUS:
+                    try:
+                        data = r.json()
+                    except ValueError:  # e.g. a proxy's error page: as good as no answer, retry
+                        last_error = f"HTTP 200 without JSON: {r.text[:100]!r}"
+                    else:
+                        self.failures_in_a_row = 0
+                        return parse_response(data, categories)
+                elif r.status_code in AUTH_STATUS:
                     raise ClassifierAuthError(f"HTTP {r.status_code}: {r.text[:300]}")
-                if r.status_code not in RETRY_STATUS:
+                elif r.status_code not in RETRY_STATUS:
                     raise ClassifierError(f"HTTP {r.status_code}: {r.text[:300]}")
-                last_error = f"HTTP {r.status_code}"
+                else:
+                    last_error = f"HTTP {r.status_code}"
             if attempt < self.retries:
                 delay = _retry_delay(r, attempt)
                 log.info("classifier request failed (%s), retrying in %.0fs", last_error, delay)
                 time.sleep(delay)
+        self.failures_in_a_row += 1
+        if self.failures_in_a_row >= MAX_FAILURES_IN_A_ROW:
+            self.outage = (f"the classification endpoint failed for {self.failures_in_a_row} mails in a row "
+                           f"({last_error}); the rest is left for the next run")
+            log.error("%s", self.outage)
+            raise ClassifierOutage(self.outage)
         raise ClassifierError(f"giving up after {self.retries} attempts: {last_error}")
 
     def _pace(self) -> None:

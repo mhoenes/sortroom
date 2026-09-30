@@ -314,3 +314,31 @@ def test_whole_mails_are_fetched_in_small_batches(env):
     sorter.run(Config(**{**env.cfg.__dict__, "max_per_run": 200}), CREDS, env.tmp, live=True, limit=None)
     bodies = [bulk for headers_only, bulk in FakeMailBox.instances[0].bulks if not headers_only]
     assert bodies and all(bulk == sorter.BODY_CHUNK <= 20 for bulk in bodies)
+
+
+def test_a_classifier_outage_applies_what_was_classified(env):
+    from email_sorter.classifier import ClassifierOutage
+
+    class DownAfterTwo(FakeClassifier):
+        outage = None
+
+        def decide(self, state, categories):
+            self.calls += 1
+            if self.calls > 2:
+                self.outage = "the classification endpoint failed for 3 mails in a row (HTTP 503)"
+                raise ClassifierOutage(self.outage)
+            return Decision("werbung", 1.0, {"werbung": 1.0}, 0.0, 0.0)
+
+    classifier = DownAfterTwo()
+    _use_classifier(env, classifier)
+    result = sorter.run(Config(**{**env.cfg.__dict__, "max_per_run": 10}), CREDS, env.tmp, live=True, limit=None)
+    assert classifier.calls == 3 and result.moved == 2 and result.failed == 5
+    assert result.exit_code == 1 and "3 mails in a row" in result.error
+    store = Store(env.tmp / "data" / "state.db")
+    assert store.recent_runs(1)[0]["error"] == result.error
+    store.close()
+
+    classifier = DownAfterTwo()  # a backfill stops as well, after applying its batch
+    _use_classifier(env, classifier)
+    result = sorter.run_backfill(env.cfg, CREDS, env.tmp / "b", live=True, since=date(2026, 1, 1), limit=None)
+    assert classifier.calls == 3 and result.moved == 2 and "in a row" in result.error
