@@ -221,3 +221,34 @@ def test_move_creates_folder_the_server_says_is_missing():
     assert box.created == ["Werbung"] and box.moves == [(["1"], "Werbung")]
     with pytest.raises(RuntimeError, match="top-level label such as 'Werbung'"):
         move_uids(Box(create_ok=False), ["1"], "INBOX/Werbung")
+
+
+class NoJson(FakeResponse):
+    def json(self):
+        raise ValueError("Expecting value")
+
+
+def test_client_retries_an_answer_without_json(monkeypatch):
+    monkeypatch.setattr(classifier_mod.time, "sleep", lambda s: None)
+    session = FakeSession([NoJson(200, "<html>proxy error</html>"), FakeResponse(200, SAMPLE_RESPONSE)])
+    assert ClassifierClient("key", "https://example", "m", session=session).decide({}, CFG.descriptions).category == "finanzen"
+
+
+def test_client_stops_after_failing_for_several_mails_in_a_row(monkeypatch):
+    monkeypatch.setattr(classifier_mod.time, "sleep", lambda s: None)
+    down = [FakeResponse(503)] * 2
+    session = FakeSession(down * 2 + [FakeResponse(200, SAMPLE_RESPONSE)] + down * 3)
+    client = ClassifierClient("key", "https://example", "m", retries=2, session=session)
+    for _ in range(2):
+        with pytest.raises(ClassifierError, match="giving up"):
+            client.decide({}, CFG.descriptions)
+    assert client.decide({}, CFG.descriptions).category == "finanzen"  # a success starts the count again
+    for _ in range(2):
+        with pytest.raises(ClassifierError, match="giving up"):
+            client.decide({}, CFG.descriptions)
+    with pytest.raises(classifier_mod.ClassifierOutage, match="3 mails in a row"):
+        client.decide({}, CFG.descriptions)
+    calls = session.calls
+    with pytest.raises(classifier_mod.ClassifierOutage):
+        client.decide({}, CFG.descriptions)  # no more requests for this run
+    assert session.calls == calls

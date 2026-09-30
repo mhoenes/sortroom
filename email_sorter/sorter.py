@@ -14,7 +14,7 @@ from imap_tools import AND, MailBox, MailMessage, MailMessageFlags
 
 from .config import INBOX_ACTION, Config, Credentials, SenderRule
 from .expiry import resolve_expiry
-from .classifier import Decision, ClassifierAuthError, ClassifierClient, ClassifierError
+from .classifier import Decision, ClassifierAuthError, ClassifierClient, ClassifierError, ClassifierOutage
 from .mailtext import build_state, full_text, message_key, received_of, sent_date, unsubscribe_links
 from .store import GONE, MOVED, Store
 from .oauth import sign_in
@@ -295,6 +295,9 @@ def classify_new(
             )
         except ClassifierAuthError:
             raise
+        except ClassifierOutage:
+            failed.append(pending[msg_uid])
+            break  # what was classified is still applied
         except Exception as e:
             failed.append(pending[msg_uid])
             mail_failed(msg, e)
@@ -305,9 +308,25 @@ def classify_new(
         log.debug("%.2f %-18s %s", decision.confidence, decision.category, msg.subject)
     missing = [pending[u] for u in uids if pending[u] not in done]
     if missing:
-        log.warning("%d mail(s) were not returned by the server, retried next run", len(missing))
+        if outage(classifier):
+            log.warning("%d mail(s) left for the next run", len(missing))
+        else:
+            log.warning("%d mail(s) were not returned by the server, retried next run", len(missing))
         failed.extend(missing)
     return outcomes, failed, attempted
+
+
+def outage(classifier) -> str | None:
+    """Why the classifier stopped for this run, if it did (see ClassifierOutage)."""
+    return getattr(classifier, "outage", None)
+
+
+def _with_outage(result: RunResult, classifier) -> RunResult:
+    """Mark a run that stopped because the classifier was down: it shows as aborted, with the reason."""
+    reason = outage(classifier)
+    if reason:
+        result.exit_code, result.error = max(result.exit_code, 1), reason
+    return result
 
 
 def apply(mb: MailBox, outcomes: list[Outcome], store: Store) -> int:
@@ -486,6 +505,8 @@ def recheck_expiry(mb: MailBox, cfg: Config, classifier: ClassifierClient, store
                         expires = resolve_expiry(full_text(msg), sent_date(msg), decision.expiry_window)
                 except ClassifierAuthError:
                     raise
+                except ClassifierOutage:
+                    break  # the rest stays unchecked, retried next time
                 except Exception as e:
                     mail_failed(msg, e, "check")
                     continue  # stays unchecked, retried next time
@@ -493,6 +514,8 @@ def recheck_expiry(mb: MailBox, cfg: Config, classifier: ClassifierClient, store
                 if expires:
                     found += 1
                     log.debug("expires %s: %s", expires, msg.subject)
+            if outage(classifier):
+                break
     finally:
         mb.folder.set(cfg.source_folder)
     log.info("found %d time-limited offer(s) among already sorted mail", found)
@@ -584,9 +607,9 @@ def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int 
             elif outcomes:
                 log.info("dry run - nothing changed. Report: %s", report.path)
             code = 1 if (failed or failures) else 0
-            return _finish(store, "run", None, started,
-                           summarize(outcomes, live, code, failed=len(failed) + failures, expired_moved=tagged,
-                                     report=report.path if report and report.rows else None))
+            return _finish(store, "run", None, started, _with_outage(
+                summarize(outcomes, live, code, failed=len(failed) + failures, expired_moved=tagged,
+                          report=report.path if report and report.rows else None), classifier))
     except Exception as e:
         _finish(store, "run", None, started, RunResult(exit_code=1, live=live, error=str(e)))
         raise
@@ -647,6 +670,10 @@ def run_backfill(cfg: Config, creds: Credentials, base_dir: Path, live: bool,
                     all_failed.extend(failed)
                     if remaining is not None:
                         remaining -= len(attempted)
+                    if outage(classifier):
+                        break
+                if outage(classifier):
+                    break
                 if remaining is not None and remaining <= 0:
                     log.info("limit reached, stopping")
                     break
@@ -658,9 +685,9 @@ def run_backfill(cfg: Config, creds: Credentials, base_dir: Path, live: bool,
             if all_failed:
                 log.warning("%d mail(s) could not be classified; run the backfill again to retry", len(all_failed))
             code = 1 if (all_failed or failures) else 0
-            return _finish(store, "backfill", detail, started,
-                           summarize(all_outcomes, live, code, failed=len(all_failed) + failures,
-                                     expired_moved=tagged, report=report.path if report and report.rows else None))
+            return _finish(store, "backfill", detail, started, _with_outage(
+                summarize(all_outcomes, live, code, failed=len(all_failed) + failures,
+                          expired_moved=tagged, report=report.path if report and report.rows else None), classifier))
     except Exception as e:
         _finish(store, "backfill", detail, started, RunResult(exit_code=1, live=live, error=str(e)))
         raise
@@ -686,8 +713,8 @@ def run_recheck_expiry(cfg: Config, creds: Credentials, base_dir: Path, live: bo
                 tagged = move_expired(mb, cfg, store)
             else:
                 log.info("dry run - expiry dates saved, nothing moved (use --live to move expired offers)")
-            return _finish(store, "recheck", None, started,
-                           RunResult(exit_code=0, live=live, time_limited_offers=found, expired_moved=tagged))
+            return _finish(store, "recheck", None, started, _with_outage(
+                RunResult(exit_code=0, live=live, time_limited_offers=found, expired_moved=tagged), classifier))
     except Exception as e:
         _finish(store, "recheck", None, started, RunResult(exit_code=1, live=live, error=str(e)))
         raise

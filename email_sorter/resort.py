@@ -16,14 +16,14 @@ from pathlib import Path
 from imap_tools import AND, MailBox
 
 from .config import Config, Credentials
-from .classifier import ClassifierAuthError, ClassifierClient
+from .classifier import ClassifierAuthError, ClassifierClient, ClassifierOutage
 from .mailtext import build_state, message_key, received_of, unsubscribe_links
 from datetime import datetime
 
 from .config import INBOX_ACTION
 from .sorter import (BODY_CHUNK, IMAP_TIMEOUT, Outcome, ReportWriter, RunResult, expiry_for, move_uids,
-                     mail_failed, plan, ready_to_sort, rule_outcome, server_folder, _auth_failed, _chunks,
-                     _delimiter, _ensure_folder, _finish)
+                     mail_failed, outage, plan, ready_to_sort, rule_outcome, server_folder, _auth_failed, _chunks,
+                     _delimiter, _ensure_folder, _finish, _with_outage)
 from .store import Store
 from .oauth import sign_in
 
@@ -86,6 +86,9 @@ def resort_outcomes(mb: MailBox, cfg: Config, classifier: ClassifierClient, fold
                 )
             except ClassifierAuthError:
                 raise
+            except ClassifierOutage:
+                failed.append(key)
+                break  # what was classified is still applied
             except Exception as e:
                 failed.append(key)
                 mail_failed(msg, e)
@@ -95,6 +98,8 @@ def resort_outcomes(mb: MailBox, cfg: Config, classifier: ClassifierClient, fold
                 moving.append(outcome)
             if on_outcome:
                 on_outcome(outcome)
+        if outage(classifier):
+            break
     if kept:
         log.info("%d mail(s) left alone by inbox sender rules", kept)
     missing = len(uids) - len(seen)
@@ -160,7 +165,7 @@ def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, liv
             log.info("%s %d mail(s) out of %s, %d stay%s", "moved" if live else "would move", moved, folder,
                      len(outcomes) - len(moving),
                      ": " + ", ".join(f"{t}={n}" for t, n in targets.most_common()) if targets else "")
-            return _finish(store, "resort", folder, started, RunResult(
+            return _finish(store, "resort", folder, started, _with_outage(RunResult(
                 exit_code=1 if (failed or move_failures) else 0,
                 live=live,
                 classified=len(outcomes),
@@ -170,7 +175,7 @@ def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, liv
                 cost_usd=round(sum(o.decision.cost for o in outcomes), 6),
                 categories=dict(Counter(o.decision.category for o in outcomes).most_common()),
                 report=str(report.path) if report and report.rows else None,
-            ))
+            ), classifier))
     except Exception as e:
         _finish(store, "resort", folder, started, RunResult(exit_code=1, live=live, error=str(e)))
         raise
