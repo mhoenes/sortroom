@@ -10,7 +10,7 @@ from email_sorter.config import Credentials
 from email_sorter.mailtext import unsubscribe_links
 from email_sorter.store import Store
 from email_sorter.web import queries
-from support import example_config
+from support import HeaderFetch, example_config, raw_headers
 
 CFG = example_config()
 CREDS = Credentials("u", "p", "k")
@@ -57,7 +57,7 @@ def test_the_newest_mail_gives_the_links(tmp_path):
     store.close()
 
 
-class FakeMailBox:
+class FakeMailBox(HeaderFetch):
     def __init__(self, heads):
         self.heads = heads
         self.folder = SimpleNamespace(list=lambda: [SimpleNamespace(name="INBOX", delim=".", flags=())],
@@ -72,7 +72,7 @@ class FakeMailBox:
     def __exit__(self, *exc):
         return False
 
-    def fetch(self, *a, **kw):
+    def raw_mails(self):
         return self.heads
 
 
@@ -80,9 +80,9 @@ def test_reconcile_reads_the_links_of_logged_mails(tmp_path, monkeypatch):
     store = Store(tmp_path / "data" / "state.db")
     _record(store, "<a@x>", "news@shop.example")
     store.close()
-    heads = [_msg("<https://shop/u>", "List-Unsubscribe=One-Click", key="<a@x>", from_="news@shop.example",
-                  date=datetime(2026, 9, 20, 10, 0), date_str=""),
-             _msg("<https://other/u>", key="<unknown@x>", from_="other@x", date=None, date_str="")]
+    heads = [raw_headers("<a@x>", "News <news@shop.example>", date="Sun, 20 Sep 2026 10:00:00 +0000",
+                         list_unsubscribe="<https://shop/u>", list_unsubscribe_post="List-Unsubscribe=One-Click"),
+             raw_headers("<unknown@x>", "other@x", list_unsubscribe="<https://other/u>")]
     monkeypatch.setattr(reconcile, "MailBox", lambda *a, **kw: FakeMailBox(heads))
     reconcile.run_reconcile(CFG, CREDS, tmp_path, live=False)
     store = Store(tmp_path / "data" / "state.db")

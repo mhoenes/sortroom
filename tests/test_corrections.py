@@ -6,7 +6,7 @@ from email_sorter.classifier import Decision
 from email_sorter.config import INBOX_ACTION, Credentials
 from email_sorter.store import MOVED, Store
 from email_sorter.web import queries
-from support import example_config
+from support import HeaderFetch, example_config, raw_headers
 
 CFG = example_config()
 CREDS = Credentials("u", "p", "k")
@@ -49,7 +49,7 @@ def test_moves_on_the_mails_page(tmp_path):
     store.close()
 
 
-class FakeMailBox:
+class FakeMailBox(HeaderFetch):
     def __init__(self, folders):
         self.folders = folders
         self.folder = SimpleNamespace(
@@ -65,8 +65,8 @@ class FakeMailBox:
     def __exit__(self, *exc):
         return False
 
-    def fetch(self, *a, **kw):
-        return [SimpleNamespace(headers={"message-id": (k,)}) for k in self.folders[self.current]]
+    def raw_mails(self):
+        return [raw_headers(k) for k in self.folders[self.current]]
 
 
 def test_reconcile_finds_mails_moved_by_hand(tmp_path, monkeypatch):
