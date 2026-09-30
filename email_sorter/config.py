@@ -242,27 +242,43 @@ class Mailbox:
         return self.workspace / SECRETS_FILE
 
 
-def load_mailboxes(base_dir: Path, config_path: Path) -> dict[str, Mailbox]:
+class Mailboxes(dict):
+    """The mailboxes that load, by id; `broken` maps the folders whose mailbox.toml doesn't load to
+    the reason. A broken mailbox is left out, so the others keep being sorted."""
+
+    def __init__(self, boxes=(), broken: dict[str, str] | None = None):
+        super().__init__(boxes)
+        self.broken: dict[str, str] = broken or {}
+
+
+def load_mailboxes(base_dir: Path, config_path: Path) -> Mailboxes:
     """All configured mailboxes, by id (empty until the first one is added).
 
     config.toml holds what all mailboxes share ([classifier]); each mailboxes/<id>/mailbox.toml
-    holds a mailbox's name, [imap], [rules], [schedule] and [categories.*].
+    holds a mailbox's name, [imap], [rules], [schedule] and [categories.*]. A problem in config.toml
+    raises ConfigError; one in a mailbox.toml only leaves that mailbox out (see Mailboxes.broken).
     """
     shared = _read_toml(config_path)
     check_shared(shared, config_path)
-    boxes: dict[str, Mailbox] = {}
+    boxes = Mailboxes()
     root = base_dir / "mailboxes"
     for file in sorted(root.glob("*/mailbox.toml")) if root.is_dir() else []:
         box_id = file.parent.name
-        if not _MAILBOX_ID_RE.match(box_id):
-            raise ConfigError(f"mailbox folder {box_id!r}: use lowercase letters, digits, _ or -")
-        raw = _read_toml(file)
-        if "classifier" in raw:
-            raise ConfigError(f"{file}: [classifier] belongs in {config_path.name}, it is shared by all mailboxes")
-        cfg = config_from_raw({**raw, "classifier": shared["classifier"]}, str(file))
-        boxes[box_id] = Mailbox(box_id, str(raw.get("name") or box_id), file.parent, cfg, file,
-                                config_path.with_name(SECRETS_FILE))
+        try:
+            boxes[box_id] = _load_mailbox(box_id, file, shared, config_path)
+        except (ConfigError, ValueError, TypeError) as e:  # ValueError: e.g. port = "abc"
+            boxes.broken[box_id] = str(e)
     return boxes
+
+
+def _load_mailbox(box_id: str, file: Path, shared: dict, config_path: Path) -> Mailbox:
+    if not _MAILBOX_ID_RE.match(box_id):
+        raise ConfigError(f"mailbox folder {box_id!r}: use lowercase letters, digits, _ or -")
+    raw = _read_toml(file)
+    if "classifier" in raw:
+        raise ConfigError(f"{file}: [classifier] belongs in {config_path.name}, it is shared by all mailboxes")
+    cfg = config_from_raw({**raw, "classifier": shared["classifier"]}, str(file))
+    return Mailbox(box_id, str(raw.get("name") or box_id), file.parent, cfg, file, config_path.with_name(SECRETS_FILE))
 
 
 def check_shared(shared: dict, config_path: Path) -> None:

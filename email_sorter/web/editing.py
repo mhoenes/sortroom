@@ -529,7 +529,10 @@ def save_shared(base_dir: Path, shared_path: Path, form: dict) -> None:
     tmp = shared_path.with_name(shared_path.name + ".tmp")
     tmp.write_text(tomlkit.dumps(doc), encoding="utf-8")
     try:
-        load_mailboxes(base_dir, tmp)
+        broken_before = load_mailboxes(base_dir, shared_path).broken
+        newly = {k: v for k, v in load_mailboxes(base_dir, tmp).broken.items() if broken_before.get(k) != v}
+        if newly:  # a mailbox that was broken already doesn't stop the save
+            raise ConfigError("; ".join(f"{k}: {v}" for k, v in newly.items()))
     except ConfigError as e:
         tmp.unlink(missing_ok=True)
         raise EditError(_("Not saved: %(e)s", e=e)) from None

@@ -204,3 +204,19 @@ def test_reconcile_hours_in_the_settings(tmp_path):
     raw["schedule"]["reconcile_hours"] = 0
     with pytest.raises(ConfigError, match="reconcile_hours"):
         config_from_raw(raw, "x")
+
+
+def test_broken_mailboxes_are_logged_once_and_the_others_run(caplog):
+    from email_sorter.config import Mailboxes
+    boxes = Mailboxes({"privat": _box("privat")}, {"arbeit": "bad toml"})
+    ran = []
+    s = scheduler.Scheduler(lambda: boxes, run_box=lambda box: ran.append(box.id), reconcile_box=lambda box: True,
+                  last_reconciled=lambda box: None)
+    with caplog.at_level("INFO", logger="email_sorter.scheduler"):
+        s.tick(T0)
+        s.tick(T0 + timedelta(seconds=20))
+        boxes.broken.clear()
+        s.tick(T0 + timedelta(seconds=40))
+    messages = [r.getMessage() for r in caplog.records]
+    assert sum("[arbeit] settings cannot be loaded" in m for m in messages) == 1
+    assert any("[arbeit] settings load again" in m for m in messages)
