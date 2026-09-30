@@ -1,4 +1,3 @@
-import os
 import threading
 from datetime import datetime, timedelta
 from types import SimpleNamespace
@@ -7,7 +6,7 @@ import pytest
 
 from email_sorter import scheduler
 from email_sorter.config import EXAMPLE_MAILBOXES, ConfigError, _read_toml, config_from_raw
-from email_sorter.runtime import BASE_DIR
+from email_sorter.runtime import BASE_DIR, single_instance
 from support import example_config
 
 T0 = datetime(2026, 9, 26, 12, 0)
@@ -98,11 +97,9 @@ def test_scheduled_run_skips_a_busy_mailbox(tmp_path, monkeypatch):
     monkeypatch.setattr(scheduler, "load_credentials", lambda cfg: "creds")
     runs = []
     monkeypatch.setattr(scheduler, "run", lambda *a, **kw: runs.append(kw))
-    box.lock_path.parent.mkdir(parents=True)
-    box.lock_path.write_text(str(os.getpid()))              # a live process holds the lock
-    scheduler.run_scheduled(box)
+    with single_instance(box.lock_path):                      # a run holds the lock
+        scheduler.run_scheduled(box)
     assert runs == []
-    box.lock_path.unlink()
     scheduler.run_scheduled(box)
     assert runs == [{"live": True, "limit": None}]
 

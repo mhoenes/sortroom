@@ -4,13 +4,11 @@ from __future__ import annotations
 import logging
 import os
 import sys
-import time
 from contextlib import contextmanager
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-STALE_LOCK_SECONDS = 3600
 
 log = logging.getLogger("email_sorter")
 
@@ -37,34 +35,48 @@ def setup_logging(verbose: bool) -> None:
     logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 
-def _pid_alive(pid: int) -> bool:
-    if os.name == "nt":  # os.kill(pid, 0) would terminate the process on Windows
-        import ctypes
+if os.name == "nt":
+    import msvcrt
 
-        kernel32 = ctypes.windll.kernel32
-        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
-        if not handle:
+    def _try_lock(fd: int) -> bool:
+        os.lseek(fd, 0, os.SEEK_SET)
+        try:
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        except OSError:
             return False
-        code = ctypes.c_ulong()
-        kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
-        kernel32.CloseHandle(handle)
-        return code.value == 259  # STILL_ACTIVE
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
         return True
-    return True
+
+    def _unlock(fd: int) -> None:
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+else:
+    import fcntl
+
+    def _try_lock(fd: int) -> bool:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return False
+        return True
+
+    def _unlock(fd: int) -> None:
+        fcntl.flock(fd, fcntl.LOCK_UN)
 
 
-def _lock_is_stale(lock_path: Path) -> bool:
-    """Stale if the owning process is gone (killed run). A long backfill can run for
-    hours, so age only decides when the lock holds no readable PID."""
+def is_locked(lock_path: Path) -> bool:
+    """Whether a run holds the lock now. Takes it for a moment to find out, so a run starting at that
+    very moment is skipped once and comes again at its next slot."""
     try:
-        return not _pid_alive(int(lock_path.read_text().strip()))
-    except (OSError, ValueError):
-        return time.time() - lock_path.stat().st_mtime > STALE_LOCK_SECONDS
+        fd = os.open(lock_path, os.O_RDWR)
+    except FileNotFoundError:
+        return False
+    try:
+        if not _try_lock(fd):
+            return True
+        _unlock(fd)
+        return False
+    finally:
+        os.close(fd)
 
 
 @contextmanager
@@ -85,19 +97,20 @@ def keep_awake():
 
 @contextmanager
 def single_instance(lock_path: Path):
-    """Skip this run if another one is still going (scheduled runs can overlap)."""
+    """Skip this run if another one is still going (scheduled runs can overlap).
+
+    An OS file lock (flock; on Windows msvcrt.locking): it holds against other threads, processes and
+    containers sharing the folder, and the system releases it when its process ends - a crashed run
+    leaves nothing behind. The file itself stays; removing it could let two runs lock two files."""
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    if lock_path.exists() and _lock_is_stale(lock_path):
-        log.info("removing stale lock from an interrupted run")
-        lock_path.unlink(missing_ok=True)
+    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o644)
     try:
-        fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-    except FileExistsError:
-        yield False
-        return
-    try:
-        os.write(fd, str(os.getpid()).encode())
-        os.close(fd)
-        yield True
+        if not _try_lock(fd):
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            _unlock(fd)
     finally:
-        lock_path.unlink(missing_ok=True)
+        os.close(fd)

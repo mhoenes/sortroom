@@ -10,7 +10,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from .config import ConfigError, Mailbox, load_credentials, load_mailboxes
-from .runtime import BASE_DIR, _lock_is_stale, default_config_path, keep_awake, setup_logging, single_instance  # noqa: F401
+from .runtime import BASE_DIR, default_config_path, keep_awake, setup_logging, single_instance
 
 log = logging.getLogger("email_sorter")
 

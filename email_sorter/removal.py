@@ -34,6 +34,7 @@ def delete_mailbox(box: Mailbox) -> dict:
             if token and oauth.PROVIDERS[box.cfg.imap_auth].revoke:
                 revoked = oauth.revoke(box.cfg.imap_auth, token)
         shutil.rmtree(box.workspace)
+    box.lock_path.unlink(missing_ok=True)  # released above; no run can start for a mailbox that's gone
     jobs.remove_mailbox(box.id)
     log.info("[%s] mailbox deleted%s", box.id,
              "" if revoked is None else "; sign-in revoked" if revoked else "; revoking the sign-in failed")

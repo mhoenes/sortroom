@@ -325,15 +325,14 @@ def test_renaming_a_mailbox_moves_its_folder(client, setup):
 
 
 def test_rename_is_refused_while_the_mailbox_is_busy(client, setup):
-    lock = setup / "mailboxes" / "privat" / "data" / "run.lock"
-    lock.parent.mkdir()
-    lock.write_text(str(os.getpid()))  # a run of this very process holds the lock
-    html = client.get("/ui/m/privat/settings").text
-    r = client.post("/ui/m/privat/settings", data=_settings_form(html, name="Arbeit"))
-    assert r.status_code == 422 and "weder Name noch Ordner" in r.text
+    from email_sorter.runtime import single_instance
+    with single_instance(_box(setup).lock_path) as held:  # a run of this very process holds the lock
+        assert held
+        html = client.get("/ui/m/privat/settings").text
+        r = client.post("/ui/m/privat/settings", data=_settings_form(html, name="Arbeit"))
+        assert r.status_code == 422 and "weder Name noch Ordner" in r.text
     assert (setup / "mailboxes" / "privat").exists() and not (setup / "mailboxes" / "arbeit").exists()
     assert load_mailboxes(setup, setup / "config.toml")["privat"].name == "Privat"  # nothing saved
-    lock.unlink()
 
 
 def test_reconcile_status_in_the_settings(client, setup, monkeypatch):

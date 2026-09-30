@@ -1,4 +1,3 @@
-import os
 import time
 from datetime import date, timedelta
 from pathlib import Path
@@ -7,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from email_sorter import api
+from email_sorter.runtime import is_locked, single_instance
 from email_sorter.config import Credentials, Mailbox
 from email_sorter.sorter import RunResult
 from support import example_config
@@ -77,7 +77,7 @@ def test_run_returns_summary_per_mailbox_and_defaults_to_live(client):
     body = r.json()
     assert body["ok"] and body["results"]["privat"]["classified"] == 3
     assert client.calls == [("run", "privat", True, None)]
-    assert not client.boxes["privat"].lock_path.exists()  # released afterwards
+    assert not is_locked(client.boxes["privat"].lock_path)  # released afterwards
 
 
 def test_run_covers_all_mailboxes(make_client):
@@ -96,14 +96,14 @@ def test_run_one_mailbox(make_client):
 
 def test_busy_mailbox_is_skipped_others_still_run(make_client):
     c = make_client(("gmail", "privat"))
-    lock = c.boxes["privat"].lock_path
-    lock.parent.mkdir(parents=True)
-    lock.write_text(str(os.getpid()))  # a live process holds it
-    body = c.post("/run", headers=AUTH).json()
-    assert body["ok"] and body["results"]["privat"]["skipped"]
-    assert c.calls == [("run", "gmail", True, None)]
-    assert c.post("/run", headers=AUTH, json={"mailbox": "privat"}).status_code == 409
-    assert c.get("/health").json()["busy"] is True
+    with single_instance(c.boxes["privat"].lock_path):  # a run holds it
+        assert c.get("/mailboxes", headers=AUTH).json()[1] == {"id": "privat", "name": "Privat", "busy": True}
+        body = c.post("/run", headers=AUTH).json()
+        assert body["ok"] and body["results"]["privat"]["skipped"]
+        assert c.calls == [("run", "gmail", True, None)]
+        assert c.post("/run", headers=AUTH, json={"mailbox": "privat"}).status_code == 409
+        assert c.get("/health").json()["busy"] is True
+    assert c.get("/health").json()["busy"] is False  # released with its run
 
 
 def test_mailboxes_listing(make_client):
@@ -148,14 +148,14 @@ def test_unknown_job_is_404(client):
     assert client.get("/jobs/nope", headers=AUTH).status_code == 404
 
 
-def test_stale_locks_from_previous_container_are_removed_on_startup(tmp_path, monkeypatch):
+def test_old_pid_lock_files_are_removed_on_startup(tmp_path, monkeypatch):
     boxes = _boxes(tmp_path, ("gmail", "privat"))
     for b in boxes.values():
-        b.lock_path.parent.mkdir(parents=True)
-        b.lock_path.write_text("1")  # PID 1 is "alive" in a container, but belonged to the crashed process
+        (b.workspace / "data").mkdir(parents=True)
+        (b.workspace / "data" / "run.lock").write_text("1")  # up to 0.13.1
     monkeypatch.setattr(api, "load_mailboxes", lambda base, path: boxes)
     with TestClient(api.app):
-        assert not any(b.lock_path.exists() for b in boxes.values())
+        assert not any((b.workspace / "data" / "run.lock").exists() for b in boxes.values())
 
 
 def test_a_broken_mailbox_is_reported_and_the_others_run(make_client, monkeypatch):

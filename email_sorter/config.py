@@ -226,14 +226,16 @@ class Mailbox:
     """One mailbox: its settings plus the folder holding its log, lock and reports."""
     id: str
     name: str
-    workspace: Path  # data/state.db, data/run.lock and reports/ live below this
+    workspace: Path  # data/state.db and reports/ live below this
     cfg: Config
     config_file: Path | None = None  # its mailbox.toml
     shared_secrets: Path | None = None  # the secrets.toml next to config.toml
 
     @property
     def lock_path(self) -> Path:
-        return self.workspace / "data" / "run.lock"
+        """The run lock, in mailboxes/.locks/ rather than in the mailbox folder: a folder holding an
+        open file can't be renamed or deleted on Windows, and both happen under the lock."""
+        return self.workspace.parent / ".locks" / f"{self.id}.lock"
 
     @property
     def secrets_path(self) -> Path:
