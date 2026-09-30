@@ -309,7 +309,17 @@ def secrets_writable(path: Path) -> bool:
 
 def write_secrets(path: Path, section: str, values: dict) -> None:
     """Set (a string) or remove (None) keys of [section] in a secrets file - atomically, mode 0600
-    and without a .bak copy. The file is deleted once nothing is left in it."""
+    and without a .bak copy. The file is deleted once nothing is left in it.
+
+    One writer at a time (secrets.toml.lock): the UI saving a login and a run storing a renewed OAuth
+    token - in this process or in the CLI - would otherwise each write back what they read before."""
+    from .runtime import exclusive
+
+    with exclusive(path.with_name(path.name + ".lock")):
+        _write_secrets(path, section, values)
+
+
+def _write_secrets(path: Path, section: str, values: dict) -> None:
     data = {k: dict(v) for k, v in read_secrets(path).items() if isinstance(v, dict)}
     table = data.setdefault(section, {})
     for key, value in values.items():

@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import time
 from contextlib import contextmanager
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -61,6 +62,26 @@ else:
 
     def _unlock(fd: int) -> None:
         fcntl.flock(fd, fcntl.LOCK_UN)
+
+
+@contextmanager
+def exclusive(lock_path: Path, timeout: float = 30):
+    """Wait for the lock, then hold it - for short work like rewriting a file, which a thread or process
+    doing the same would otherwise undo. Raises TimeoutError after `timeout` seconds."""
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        deadline = time.monotonic() + timeout
+        while not _try_lock(fd):
+            if time.monotonic() > deadline:
+                raise TimeoutError(f"{lock_path} stayed locked for {timeout:g} s")
+            time.sleep(0.01)
+        try:
+            yield
+        finally:
+            _unlock(fd)
+    finally:
+        os.close(fd)
 
 
 def is_locked(lock_path: Path) -> bool:

@@ -67,7 +67,31 @@ def test_secrets_file_has_no_copies(setup):
     path = _box(setup).secrets_path
     write_secrets(path, "imap", {"password": "two"})
     assert _secrets(path)["imap"] == {"user": "u", "password": "two"}
-    assert sorted(p.name for p in path.parent.iterdir() if p.name.startswith("secrets")) == ["secrets.toml"]
+    files = sorted(p.name for p in path.parent.iterdir() if p.name.startswith("secrets"))
+    assert files == ["secrets.toml", "secrets.toml.lock"]
+    assert path.with_name("secrets.toml.lock").stat().st_size == 0  # only the writers' lock, no copy
+
+
+def test_concurrent_writes_keep_every_change(tmp_path):
+    import threading
+    path, errors = tmp_path / "secrets.toml", []
+    barrier = threading.Barrier(12)
+
+    def write(i):
+        barrier.wait()  # all at once, like the UI saving while a run stores a renewed token
+        try:
+            write_secrets(path, "oauth" if i % 2 else "imap", {f"k{i}": f"v{i}"})
+        except Exception as e:
+            errors.append(e)
+
+    threads = [threading.Thread(target=write, args=(i,)) for i in range(12)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    stored = _secrets(path)
+    assert errors == [] and sum(len(v) for v in stored.values()) == 12
+    assert stored["oauth"]["k1"] == "v1" and stored["imap"]["k10"] == "v10"
 
 
 def test_login_moves_with_the_mailbox_folder(setup):
