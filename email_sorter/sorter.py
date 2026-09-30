@@ -24,6 +24,9 @@ log = logging.getLogger(__name__)
 MAX_EXPIRY_AGE_DAYS = 200  # tracked offers expire within ~180 days of arrival
 IMAP_TIMEOUT = 120  # seconds; a stalled connection raises instead of hanging forever
 UID_CHUNK = 250  # some servers reject IMAP command lines over ~20 KB (seen with Strato): at most this many UIDs per command
+# whole mails (attachments included) per FETCH: the answer is held in memory at once, and a few
+# large attachments per batch must not exhaust a small NAS or Raspberry Pi
+BODY_CHUNK = 20
 
 
 def _chunks(items: list[str], size: int | None = None):
@@ -266,7 +269,7 @@ def classify_new(
     uid_by_key = {pending[u]: u for u in uids}
     done: set[str] = set()
     descriptions = cfg.descriptions
-    for msg in mb.fetch(AND(uid=uids), mark_seen=False, bulk=UID_CHUNK):
+    for msg in mb.fetch(AND(uid=uids), mark_seen=False, bulk=BODY_CHUNK):
         # match by UID; fall back to the message key when the server's response carries
         # no usable UID (e.g. another client changed flags while we were fetching)
         uid = msg.uid if msg.uid in pending else uid_by_key.get(message_key(msg)) if msg.headers else None
@@ -471,7 +474,7 @@ def recheck_expiry(mb: MailBox, cfg: Config, classifier: ClassifierClient, store
             if not key_by_uid:
                 continue
             messages = (msg for chunk in _chunks(list(key_by_uid))
-                        for msg in mb.fetch(AND(uid=chunk), mark_seen=False, bulk=UID_CHUNK))
+                        for msg in mb.fetch(AND(uid=chunk), mark_seen=False, bulk=BODY_CHUNK))
             for msg in messages:
                 if msg.uid not in key_by_uid:
                     continue  # unsolicited FETCH from the server

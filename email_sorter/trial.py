@@ -17,7 +17,7 @@ from .config import Category, Config, Credentials
 from .classifier import ClassifierAuthError, ClassifierError
 from .i18n import _
 from .mailtext import build_state, message_key
-from .sorter import IMAP_TIMEOUT, MAX_EXPIRY_AGE_DAYS, UID_CHUNK, _delimiter, _find_uids, _group_by_folder
+from .sorter import BODY_CHUNK, IMAP_TIMEOUT, MAX_EXPIRY_AGE_DAYS, _delimiter, _find_uids, _group_by_folder
 from .oauth import sign_in
 
 log = logging.getLogger(__name__)
@@ -84,7 +84,7 @@ def run_trial(cfg: Config, creds: Credentials, db_path: Path, key: str, descript
                 rows[k].error = _("no longer in the folder")
             if not uids:
                 continue
-            for msg in mb.fetch(AND(uid=list(uids.values())), mark_seen=False, bulk=UID_CHUNK):
+            for msg in mb.fetch(AND(uid=list(uids.values())), mark_seen=False, bulk=BODY_CHUNK):
                 k = message_key(msg)
                 if k not in rows or rows[k].after or rows[k].error:
                     continue

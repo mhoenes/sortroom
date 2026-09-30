@@ -45,7 +45,7 @@ class FakeMailBox:
 
     def __init__(self, host, port, timeout=None):
         self.mails = {str(u): _mail(u, f"Angebot {u}") for u in range(1, 8)}
-        self.moves, self.fetches = [], 0
+        self.moves, self.fetches, self.bulks = [], 0, []
         self.folder = SimpleNamespace(
             list=lambda: [SimpleNamespace(name="INBOX", delim=".")],
             exists=lambda n: True, set=lambda n: None, create=lambda n: None, subscribe=lambda n, v: None,
@@ -63,6 +63,7 @@ class FakeMailBox:
 
     def fetch(self, criteria, **kw):
         self.fetches += 1
+        self.bulks.append((kw.get("headers_only", False), kw.get("bulk")))
         text = str(criteria)
         if "UID" in text:
             wanted = text.split("UID ")[1].rstrip(")").split(",")
@@ -306,3 +307,10 @@ def test_expiry_errors_keep_the_decision(env):
     small = Config(**{**env.cfg.__dict__, "max_per_run": 10})
     result = sorter.run(small, CREDS, env.tmp, live=True, limit=None)
     assert result.exit_code == 0 and result.moved == 7 and result.time_limited_offers == 0
+
+
+def test_whole_mails_are_fetched_in_small_batches(env):
+    _use_classifier(env, FakeClassifier())
+    sorter.run(Config(**{**env.cfg.__dict__, "max_per_run": 200}), CREDS, env.tmp, live=True, limit=None)
+    bodies = [bulk for headers_only, bulk in FakeMailBox.instances[0].bulks if not headers_only]
+    assert bodies and all(bulk == sorter.BODY_CHUNK <= 20 for bulk in bodies)
