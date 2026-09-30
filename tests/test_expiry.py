@@ -211,3 +211,23 @@ def test_move_expired_uses_category_folder_over_default(tmp_path):
     assert sorter.move_expired(mb, cfg, store, today=date(2026, 9, 25)) == 2
     assert sorted(f for _, f in mb.moves) == ["INBOX.Unterlagen.Abgelaufen", "INBOX.Werbung.Abgelaufen"]
     store.close()
+
+
+def test_dates_at_the_end_of_the_calendar_do_not_crash():
+    last = date(9999, 12, 30)
+    assert resolve_expiry("Angebot gültig bis 31.12.", last, None) is None
+    assert resolve_expiry("gilt bis 05.01.", last, None) is None  # would be next year
+    assert window_deadline("within_month", last) is None
+
+
+def test_mails_dated_in_the_future_count_as_sent_today():
+    from imap_tools import MailMessage
+    from email_sorter.mailtext import sent_date
+
+    def mail(date_header):
+        raw = f"Message-ID: <x@y>\r\nFrom: a@b.de\r\nSubject: s\r\nDate: {date_header}\r\n\r\nText".encode()
+        return MailMessage.from_bytes(raw)
+
+    assert sent_date(mail("Thu, 30 Dec 9999 10:00:00 +0000")) == date.today()
+    assert sent_date(mail("kaputt")) == date.today()
+    assert sent_date(mail("Mon, 21 Sep 2026 10:00:00 +0200")) == date(2026, 9, 21)

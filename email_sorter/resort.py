@@ -16,13 +16,13 @@ from pathlib import Path
 from imap_tools import AND, MailBox
 
 from .config import Config, Credentials
-from .classifier import ClassifierAuthError, ClassifierClient, ClassifierError
+from .classifier import ClassifierAuthError, ClassifierClient
 from .mailtext import build_state, message_key, received_of, unsubscribe_links
 from datetime import datetime
 
 from .config import INBOX_ACTION
 from .sorter import (IMAP_TIMEOUT, Outcome, ReportWriter, RunResult, UID_CHUNK, expiry_for, move_uids,
-                     plan, ready_to_sort, rule_outcome, server_folder, _auth_failed, _chunks,
+                     mail_failed, plan, ready_to_sort, rule_outcome, server_folder, _auth_failed, _chunks,
                      _delimiter, _ensure_folder, _finish)
 from .store import Store
 from .oauth import sign_in
@@ -68,28 +68,28 @@ def resort_outcomes(mb: MailBox, cfg: Config, classifier: ClassifierClient, fold
                 if on_outcome:
                     on_outcome(outcome)
                 continue
-            try:
+            try:  # whatever goes wrong with one mail, the others are still re-sorted
                 decision = classifier.decide(build_state(msg, cfg.max_body_chars), cfg.descriptions)
+                target, _flag, _expiry = plan(decision, cfg)
+                if target is None:
+                    where, note = folder, ("uncertain, stays" if decision.confidence < cfg.min_confidence
+                                           else "category belongs in the inbox, stays")
+                elif target == folder:
+                    where, note = folder, ""
+                else:
+                    where, note = target, f"moves from {folder}"
+                outcome = Outcome(
+                    key=key, uid=msg.uid, received=received_of(msg),
+                    sender=msg.from_, subject=msg.subject, decision=decision,
+                    folder=where, flag=False, note=note, expires=expiry_for(decision, cfg, msg),
+                    unsubscribe=unsubscribe_links(msg),
+                )
             except ClassifierAuthError:
                 raise
-            except ClassifierError as e:
+            except Exception as e:
                 failed.append(key)
-                log.warning("could not classify %r: %s", msg.subject, e)
+                mail_failed(msg, e)
                 continue
-            target, _flag, _expiry = plan(decision, cfg)
-            if target is None:
-                where, note = folder, ("uncertain, stays" if decision.confidence < cfg.min_confidence
-                                       else "category belongs in the inbox, stays")
-            elif target == folder:
-                where, note = folder, ""
-            else:
-                where, note = target, f"moves from {folder}"
-            outcome = Outcome(
-                key=key, uid=msg.uid, received=received_of(msg),
-                sender=msg.from_, subject=msg.subject, decision=decision,
-                folder=where, flag=False, note=note, expires=expiry_for(decision, cfg, msg),
-                unsubscribe=unsubscribe_links(msg),
-            )
             outcomes.append(outcome)
             if where != folder:
                 moving.append(outcome)
