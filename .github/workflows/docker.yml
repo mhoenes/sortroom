@@ -3,6 +3,9 @@ name: test and publish image
 # Tests run on every push and pull request. The Docker image is published to
 # GitHub Container Registry (ghcr.io/<owner>/<repo>) on pushes to main and on
 # version tags (v1.2.3), for amd64 and arm64 (e.g. ARM-based NAS).
+#
+# Image tags: :latest and :1.2.3 / :1.2 come from a version tag only, so :latest is always a
+# release (docker-compose.yml uses it); :edge is the current main, :sha-<commit> every build.
 
 on:
   push:
@@ -44,8 +47,10 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
+          flavor: latest=false
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=edge,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=short
