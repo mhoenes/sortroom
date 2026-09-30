@@ -277,8 +277,6 @@ def _move_mailbox(box: Mailbox, new_id: str, text: str, busy: bool) -> None:
         except OSError as e:
             os.rename(target, box.workspace)
             raise EditError(_("Not saved: %(e)s", e=e)) from None
-        # the lock moved along with the folder; the old path is released on leaving this block
-        (target / box.lock_path.relative_to(box.workspace)).unlink(missing_ok=True)
     jobs.rename_mailbox(box.id, new_id)
 
 

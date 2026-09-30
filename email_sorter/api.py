@@ -33,7 +33,7 @@ from . import __version__, i18n, jobs
 from .config import ConfigError, Mailbox, load_credentials, load_mailboxes
 from .i18n import _
 from .removal import MailboxBusy, delete_mailbox
-from .runtime import BASE_DIR, _lock_is_stale, default_config_path, setup_logging, single_instance
+from .runtime import BASE_DIR, default_config_path, is_locked, setup_logging, single_instance
 from .scheduler import Scheduler, enabled_by_env
 from .sorter import run, run_backfill, run_recheck_expiry
 
@@ -53,16 +53,12 @@ def _mailboxes() -> dict[str, Mailbox]:
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    # In a container the server is PID 1 after every restart, so a lock left behind by a
-    # crashed process would look alive forever. No run can be active before startup.
     try:
         boxes = load_mailboxes(BASE_DIR, CONFIG_PATH).values()
     except ConfigError:
         boxes = []
-    for box in boxes:
-        if box.lock_path.exists():
-            log.info("[%s] removing run lock left over from a previous process", box.id)
-            box.lock_path.unlink(missing_ok=True)
+    for box in boxes:  # the PID lock files of versions up to 0.13.1; the lock is in mailboxes/.locks/ now
+        (box.workspace / "data" / "run.lock").unlink(missing_ok=True)
     if enabled_by_env():
         app.state.scheduler.start()
     yield
@@ -81,7 +77,7 @@ def _require_token(authorization: str = Header(default="")) -> None:
 
 
 def _busy(box: Mailbox) -> bool:
-    return box.lock_path.exists() and not _lock_is_stale(box.lock_path)
+    return is_locked(box.lock_path)
 
 
 def _pick(boxes: dict[str, Mailbox], box_id: str | None) -> Mailbox:

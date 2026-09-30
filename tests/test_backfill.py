@@ -1,4 +1,7 @@
 import os
+import subprocess
+import sys
+import time
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
@@ -153,18 +156,41 @@ def test_since_rejects_future_and_bad_dates():
     assert cli._past_date("2020-01-01") == date(2020, 1, 1)
 
 
-def test_lock_of_running_process_is_never_stale_even_when_old(tmp_path):
-    lock = tmp_path / "run.lock"
-    lock.write_text(str(os.getpid()))
-    old = lock.stat().st_mtime - 10 * 3600
-    os.utime(lock, (old, old))
-    assert not cli._lock_is_stale(lock)
+HOLD_LOCK = """
+import sys, time
+from pathlib import Path
+from email_sorter.runtime import single_instance
+with single_instance(Path(sys.argv[1])) as held:
+    print("held" if held else "busy", flush=True)
+    time.sleep(60)
+"""
 
 
-def test_lock_of_dead_process_is_stale(tmp_path):
-    lock = tmp_path / "run.lock"
-    lock.write_text("999999")  # no such PID
-    assert cli._lock_is_stale(lock)
+def _other_process(lock):
+    """Another process that takes the lock and keeps it until it is killed."""
+    proc = subprocess.Popen([sys.executable, "-c", HOLD_LOCK, str(lock)], cwd=ROOT, stdout=subprocess.PIPE, text=True)
+    assert proc.stdout.readline().strip() == "held"
+    return proc
+
+
+def test_the_lock_holds_against_another_process_and_ends_with_it(tmp_path):
+    from email_sorter.runtime import is_locked, single_instance
+    lock = tmp_path / ".locks" / "privat.lock"
+    proc = _other_process(lock)
+    try:
+        assert is_locked(lock)
+        with single_instance(lock) as acquired:
+            assert acquired is False
+    finally:
+        proc.kill()  # like a crashed run: nothing is released by hand
+        proc.wait()
+        proc.stdout.close()
+    deadline = time.monotonic() + 5  # Linux releases it at once, Windows a moment after the process ended
+    while is_locked(lock) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert not is_locked(lock)
+    with single_instance(lock) as acquired:
+        assert acquired is True
 
 
 def test_unsolicited_fetch_response_is_ignored(env):

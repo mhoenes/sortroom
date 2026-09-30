@@ -66,14 +66,12 @@ def test_job_captures_its_log_and_result(setup):
 
 
 def test_job_rejected_when_mailbox_locked(setup):
+    from email_sorter.runtime import single_instance
     box = _box(setup)
-    box.lock_path.parent.mkdir(parents=True, exist_ok=True)
-    box.lock_path.write_text(str(__import__("os").getpid()))
-    try:
+    with single_instance(box.lock_path) as held:  # a run holds the lock
+        assert held
         job = _wait(jobs.start(box, "run", "Lauf", lambda: RunResult(exit_code=0))["id"])
         assert job["status"] == "rejected"
-    finally:
-        box.lock_path.unlink()
 
 
 # ---------------------------------------------------------------- manual + editing helpers
