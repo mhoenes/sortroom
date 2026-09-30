@@ -110,8 +110,13 @@ def logout(request: Request):
 
 
 def _safe_next(url: str) -> str:
-    """Only local paths, so the login form can't be used to redirect elsewhere."""
-    return url if url.startswith("/") and not url.startswith("//") else "/ui"
+    r"""Only paths on this site, so the login form can't be used to redirect elsewhere. Browsers read a
+    backslash as a slash and drop tabs and line breaks, so "/\evil.example" or "/<tab>/evil.example"
+    would lead to another site just like "//evil.example"."""
+    if (not url.startswith("/") or url.startswith("//") or "\\" in url
+            or any(ord(c) < 0x21 or ord(c) == 0x7F for c in url)):
+        return "/ui"
+    return url
 
 
 # ---------------------------------------------------------------- formatting
