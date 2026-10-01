@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import time
 import tomllib
+from pathlib import Path
 from datetime import date
 from urllib.parse import quote
 
@@ -30,7 +31,7 @@ from ..store import Store
 from . import _box, _boxes, _sidebar, queries, require_login, router
 from .editing import (EditError, add_sender_rule, can_add_mailbox, create_mailbox, rename_category_key, with_kind,
                       rename_folder_refs, reserved_key_text, save_shared, secrets_writable, shared_writable, writable)
-from .editor import _flash, _form, _page, _shared_path, auth_methods, form_number, without_secrets
+from .editor import _flash, _form, _page, _shared_path, form_number, without_secrets
 
 log = logging.getLogger(__name__)
 
@@ -327,13 +328,17 @@ async def mailbox_create(request: Request):
             raise EditError(reason)
         form = with_kind(form)
         choice = str(form.get("template") or "")
+        template_file: Path | None
+        template_name = ""
         if choice.startswith(EXAMPLE) and choice[len(EXAMPLE):] in EXAMPLE_MAILBOXES:
             lang = choice[len(EXAMPLE):]
             template_file = EXAMPLE_MAILBOXES[lang]
             template_name = _("Standard categories, %(language)s", language=i18n.LANGUAGES[lang])
-        elif choice in boxes:
+        elif choice in boxes and boxes[choice].config_file:
             template_file, template_name = boxes[choice].config_file, boxes[choice].name
         else:
+            template_file = None
+        if template_file is None:
             raise EditError(_("Please choose a template for the categories."))
         box_id = create_mailbox(base, _shared_path(request), template_file, template_name, form)
     except EditError as e:
@@ -422,5 +427,6 @@ def _check_model(shared_path) -> tuple[str, str]:
         d = check_model(client, {k: v["description"] for k, v in example.items()})
     except ClassifierError as e:
         return "err", _("Model check failed: %(e)s", e=e)
-    return "ok", _("Model works: a sample invoice was filed under \"%(category)s\" (confidence %(conf)s, cost $%(cost)s).",
+    return "ok", _("Model works: a sample invoice was filed under \"%(category)s\" (confidence %(conf)s, "
+                   "cost $%(cost)s).",
                    category=d.category, conf=i18n.conf(d.confidence), cost=f"{d.cost:.6f}")

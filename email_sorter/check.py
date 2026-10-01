@@ -5,7 +5,7 @@ Global settings; --check does both for every mailbox.
 """
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 
 from .config import Config, Credentials

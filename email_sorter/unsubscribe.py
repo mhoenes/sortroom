@@ -35,7 +35,7 @@ def _public(host: str, port: int) -> None:
     except OSError as e:
         raise UnsubscribeError(_("Could not reach %(host)s: %(error)s", host=host, error=e)) from None
     for info in infos:
-        if not ipaddress.ip_address(info[4][0].split("%")[0]).is_global:
+        if not ipaddress.ip_address(str(info[4][0]).split("%")[0]).is_global:
             raise UnsubscribeError(_("%(host)s is not a public address; Sortroom does not send the request there.",
                                      host=host))
 

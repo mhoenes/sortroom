@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS processed (
     expires         TEXT,                        -- last valid day of the offer (ISO date)
     expiry_checked  INTEGER NOT NULL DEFAULT 1,  -- 0 = processed before expiry tracking existed
     expired_tagged  INTEGER NOT NULL DEFAULT 0,  -- 1 = moved to the expired folder, 2 = mail no longer found
-    source          TEXT NOT NULL DEFAULT 'classifier', -- 'classifier', 'rule' (sender rule) or 'manual' (set in the UI)
+    source          TEXT NOT NULL DEFAULT 'classifier', -- 'classifier', 'rule' (sender rule), 'manual' (in the UI)
     gone            INTEGER NOT NULL DEFAULT 0   -- 1 = no longer in the mailbox (deleted), found by a reconcile
 );
 CREATE TABLE IF NOT EXISTS runs (
@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS corrections (
     category        TEXT NOT NULL,               -- the model's category
     corrected_to    TEXT NOT NULL,               -- the category it was put in, or 'inbox'
     at              TEXT NOT NULL,
-    how             TEXT NOT NULL                -- 'ui' (Mails page) or 'reconcile' (moved by hand, found by a reconcile)
+    how             TEXT NOT NULL                -- 'ui' (Mails page) or 'reconcile' (moved by hand, seen by reconcile)
 );
 CREATE TABLE IF NOT EXISTS meta (
     key             TEXT PRIMARY KEY,            -- last_reconcile: when the log was last reconciled for real
@@ -153,7 +153,7 @@ class Store:
     def recent_runs(self, limit: int = 50) -> list[dict]:
         cur = self.db.execute("SELECT * FROM runs ORDER BY started DESC, id DESC LIMIT ?", (limit,))
         names = [c[0] for c in cur.description]
-        rows = [dict(zip(names, r)) for r in cur.fetchall()]
+        rows = [dict(zip(names, r, strict=True)) for r in cur.fetchall()]
         for r in rows:
             r["live"] = bool(r["live"])
             r["categories"] = json.loads(r["categories"] or "{}")
@@ -198,7 +198,7 @@ class Store:
     def get(self, key: str) -> dict | None:
         cur = self.db.execute("SELECT * FROM processed WHERE message_key = ?", (key,))
         row = cur.fetchone()
-        return dict(zip([c[0] for c in cur.description], row)) if row else None
+        return dict(zip([c[0] for c in cur.description], row, strict=True)) if row else None
 
     def set_manual(self, key: str, category: str, moved_to: str | None) -> None:
         """A category set by hand in the UI: certain by definition, so it leaves the review list."""
@@ -321,7 +321,7 @@ class Store:
         row = cur.fetchone()
         if not row:
             return None
-        out = dict(zip([c[0] for c in cur.description], row))
+        out = dict(zip([c[0] for c in cur.description], row, strict=True))
         out["unsubscribe"] = json.loads(out["unsubscribe"] or "[]")
         return out
 
@@ -336,7 +336,7 @@ class Store:
     def correction(self, key: str) -> dict | None:
         cur = self.db.execute("SELECT * FROM corrections WHERE message_key = ?", (key,))
         row = cur.fetchone()
-        return dict(zip([c[0] for c in cur.description], row)) if row else None
+        return dict(zip([c[0] for c in cur.description], row, strict=True)) if row else None
 
     def set_correction(self, key: str, category: str, corrected_to: str | None, how: str) -> None:
         """Note that a decision of the model for `category` was corrected to `corrected_to`; None: it stood

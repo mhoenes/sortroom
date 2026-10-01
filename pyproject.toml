@@ -1,0 +1,21 @@
+# Settings of the development tools only; Sortroom itself is installed from requirements*.txt.
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+# pyflakes, pycodestyle, bugbear (likely bugs) and pyupgrade
+select = ["E", "F", "W", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# pytest fixtures imported from another test module look like unused or redefined names; long expected
+# texts in assertions stay on one line
+"tests/*" = ["F401", "F811", "E501"]
+"tools/make_icons.py" = ["E501"]  # an SVG template
+
+[tool.mypy]
+python_version = "3.13"
+files = ["email_sorter"]
+ignore_missing_imports = true   # imap_tools and itsdangerous ship no type hints
+warn_unused_ignores = true

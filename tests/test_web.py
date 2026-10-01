@@ -1,5 +1,5 @@
 import hashlib
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone, UTC
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -195,7 +195,7 @@ def test_mails_sorted_and_filtered_by_received(tmp_path):
     store = Store(tmp_path / "data" / "state.db")
     now = datetime.now().astimezone()
     received = {  # offsets differ, so text order would be wrong
-        "<utc>": (now - timedelta(hours=2)).astimezone(timezone.utc).isoformat(timespec="minutes"),
+        "<utc>": (now - timedelta(hours=2)).astimezone(UTC).isoformat(timespec="minutes"),
         "<la>": (now - timedelta(hours=1)).astimezone(timezone(timedelta(hours=-7))).isoformat(timespec="minutes"),
         "<local>": (now - timedelta(hours=3)).isoformat(timespec="minutes"),
         "<backfilled>": (now - timedelta(days=40)).isoformat(timespec="minutes"),  # processed today, received long ago
@@ -261,7 +261,7 @@ def test_formatters():  # German (the tests' default language); English in test_
     assert i18n.dt(f"{year}-09-24T21:58:00") == "24.09. 21:58"
     assert i18n.dt("2020-01-14T16:32:00") == "14.01.2020"            # earlier year: date only
     assert i18n.dt("2020-01-14T16:32:00", True) == "14.01.2020 16:32"
-    utc = datetime(year, 9, 24, 10, 0, tzinfo=timezone.utc)
+    utc = datetime(year, 9, 24, 10, 0, tzinfo=UTC)
     assert i18n.dt(utc.isoformat()) == utc.astimezone().strftime("%d.%m. %H:%M")  # sender's offset -> local
     assert web.usd(0.00009, 5) == "$0.00009"
 

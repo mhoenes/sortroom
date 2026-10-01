@@ -4,9 +4,9 @@ Google: every user registers their own OAuth client (a "Desktop app"), since Gma
 restricted and a shared app would need Google's security assessment. Microsoft: Sortroom brings its
 own app (a public client for personal and work accounts, no secret) - a personal Outlook.com
 account can't register apps without an Azure tenant - and a mailbox can still set its own client ID,
-e.g. for an organization that only allows its own apps. The client ID is set per mailbox. The sign-in is the authorization-code flow with
-PKCE and a loopback redirect to http://localhost:<port>/oauth/callback: when the admin UI runs
-on another machine the browser can't open that address, so the user copies it from the address
+e.g. for an organization that only allows its own apps. The client ID is set per mailbox. The sign-in is
+the authorization-code flow with PKCE and a loopback redirect to http://localhost:<port>/oauth/callback:
+when the admin UI runs on another machine the browser can't open that address, so the user copies it from the address
 bar into the UI, which takes the code from it. Google doesn't allow the Gmail scope in the device
 flow, so this one flow serves both providers.
 

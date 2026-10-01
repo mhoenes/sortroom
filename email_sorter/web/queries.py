@@ -66,7 +66,8 @@ def stats(db: sqlite3.Connection | None, min_confidence: float, now: datetime | 
     s.flagged_7d = db.execute(f"SELECT COUNT(*) FROM processed WHERE flagged = 1 AND {RECEIVED} >= julianday(?)",
                               (_received_since(now, timedelta(days=7)),)).fetchone()[0]
     cost, n = db.execute(
-        "SELECT COALESCE(SUM(cost_usd), 0), COUNT(*) FROM processed WHERE processed_at >= ? AND source NOT IN ('rule', 'manual')",
+        "SELECT COALESCE(SUM(cost_usd), 0), COUNT(*) FROM processed "
+        "WHERE processed_at >= ? AND source NOT IN ('rule', 'manual')",
         (month,)).fetchone()
     s.cost_month, s.classified_mails_month = cost, n
     row = db.execute("SELECT * FROM runs WHERE kind = 'run' ORDER BY started DESC, id DESC LIMIT 1").fetchone()
@@ -136,7 +137,8 @@ def recent_runs(db: sqlite3.Connection | None, limit: int = 8, skip_empty: bool 
     if db is None:
         return []
     where = "WHERE NOT (kind = 'run' AND classified = 0 AND exit_code = 0)" if skip_empty else ""
-    undoable = "live = 1 AND EXISTS (SELECT 1 FROM undo WHERE undo.run = runs.started)" if _has_table(db, "undo") else "0"
+    undoable = ("live = 1 AND EXISTS (SELECT 1 FROM undo WHERE undo.run = runs.started)"
+                if _has_table(db, "undo") else "0")
     return [dict(r) for r in db.execute(
         f"SELECT *, {undoable} AS undoable FROM runs {where} ORDER BY started DESC, id DESC LIMIT ?", (limit,))]
 
@@ -178,16 +180,16 @@ def senders(db: sqlite3.Connection | None, category: str = "", now: datetime | N
             s["jd"], s["last"] = r["jd"] or 0, r["received"]
     out = []
     for address, info in known.items():
-        s = stats.get(address)
-        if s is None and (category or not info["unsubscribed"]):
+        got = stats.get(address)
+        if got is None and (category or not info["unsubscribed"]):
             continue
         since = 0
         if info["unsubscribed"]:
             since = db.execute(f"SELECT COUNT(*) FROM processed WHERE lower(sender) = ? AND {RECEIVED} > julianday(?)",
                                (address, _iso(datetime.fromisoformat(info["unsubscribed"]).astimezone()))).fetchone()[0]
-        out.append({**info, "links": json.loads(info["unsubscribe"]), "mails": s["mails"] if s else 0,
-                    "last": s["last"] if s else None, "jd": s["jd"] if s else 0.0,
-                    "category": s["categories"].most_common(1)[0][0] if s else None, "since": since})
+        out.append({**info, "links": json.loads(info["unsubscribe"]), "mails": got["mails"] if got else 0,
+                    "last": got["last"] if got else None, "jd": got["jd"] if got else 0.0,
+                    "category": got["categories"].most_common(1)[0][0] if got else None, "since": since})
     out.sort(key=lambda s: (-s["mails"], -s["jd"], s["address"]))
     return out
 
@@ -221,7 +223,8 @@ def mails(db: sqlite3.Connection | None, f: MailFilter, min_confidence: float,
     """One page of processed mail matching the filter, newest received first, and the total count."""
     if db is None:
         return [], 0
-    where, args = [], []
+    where: list[str] = []
+    args: list[object] = []
     span = PERIODS.get(f.period)
     if span:
         where.append(f"{RECEIVED} >= julianday(?)")

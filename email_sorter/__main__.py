@@ -70,9 +70,9 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _task(args) -> str:
-    for flag, name in (("undo_run", "undo"), ("reconcile", "reconcile"), ("relocate", "relocate"), ("resort_folder", "folder re-sort"),
-                       ("rename_category", "category rename"), ("rename_folder", "folder rename"),
-                       ("recheck_expiry", "expiry recheck"), ("since", "backfill")):
+    for flag, name in (("undo_run", "undo"), ("reconcile", "reconcile"), ("relocate", "relocate"),
+                       ("resort_folder", "folder re-sort"), ("rename_category", "category rename"),
+                       ("rename_folder", "folder rename"), ("recheck_expiry", "expiry recheck"), ("since", "backfill")):
         if getattr(args, flag):
             return name
     return "run"
@@ -109,10 +109,12 @@ def _run_one(box: Mailbox, args) -> int:
                 return run_resort(cfg, creds, work, args.resort_folder, live=args.live, limit=args.limit).exit_code
             if args.rename_category:
                 from .maintenance import rename_category
-                return rename_category(*args.rename_category, live=args.live, base_dir=work).exit_code
+                old, new = args.rename_category
+                return rename_category(old, new, live=args.live, base_dir=work).exit_code
             if args.rename_folder:
                 from .maintenance import rename_folder
-                return rename_folder(cfg, creds, *args.rename_folder, live=args.live, base_dir=work).exit_code
+                old, new = args.rename_folder
+                return rename_folder(cfg, creds, old, new, live=args.live, base_dir=work).exit_code
             if args.recheck_expiry:
                 return run_recheck_expiry(cfg, creds, work, live=args.live).exit_code
             if args.since:

@@ -49,7 +49,7 @@ def resort_outcomes(mb: MailBox, cfg: Config, classifier: ClassifierClient, fold
     for chunk in chunks(uids):
         wanted = set(chunk)
         for msg in mb.fetch(AND(uid=chunk), mark_seen=False, bulk=BODY_CHUNK):
-            if msg.uid not in wanted or msg.uid in seen:
+            if not msg.uid or msg.uid not in wanted or msg.uid in seen:
                 continue  # unsolicited FETCH response
             seen.add(msg.uid)
             rule = cfg.rule_for(msg.from_)
@@ -140,7 +140,8 @@ def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, liv
             if live:
                 by_target: dict[str, list[Outcome]] = defaultdict(list)
                 for o in moving:
-                    by_target[server_folder(o.folder, delim)].append(o)
+                    if o.folder:  # always set for a mail that moves
+                        by_target[server_folder(o.folder, delim)].append(o)
                 for target, group in by_target.items():
                     try:
                         ensure_folder(mb, target)
@@ -155,7 +156,7 @@ def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, liv
                     if o.key in move_failures:
                         continue
                     store.record(replace(o, folder=None) if (o.folder or "").strip("/") == source else o)
-            elif outcomes:
+            elif outcomes and report:
                 log.info("dry run - nothing changed. Report: %s", report.path)
             mb.folder.set(cfg.source_folder)
 

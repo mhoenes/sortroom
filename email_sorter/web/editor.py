@@ -13,6 +13,7 @@ import secrets
 import threading
 import time
 import uuid
+from typing import Any
 from urllib.parse import quote
 
 from fastapi import Depends, HTTPException, Request
@@ -178,7 +179,8 @@ async def categories_test(request: Request, box_id: str):
         creds = load_credentials(box)
     except ConfigError as e:
         raise HTTPException(500, str(e)) from None
-    job = {"id": uuid.uuid4().hex[:12], "box": box.id, "key": key, "new": new, "description": description,
+    job: dict[str, Any] = {"id": uuid.uuid4().hex[:12], "box": box.id, "key": key, "new": new,
+                           "description": description,
            "status": "running", "done": 0, "total": 0, "rows": [], "cost": 0.0, "error": None,
            "started": time.time()}
     with _trials_lock:
@@ -335,12 +337,14 @@ async def mailbox_delete(request: Request, box_id: str):
         _flash(request, _("Not deleted: please type the name of the mailbox exactly."), "err")
         return back
     if _busy(request, box):
-        _flash(request, _("Not deleted: something is running for this mailbox. Please try again when it is done."), "warn")
+        _flash(request, _("Not deleted: something is running for this mailbox. Please try again when it is "
+                          "done."), "warn")
         return back
     try:
         result = await run_in_threadpool(delete_mailbox, box)
     except MailboxBusy:
-        _flash(request, _("Not deleted: something is running for this mailbox. Please try again when it is done."), "warn")
+        _flash(request, _("Not deleted: something is running for this mailbox. Please try again when it is "
+                          "done."), "warn")
         return back
     except OSError as e:
         log.exception("[%s] deleting the mailbox failed", box.id)
@@ -350,7 +354,8 @@ async def mailbox_delete(request: Request, box_id: str):
     if result["revoked"] is True:
         text += " " + _("The sign-in with Google was revoked.")
     elif result["revoked"] is False:
-        text += " " + _("Revoking the sign-in with Google failed – remove Sortroom's access at myaccount.google.com/connections.")
+        text += " " + _("Revoking the sign-in with Google failed – remove Sortroom's access at "
+                        "myaccount.google.com/connections.")
     _flash(request, text, "ok" if result["revoked"] is not False else "warn")
     return RedirectResponse("/ui", status_code=303)
 

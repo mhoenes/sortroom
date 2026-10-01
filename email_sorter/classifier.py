@@ -20,7 +20,8 @@ AUTH_STATUS = {401, 402, 403}  # bad key, no credits, forbidden - retrying won't
 
 NEEDS_ACTION_QUESTION = {
     "type": "noul",
-    "instructions": "Does this email require the recipient to do something, such as pay, reply, confirm, sign or decide?",
+    "instructions": ("Does this email require the recipient to do something, such as pay, reply, confirm, "
+                     "sign or decide?"),
     "criteria": {
         "true": "An action, payment or reply from the recipient is expected.",
         "false": "The email is informational only; nothing needs to be done.",
@@ -29,9 +30,11 @@ NEEDS_ACTION_QUESTION = {
 
 HAS_EXPIRY_QUESTION = {
     "type": "noul",
-    "instructions": "Does this email advertise an offer, discount, voucher, coupon, sale or deal that is limited in time?",
+    "instructions": ("Does this email advertise an offer, discount, voucher, coupon, sale or deal that is "
+                     "limited in time?"),
     "criteria": {
-        "true": "The offer ends or expires: a deadline, end date, 'only today', 'last days', 'ends soon' or a countdown is mentioned.",
+        "true": ("The offer ends or expires: a deadline, end date, 'only today', 'last days', 'ends soon' or "
+                 "a countdown is mentioned."),
         "false": "No offer, or the offer has no time limit.",
     },
 }

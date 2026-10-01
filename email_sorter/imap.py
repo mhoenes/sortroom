@@ -7,7 +7,7 @@ import re
 from collections import defaultdict
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
-from typing import Iterable, Iterator
+from collections.abc import Iterable, Iterator
 
 from imap_tools import AND, MailBox, MailMessage
 
@@ -18,7 +18,8 @@ from .oauth import sign_in
 log = logging.getLogger(__name__)
 
 IMAP_TIMEOUT = 120  # seconds; a stalled connection raises instead of hanging forever
-UID_CHUNK = 250  # some servers reject IMAP command lines over ~20 KB (seen with Strato): at most this many UIDs per command
+# some servers reject IMAP command lines over ~20 KB (seen with Strato): at most this many UIDs per command
+UID_CHUNK = 250
 # whole mails (attachments included) per FETCH: the answer is held in memory at once, and a few
 # large attachments per batch must not exhaust a small NAS or Raspberry Pi
 BODY_CHUNK = 20
@@ -143,11 +144,11 @@ def _since(received_values: Iterable[str | None], fallback_days: int) -> date:
 def find_uids(mb: MailBox, folder: str, wanted: dict[str, str | None], fallback_days: int) -> dict[str, str]:
     """Locate mails by message key in a folder: {key: uid}. `wanted` maps key -> received."""
     mb.folder.set(folder)
-    found = {}
+    found: dict[str, str] = {}
     since = _since(wanted.values(), fallback_days)
     for head in mb.fetch(AND(date_gte=since), mark_seen=False, headers_only=True, bulk=UID_CHUNK):
         key = message_key(head)
-        if key in wanted:
+        if key in wanted and head.uid:  # without a UID (an odd server answer) it can't be moved anyway
             found[key] = head.uid
     return found
 

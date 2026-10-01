@@ -13,7 +13,7 @@ import logging
 import os
 import threading
 from datetime import datetime, timedelta
-from typing import Callable
+from collections.abc import Callable
 
 from .config import ConfigError, Mailbox, imap_credentials, load_credentials
 from .runtime import single_instance

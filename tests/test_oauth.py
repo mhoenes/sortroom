@@ -185,7 +185,7 @@ def test_the_sign_in_flow(client, setup, token_server):
     q = {k: v[0] for k, v in parse_qs(urlsplit(link).query).items()}
     assert q["redirect_uri"] == "http://localhost/oauth/callback" and q["login_hint"] == "u"
     state = q["state"]
-    assert 'name="state" value="%s"' % state in html
+    assert f'name="state" value="{state}"' in html
 
     r = client.post("/ui/m/privat/oauth", data={"csrf": _csrf(html), "state": state,
                                                 "response_url": "http://localhost/oauth/callback?state=other&code=c"})

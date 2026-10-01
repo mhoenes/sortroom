@@ -123,8 +123,9 @@ def test_shipped_files():
         assert {"imap", "rules", "schedule", "categories"} <= set(example) and "classifier" not in example
     # the English standard categories mirror the German ones: same rules, same switches, same descriptions
     assert de["rules"].keys() == en["rules"].keys() and len(de["categories"]) == len(en["categories"])
-    for (_k, d), (_e, e) in zip(de["categories"].items(), en["categories"].items()):
-        assert {k: v for k, v in d.items() if k != "folder"} == {k: v for k, v in e.items() if k != "folder"}             or d["description"].replace("finanzen", "finance") == e["description"]
+    for (_k, d), (_e, e) in zip(de["categories"].items(), en["categories"].items(), strict=True):
+        assert ({k: v for k, v in d.items() if k != "folder"} == {k: v for k, v in e.items() if k != "folder"}
+                or d["description"].replace("finanzen", "finance") == e["description"])
         assert ("folder" in d) == ("folder" in e)
     assert "werbung" in de["categories"] and en["categories"]["promotions"]["track_expiry"]
 

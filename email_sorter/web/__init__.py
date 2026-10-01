@@ -29,7 +29,9 @@ from . import queries
 HERE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(HERE / "templates"))
 templates.env.add_extension("jinja2.ext.i18n")
-templates.env.install_gettext_callables(i18n.translate, i18n.translate_plural, newstyle=True)
+# added by the i18n extension at runtime, so a type checker doesn't know it
+templates.env.install_gettext_callables(  # type: ignore[attr-defined]
+    i18n.translate, i18n.translate_plural, newstyle=True)
 templates.env.globals["lang"] = i18n.language
 router = APIRouter()
 
@@ -331,7 +333,7 @@ def overview(request: Request, box_id: str):
         dist = queries.distribution(db, 7)
         runs = queries.recent_runs(db, 8)
         review = queries.uncertain_mails(db, cfg.min_confidence, 5, days=30)  # as stats().uncertain
-        filed, corrected = map(sum, zip(*queries.corrections(db, cfg.min_confidence).values() or [(0, 0)]))
+        filed, corrected = map(sum, zip(*queries.corrections(db, cfg.min_confidence).values() or [(0, 0)], strict=True))
         expired = queries.expired_moved(db, 7)
     finally:
         if db:
