@@ -236,3 +236,8 @@ def test_cli_runs_the_other_mailboxes_and_reports_the_broken_one(tmp_path, monke
     assert any("[arbeit] configuration error, skipped" in r.getMessage() for r in caplog.records)
     assert cli.main(["--config", str(tmp_path / "config.toml"), "--mailbox", "arbeit"]) == 2
     assert cli.main(["--config", str(tmp_path / "config.toml"), "--mailbox", "privat"]) == 0
+
+
+def test_inbox_is_no_category_key(tmp_path):
+    with pytest.raises(ConfigError, match="'inbox' is reserved"):
+        _cfg_with(tmp_path, '\n[categories.inbox]\ndescription = "Alles"\n')

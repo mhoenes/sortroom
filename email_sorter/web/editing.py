@@ -21,6 +21,13 @@ from ..config import (IMAP_AUTHS, INBOX_ACTION, SECRETS_FILE, Config, ConfigErro
 from ..i18n import DEFAULT_LANGUAGE, LANGUAGES, _
 from ..runtime import single_instance
 
+
+def reserved_key_text() -> str:
+    """Why "inbox" can't be a category key, in the UI language."""
+    return _("\"inbox\" is reserved: sender rules use it for leaving mail in the inbox. Please choose "
+             "another key.")
+
+
 _KEY_RE = re.compile(r"^[a-z0-9_]{1,40}$")
 _FOLDER_RE = re.compile(r"^[^\\%*\x00-\x1f]{1,200}$")  # IMAP list wildcards and control chars excluded
 
@@ -117,6 +124,8 @@ def save_category(box: Mailbox, shared_path: Path, key: str, form: dict, create:
     cats = doc.get("categories")
     if cats is None:
         raise EditError(_("The file has no categories."))
+    if create and key == INBOX_ACTION:
+        raise EditError(reserved_key_text())
     if create and key in cats:
         raise EditError(_("The category \"%(key)s\" already exists.", key=key))
     if not create and key not in cats:

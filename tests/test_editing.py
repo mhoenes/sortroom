@@ -146,6 +146,12 @@ def test_sender_rules_saved(setup):
         delete_category(_box(setup), shared, "werbung")
 
 
+def test_inbox_is_refused_as_a_category_key(setup):
+    shared = setup / "config.toml"
+    with pytest.raises(EditError, match="„inbox“ ist reserviert"):
+        save_category(_box(setup), shared, "inbox", {"description": "Alles"}, create=True)
+
+
 def test_sender_rules_keep_comments(setup):
     path = setup / "mailboxes" / "privat" / "mailbox.toml"
     rules = '[[sender_rules]]\nmatch = "scanner@brother.com"  # Scanner\naction = "inbox"\n\n# Kategorien\n'

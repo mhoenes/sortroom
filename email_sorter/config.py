@@ -124,6 +124,9 @@ def config_from_raw(raw: dict, where: str) -> Config:
         for key, c in raw["categories"].items():
             if not _KEY_RE.match(key):
                 raise ConfigError(f"category key {key!r} must be lowercase letters, digits or _")
+            if key == INBOX_ACTION:  # a sender rule "inbox" would be ambiguous, and so would a correction
+                raise ConfigError(f"category key {key!r} is reserved: sender rules use it for "
+                                  "leaving mail in the inbox")
             if not c.get("description", "").strip():
                 raise ConfigError(f"category {key!r} needs a description")
             categories[key] = Category(

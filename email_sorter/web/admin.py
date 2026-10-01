@@ -28,7 +28,7 @@ from ..undo import run_undo
 from ..store import Store
 from . import _box, _boxes, _sidebar, queries, require_login, router
 from .editing import (EditError, add_sender_rule, can_add_mailbox, create_mailbox, rename_category_key, with_kind,
-                      rename_folder_refs, save_shared, secrets_writable, shared_writable, writable)
+                      rename_folder_refs, reserved_key_text, save_shared, secrets_writable, shared_writable, writable)
 from .editor import _flash, _form, _page, _shared_path, auth_methods, form_number, without_secrets
 
 log = logging.getLogger(__name__)
@@ -147,6 +147,8 @@ def _job_for(request: Request, box: Mailbox, task: str, form: dict):
         old, new = str(form.get("old") or ""), str(form.get("new") or "").strip().lower()
         if old not in cfg.categories:
             raise EditError(_("Please choose a category."))
+        if new == INBOX_ACTION:
+            raise EditError(reserved_key_text())
         if not new or new in cfg.categories:
             raise EditError(_("The new key is missing or already taken."))
         if live and not writable(box):
