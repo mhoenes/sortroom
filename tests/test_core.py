@@ -252,3 +252,42 @@ def test_client_stops_after_failing_for_several_mails_in_a_row(monkeypatch):
     with pytest.raises(classifier_mod.ClassifierOutage):
         client.decide({}, CFG.descriptions)  # no more requests for this run
     assert session.calls == calls
+
+
+def test_the_log_is_migrated_once_and_in_order(tmp_path, monkeypatch):
+    import sqlite3
+    from email_sorter import store as store_mod
+    path = tmp_path / "state.db"
+    store_mod.Store(path).close()
+    db = sqlite3.connect(path)
+    assert db.execute("PRAGMA user_version").fetchone()[0] == len(store_mod.MIGRATIONS)
+    db.close()
+
+    steps = store_mod.MIGRATIONS + ("CREATE TABLE extra (x);", "INSERT INTO extra VALUES (1);")
+    monkeypatch.setattr(store_mod, "MIGRATIONS", steps)  # a later version adds two steps
+    store_mod.Store(path).close()
+    store_mod.Store(path).close()  # opened again: nothing runs twice
+    db = sqlite3.connect(path)
+    assert db.execute("PRAGMA user_version").fetchone()[0] == len(steps)
+    assert db.execute("SELECT COUNT(*) FROM extra").fetchone()[0] == 1
+    db.close()
+
+
+def test_a_failing_step_changes_nothing_and_a_newer_log_is_refused(tmp_path, monkeypatch):
+    import sqlite3
+    from email_sorter import store as store_mod
+    path = tmp_path / "state.db"
+    store_mod.Store(path).close()
+    known = len(store_mod.MIGRATIONS)
+    monkeypatch.setattr(store_mod, "MIGRATIONS", store_mod.MIGRATIONS + (
+        "CREATE TABLE half (x); INSERT INTO nowhere VALUES (1);",))
+    with pytest.raises(sqlite3.OperationalError):
+        store_mod.Store(path)
+    db = sqlite3.connect(path)
+    assert db.execute("PRAGMA user_version").fetchone()[0] == known  # the step is not counted ...
+    assert not db.execute("SELECT 1 FROM sqlite_master WHERE name = 'half'").fetchone()  # ... nor half done
+    db.execute(f"PRAGMA user_version = {known + 5}")  # a log written by a newer Sortroom
+    db.close()
+    monkeypatch.undo()
+    with pytest.raises(RuntimeError, match="newer Sortroom"):
+        store_mod.Store(path)

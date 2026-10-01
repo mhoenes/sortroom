@@ -113,8 +113,9 @@ def test_gmail_all_mail_counts_as_kept_but_not_as_place(tmp_path, monkeypatch):
 
 def test_old_source_name_is_renamed_when_the_log_is_opened(tmp_path):
     import sqlite3
-    Store(tmp_path / "state.db").close()
-    db = sqlite3.connect(tmp_path / "state.db")
+    from email_sorter.store import MIGRATIONS
+    db = sqlite3.connect(tmp_path / "state.db")  # a log of 0.7: the tables, no version yet
+    db.executescript(MIGRATIONS[0])
     db.execute("INSERT INTO processed (message_key, processed_at, category, confidence, needs_action, flagged, "
                "cost_usd, source) VALUES ('<old@x>', '2026-01-01T00:00:00', 'werbung', 0.9, 0, 0, 0, 'jev')")
     db.commit()
