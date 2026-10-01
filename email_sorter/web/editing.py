@@ -19,7 +19,8 @@ from tomlkit.items import AoT, Table
 
 from .. import jobs
 from ..config import (IMAP_AUTHS, INBOX_ACTION, SECRETS_FILE, Config, ConfigError, Mailbox, _read_toml,
-                      config_from_raw, default_label, mailbox_id_for, read_secrets, secrets_writable, write_secrets)
+                      config_from_raw, default_label, mailbox_id_for, read_secrets, secrets_writable, valid_mailbox_id,
+                      write_secrets)
 from ..i18n import DEFAULT_LANGUAGE, LANGUAGES, _
 from ..runtime import single_instance
 
@@ -187,8 +188,8 @@ def delete_category(box: Mailbox, shared_path: Path, key: str) -> None:
 
 @_one_at_a_time
 def save_settings(box: Mailbox, shared_path: Path, form: dict, busy: bool = False) -> str:
-    """Save the settings page. The mailbox folder (its id) follows the display name, so a new
-    name can move the folder; returns the id afterwards. `busy`: a job or test is running."""
+    """Save the settings page; returns the mailbox's id afterwards. The display name never changes the id:
+    only the field box_id (the folder name) does, which moves the folder. `busy`: a job or test is running."""
     doc = _doc(box)
     name = _text(form, "name", 60)
     if not name:
@@ -226,8 +227,7 @@ def save_settings(box: Mailbox, shared_path: Path, form: dict, busy: bool = Fals
     if (login or any(oauth.values())) and not secrets_writable(box.secrets_path):
         raise EditError(_("%(file)s is not writable, so the login cannot be stored.", file=SECRETS_FILE))
     text = _checked_text(box, doc, shared_path)
-    taken = {p.name for p in box.workspace.parent.iterdir() if p.is_dir()} - {box.id}
-    new_id = mailbox_id_for(name, taken)
+    new_id = _new_id(box, form)
     if new_id == box.id:
         _write(box.config_file, text)
     else:
@@ -284,6 +284,19 @@ def _sign_in_method(form: dict, imap: Table, before: Config | None) -> tuple[str
     if before is None or (before.imap_auth, before.oauth_client_id, before.oauth_tenant) != (auth, client_id, tenant):
         oauth["refresh_token"] = None
     return auth, oauth
+
+
+def _new_id(box: Mailbox, form: dict) -> str:
+    """The folder name asked for in the form; the current one when the form has none."""
+    new_id = _text(form, "box_id", 40).lower() if "box_id" in form else box.id
+    if new_id == box.id:
+        return new_id
+    if not valid_mailbox_id(new_id):
+        raise EditError(_("Folder name: lowercase letters, digits, - and _ only, starting with a letter or digit "
+                          "(max. 40)."))
+    if box.workspace.with_name(new_id).exists():
+        raise EditError(_("Folder name: mailboxes/%(id)s exists already.", id=new_id))
+    return new_id
 
 
 def _move_mailbox(box: Mailbox, new_id: str, text: str, busy: bool) -> None:
