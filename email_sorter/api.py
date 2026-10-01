@@ -65,7 +65,9 @@ async def _lifespan(app: FastAPI):
     app.state.scheduler.stop()
 
 
-app = FastAPI(title="Sortroom", version=__version__, lifespan=_lifespan)
+# the API documentation is served below, only after logging in to the admin UI
+app = FastAPI(title="Sortroom", version=__version__, lifespan=_lifespan, docs_url=None, redoc_url=None,
+              openapi_url=None)
 
 
 def _require_token(authorization: str = Header(default="")) -> None:
@@ -227,6 +229,7 @@ def get_job(job_id: str) -> dict:
 from urllib.parse import quote  # noqa: E402
 
 from fastapi import Request  # noqa: E402
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html  # noqa: E402
 from fastapi.responses import FileResponse, RedirectResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from starlette.middleware.sessions import SessionMiddleware  # noqa: E402
@@ -244,6 +247,22 @@ app.add_middleware(SessionMiddleware, secret_key=web.session_secret(), session_c
 app.middleware("http")(web.language_middleware)
 app.mount("/ui/static", StaticFiles(directory=str(web.HERE / "static")), name="static")
 app.include_router(web.router)
+
+
+@app.get("/openapi.json", include_in_schema=False, dependencies=[Depends(web.require_login)])
+def _openapi() -> dict:
+    return app.openapi()
+
+
+@app.get("/docs", include_in_schema=False, dependencies=[Depends(web.require_login)])
+def _docs():
+    """Swagger UI; it loads its viewer from cdn.jsdelivr.net (see PRIVACY.md)."""
+    return get_swagger_ui_html(openapi_url="/openapi.json", title="Sortroom API")
+
+
+@app.get("/redoc", include_in_schema=False, dependencies=[Depends(web.require_login)])
+def _redoc():
+    return get_redoc_html(openapi_url="/openapi.json", title="Sortroom API")
 
 
 @app.get("/favicon.ico", include_in_schema=False)

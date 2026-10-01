@@ -52,4 +52,12 @@
       {{ help(_('Saves, then sends the model one sample mail with the standard categories. Costs a fraction of a cent.')) }}</div>{% endif %}
   </fieldset>
 </form>
+
+<form method="post" action="/ui/sessions/end" class="card stack" style="margin-top:16px">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <h2>{{ _('Sessions') }}</h2>
+  <p class="muted" style="margin:0">{{ _('Logs out every browser that is logged in, this one too – e.g. after using someone else\'s computer, or if a login may have been copied. A logout only ends the session of its own browser.') }}</p>
+  <div class="actions"><button class="btn danger" type="submit" {% if not key_writable %}disabled title="{{ _('%(file)s is read-only.', file=secrets_file) }}"{% endif %}
+    onclick='return confirm({{ _("Log out every browser, this one too?")|tojson }})'>{{ _('Log out everywhere') }}</button></div>
+</form>
 {% endblock %}

@@ -240,6 +240,23 @@ def test_shared_settings(client, setup):
     assert r.status_code == 422 and "https" in r.text
 
 
+
+def test_log_out_everywhere(client, setup):
+    other = TestClient(api.app)  # a second browser, logged in as well
+    other.post("/login", data={"password": PASSWORD})
+    assert other.get("/ui", follow_redirects=False).status_code == 200
+    html = client.get("/ui/settings").text
+    assert "Überall abmelden" in html
+    r = client.post("/ui/sessions/end", data={"csrf": _csrf(html)}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/login"
+    for browser in (client, other):  # both are logged out, the cookie of the other one no longer counts
+        assert browser.get("/ui", follow_redirects=False).status_code == 303
+    assert "sessions_ended" in tomllib.loads((setup / "secrets.toml").read_text(encoding="utf-8"))["ui"]
+    other.post("/login", data={"password": PASSWORD})  # logging in again works at once
+    assert other.get("/ui", follow_redirects=False).status_code == 200
+    other.close()
+
+
 def test_set_expiry_by_hand(client, setup):
     html = client.get("/ui/m/privat/mails?period=all&key=%3Cm1%40x%3E").text
     token = _csrf(html)

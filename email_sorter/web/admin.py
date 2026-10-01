@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import tomllib
 from datetime import date
 from urllib.parse import quote
@@ -15,7 +16,7 @@ from ..check import check_imap, check_model
 from ..classifier import ClassifierClient, ClassifierError
 from .. import i18n
 from ..config import (EXAMPLE_MAILBOXES, INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, _read_toml,
-                      classifier_key, imap_credentials, load_credentials)
+                      classifier_key, imap_credentials, load_credentials, write_secrets)
 from ..i18n import _
 from ..maintenance import relocate_category, rename_category, rename_folder
 from ..oauth import PROVIDERS
@@ -375,6 +376,20 @@ def _shared_page(request: Request, form: dict | None = None, error: str | None =
 @router.get("/ui/settings", response_class=HTMLResponse, dependencies=[Depends(require_login)])
 def shared_settings(request: Request):
     return _shared_page(request)
+
+
+@router.post("/ui/sessions/end", dependencies=[Depends(require_login)])
+async def end_sessions(request: Request):
+    """Log out every browser: logins from before now are void (see web.sessions_ended)."""
+    await _form(request)
+    path = _shared_path(request).with_name(SECRETS_FILE)
+    if not secrets_writable(path):
+        _flash(request, _("%(file)s is not writable, so the sessions cannot be ended.", file=SECRETS_FILE), "err")
+        return RedirectResponse("/ui/settings", status_code=303)
+    write_secrets(path, "ui", {"sessions_ended": repr(time.time())})
+    log.info("all admin UI sessions ended")
+    request.session.clear()
+    return RedirectResponse("/login", status_code=303)
 
 
 @router.post("/ui/settings", response_class=HTMLResponse, dependencies=[Depends(require_login)])

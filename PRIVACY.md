@@ -65,7 +65,8 @@ All of it stays on the machine that runs Sortroom, in its folders:
   sign-in token, and the API key of the endpoint; plain text, readable only by the
   user that runs Sortroom (mode `0600`).
 
-The admin UI sets one cookie, for the login session, and loads no external resources.
+The admin UI sets one cookie, for the login session, and loads no external resources. Only the
+API documentation (`/docs`, `/redoc`, after logging in) loads its viewer from `cdn.jsdelivr.net`.
 
 ## Removing access and data
 
