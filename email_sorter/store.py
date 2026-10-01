@@ -10,6 +10,8 @@ from collections.abc import Iterable
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+# The tables as of 0.13. CREATE IF NOT EXISTS, so a log from any earlier version passes too: the tables
+# added since 0.13 (undo, senders, corrections) were created on the fly when a log was opened.
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS processed (
     message_key     TEXT PRIMARY KEY,
@@ -76,6 +78,32 @@ CREATE TABLE IF NOT EXISTS meta (
     value           TEXT NOT NULL
 );
 """
+# Every change of the log's structure is one step here, applied once and in order; PRAGMA user_version
+# holds how many a log has had. Add new steps at the end and never change one that was released: a log
+# that had it won't run it again. (Step 2: mails decided by the model were logged as 'jev' up to 0.7.10.)
+MIGRATIONS: tuple[str, ...] = (
+    _SCHEMA,
+    "UPDATE processed SET source = 'classifier' WHERE source = 'jev';",
+)
+
+
+def migrate(db: sqlite3.Connection) -> int:
+    """Bring the log up to date; returns its version afterwards. A log from a newer Sortroom is refused,
+    since this version can't know what its steps changed."""
+    version = db.execute("PRAGMA user_version").fetchone()[0]
+    if version > len(MIGRATIONS):
+        raise RuntimeError(f"the log is from a newer Sortroom (version {version}, this one knows "
+                           f"{len(MIGRATIONS)}) - update Sortroom")
+    for number, step in enumerate(MIGRATIONS[version:], start=version + 1):
+        try:  # all of a step or none
+            db.executescript(f"BEGIN;\n{step}\nPRAGMA user_version = {number};\nCOMMIT;")
+        except sqlite3.Error:
+            if db.in_transaction:
+                db.rollback()
+            raise
+    return len(MIGRATIONS)
+
+
 RUN_RETENTION_DAYS = 180
 
 MOVED, GONE = 1, 2
@@ -85,10 +113,11 @@ class Store:
     def __init__(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(path)
-        self.db.executescript(_SCHEMA)
-        # mails decided by the model were logged as 'jev' up to 0.7.10
-        self.db.execute("UPDATE processed SET source = 'classifier' WHERE source = 'jev'")
-        self.db.commit()
+        try:
+            migrate(self.db)
+        except Exception:
+            self.db.close()
+            raise
         self._undo: tuple[str, str | None] | None = None
 
     def track(self, run_started: datetime, origin: str | None = None) -> None:
