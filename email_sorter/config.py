@@ -33,9 +33,25 @@ INBOX_ACTION = "inbox"  # sender rule action: leave the mail in the inbox, untou
 
 @dataclass(frozen=True)
 class SenderRule:
-    """Mail whose sender address contains `match` goes straight to `action`, without the classifier."""
+    """Mail from a matching sender goes straight to `action`, without the classifier."""
     match: str   # lowercase
     action: str  # INBOX_ACTION or a category key
+
+    def matches(self, address: str) -> bool:
+        """`address` in lower case. A rule is
+        - an address ("news@shop.de"): exactly this sender;
+        - a domain with @ ("@shop.de"): every sender of exactly this domain;
+        - a domain without @ ("shop.de"): this domain and its subdomains ("mail.shop.de");
+        - any other text ("newsletter"): part of the address.
+        Domains are compared whole, so "@bank.de" doesn't match "x@bank.de.example" or "x@bank.dev"."""
+        domain = address.rpartition("@")[2]
+        if self.match.startswith("@"):
+            return domain == self.match[1:]
+        if "@" in self.match:
+            return address == self.match
+        if "." in self.match:
+            return domain == self.match or domain.endswith("." + self.match)
+        return self.match in address
 
 
 # Logins and the API key, set in the admin UI: mailboxes/<id>/secrets.toml ([imap] user, password;
@@ -76,8 +92,12 @@ class Config:
 
     def rule_for(self, sender: str) -> SenderRule | None:
         """The first sender rule matching this sender address, if any (case-insensitive)."""
-        sender = (sender or "").lower()
-        return next((r for r in self.sender_rules if r.match in sender), None)
+        address = (sender or "").strip().lower()
+        if "<" in address:  # "Name <address>"
+            address = address[address.rfind("<") + 1:].rstrip(">").strip()
+        if not address:
+            return None
+        return next((r for r in self.sender_rules if r.matches(address)), None)
 
     @property
     def descriptions(self) -> dict[str, str]:
