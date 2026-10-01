@@ -98,11 +98,29 @@ def test_failed_logins_from_many_addresses_lock_everyone(client, monkeypatch):
     assert "10.0.0.1" not in web._failed_logins  # old entries are dropped
 
 
+def _csrf(html):
+    return html.split('name="csrf" value="', 1)[1].split('"', 1)[0]
+
+
 def test_login_and_logout(client):
     _login(client)
-    assert client.get("/ui").status_code == 200
-    client.post("/logout")
+    html = client.get("/ui").text
+    assert client.post("/logout").status_code == 403            # without the form's token: another site
+    assert client.post("/logout", data={"csrf": "falsch"}).status_code == 403
+    assert client.get("/ui", follow_redirects=False).status_code == 200  # still logged in
+    r = client.post("/logout", data={"csrf": _csrf(html)}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/login"
     assert client.get("/ui", follow_redirects=False).status_code == 303
+
+
+def test_api_documentation_needs_the_login(client):
+    for path in ("/docs", "/redoc", "/openapi.json"):
+        r = client.get(path, follow_redirects=False)
+        assert r.status_code == 303 and r.headers["location"].startswith("/login?next=")
+    _login(client)
+    assert "swagger-ui" in client.get("/docs").text and "redoc" in client.get("/redoc").text
+    spec = client.get("/openapi.json").json()
+    assert "/run" in spec["paths"] and "/docs" not in spec["paths"]
 
 
 @pytest.mark.parametrize("target", ["//evil.example/x", "/\\evil.example", "/\\/evil.example", "/\t/evil.example",

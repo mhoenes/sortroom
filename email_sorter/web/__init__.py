@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import math
 import os
+import secrets
 import threading
 import time
 from datetime import datetime
@@ -20,7 +21,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from .. import __version__, i18n
-from ..config import ConfigError, Mailbox, default_label
+from ..config import SECRETS_FILE, ConfigError, Mailbox, default_label, read_secrets
 from ..i18n import _
 from ..sorter import expired_target
 from . import queries
@@ -72,9 +73,23 @@ class LoginRequired(Exception):
         self.next_url = next_url
 
 
+def sessions_ended(request: Request) -> float:
+    """When "Log out everywhere" was used last (seconds since 1970), 0 if never: logins from before are void.
+    Kept in the secrets.toml next to config.toml ([ui] sessions_ended)."""
+    try:
+        stored = read_secrets(request.app.state.config_path.with_name(SECRETS_FILE)).get("ui") or {}
+        return float(stored.get("sessions_ended") or 0)
+    except (ConfigError, TypeError, ValueError):
+        return 0
+
+
 def require_login(request: Request) -> None:
+    here = str(request.url.path) + (f"?{request.url.query}" if request.url.query else "")
     if not request.session.get("user"):
-        raise LoginRequired(str(request.url.path) + (f"?{request.url.query}" if request.url.query else ""))
+        raise LoginRequired(here)
+    if request.session.get("since", 0) < sessions_ended(request):  # the cookie is signed, but ended
+        request.session.clear()
+        raise LoginRequired(here)
 
 
 def _locked_for(ip: str) -> float:
@@ -123,7 +138,7 @@ def login(request: Request, password: str = Form(""), next: str = Form("/ui")):
             _failed_logins.pop(ip, None)
         request.session.clear()
         request.session["user"] = "admin"
-        request.session["since"] = int(time.time())
+        request.session["since"] = time.time()  # with fractions: "Log out everywhere" may come in the same second
         return RedirectResponse(_safe_next(next), status_code=303)
     with _failed_lock:
         _failed_logins.setdefault(ip, []).append(_clock())
@@ -133,7 +148,11 @@ def login(request: Request, password: str = Form(""), next: str = Form("/ui")):
 
 
 @router.post("/logout")
-def logout(request: Request):
+async def logout(request: Request):
+    """Log out; with the form's CSRF token, so another site can't log you out."""
+    sent = str((await request.form()).get("csrf", ""))
+    if not sent or not secrets.compare_digest(sent, request.session.get("csrf", "")):
+        raise HTTPException(403, _("Form expired – please reload the page."))
     request.session.clear()
     return RedirectResponse("/login", status_code=303)
 
