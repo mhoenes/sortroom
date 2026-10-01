@@ -10,7 +10,8 @@ import logging
 import threading
 import uuid
 from datetime import datetime
-from typing import Callable
+from collections.abc import Callable
+from typing import Any
 
 from .config import Mailbox
 from .runtime import single_instance
@@ -56,7 +57,8 @@ def start(box: Mailbox, kind: str, label: str, fn: Callable[[], object], request
     app_log = logging.getLogger("email_sorter")
     if app_log.getEffectiveLevel() > logging.INFO:  # the job log shows INFO lines even if the console doesn't
         app_log.setLevel(logging.INFO)
-    job = {"id": uuid.uuid4().hex[:12], "mailbox": box.id, "kind": kind, "label": label, "status": "running",
+    job: dict[str, Any] = {"id": uuid.uuid4().hex[:12], "mailbox": box.id, "kind": kind, "label": label,
+                           "status": "running",
            "started": _now(), "finished": None, "request": request or {}, "result": None, "error": None, "log": []}
     with _lock:
         _jobs[job["id"]] = job

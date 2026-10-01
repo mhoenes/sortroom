@@ -9,6 +9,7 @@ from email_sorter.config import Config, Credentials, SenderRule
 from email_sorter.classifier import Decision
 from email_sorter.store import Store
 from support import example_config
+from datetime import UTC
 
 # the example mailbox has no sender rules; these tests use the scanner rule of a real setup
 CFG = Config(**{**example_config().__dict__, "min_age_hours": 0,
@@ -133,7 +134,7 @@ def test_unknown_folder(env):
 
 def test_inbox_resort_respects_min_age(env, monkeypatch):
     from datetime import datetime, timedelta, timezone
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     env.mb.folders["INBOX"] = dict(env.mb.folders.pop("INBOX.Reisen"))
     ages = {"1": 30, "2": 2, "3": 48, "4": 1, "5": 72}  # hours since arrival
     monkeypatch.setattr(sorter, "received_times",

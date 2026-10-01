@@ -109,13 +109,13 @@ def run_undo(cfg: Config, creds: Credentials, base_dir: Path, run: str, live: bo
         handled = [e for e in todo if e["key"] not in missing and e["key"] not in failed]
         if live:
             restore, forget, back_to = [], [], {}
-            for e in handled:
-                if e["before"]:
-                    restore.append({**e["before"], "moved_to": e["origin"]})
+            for entry in handled:
+                if entry["before"]:
+                    restore.append({**entry["before"], "moved_to": entry["origin"]})
                 elif sort_again:
-                    forget.append(e["key"])
+                    forget.append(entry["key"])
                 else:
-                    back_to[e["key"]] = e["origin"]
+                    back_to[entry["key"]] = entry["origin"]
             store.undo(run, restore, forget, back_to, keep=failed)
             finish(store, "undo", run, started, RunResult(
                 exit_code=1 if failed else 0, live=True, classified=len(handled), moved=moved, failed=len(failed)))

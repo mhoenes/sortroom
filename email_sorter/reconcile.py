@@ -60,7 +60,7 @@ def _corrections(cfg: Config, store: Store, found: dict[str, str | None]) -> lis
     for name, c in cfg.categories.items():
         if c.folder:
             by_folder.setdefault(c.folder.strip("/"), []).append(name)
-    out = []
+    out: list[tuple[str, str, str | None]] = []
     for key, category, moved_to in store.model_decisions(cfg.min_confidence):
         where = found.get(key)
         if where is None:

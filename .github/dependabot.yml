@@ -1,4 +1,5 @@
-# Keeps the GitHub Actions versions current (e.g. runtime deprecations like Node 20).
+# Proposes updates of the GitHub Actions pinned in .github/workflows (a pull request a month at most).
+# Python packages are pinned in requirements-lock.txt and updated by hand (see its header).
 version: 2
 updates:
   - package-ecosystem: github-actions

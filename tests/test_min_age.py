@@ -1,9 +1,9 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from types import SimpleNamespace
 
 from email_sorter import imap, sorter
 
-NOW = datetime(2026, 9, 24, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 24, 12, 0, tzinfo=UTC)
 
 
 class FakeClient:
@@ -24,9 +24,9 @@ def test_received_times_parses_uid_and_internaldate_in_any_order():
     ])
     times = imap.received_times(SimpleNamespace(client=client), ["261848", "261877", "261879"])
     assert times == {
-        "261848": datetime(2026, 8, 18, 13, 29, 18, tzinfo=timezone.utc),
-        "261877": datetime(2026, 9, 4, 7, 34, 45, tzinfo=timezone.utc),
-        "261879": datetime(2026, 9, 24, 9, 55, 40, tzinfo=timezone.utc),
+        "261848": datetime(2026, 8, 18, 13, 29, 18, tzinfo=UTC),
+        "261877": datetime(2026, 9, 4, 7, 34, 45, tzinfo=UTC),
+        "261879": datetime(2026, 9, 24, 9, 55, 40, tzinfo=UTC),
     }
     assert client.calls == [("FETCH", "261848,261877,261879", "(INTERNALDATE)")]
 

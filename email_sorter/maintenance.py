@@ -58,7 +58,7 @@ def rename_folder(cfg: Config, creds: Credentials, old: str, new: str, live: boo
             renamed = [new_srv + name[len(old_srv):] for name in tree]
             mails = sum(mb.folder.status(name, ["MESSAGES"])["MESSAGES"] for name in tree)
             records = store.count_moved_to(old)
-            for a, b in zip(tree, renamed):
+            for a, b in zip(tree, renamed, strict=True):
                 log.info("%s %s -> %s", "renaming" if live else "dry run: would rename", a, b)
             log.info("%s %d mail(s) on the server, %d record(s) in the log",
                      "moving" if live else "would move", mails, records)
@@ -66,7 +66,7 @@ def rename_folder(cfg: Config, creds: Credentials, old: str, new: str, live: boo
                 return RunResult(exit_code=0, live=False, moved=mails, classified=records)
 
             mb.folder.rename(old_srv, new_srv)  # IMAP RENAME takes the subfolders along
-            for a, b in zip(tree, renamed):
+            for a, b in zip(tree, renamed, strict=True):
                 try:
                     mb.folder.subscribe(a, False)
                 except Exception:  # an old name that was never subscribed

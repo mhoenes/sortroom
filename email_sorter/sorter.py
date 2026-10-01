@@ -6,9 +6,9 @@ import csv
 import logging
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, UTC
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 from imap_tools import AND, MailBox, MailMessage, MailMessageFlags
 
@@ -83,7 +83,7 @@ def old_enough(times: dict[str, datetime], uids: list[str], min_age_hours: float
     """UIDs that arrived at least min_age_hours ago. Unknown arrival time counts as old enough."""
     if min_age_hours <= 0:
         return uids
-    cutoff = (now or datetime.now(timezone.utc)) - timedelta(hours=min_age_hours)
+    cutoff = (now or datetime.now(UTC)) - timedelta(hours=min_age_hours)
     return [u for u in uids if u not in times or times[u] <= cutoff]
 
 
@@ -129,7 +129,7 @@ def classify_new(
     kept = 0
     for head in mb.fetch(criteria, mark_seen=False, headers_only=True, bulk=UID_CHUNK):
         key = message_key(head)
-        if store.is_processed(key) or (exclude and key in exclude):
+        if not head.uid or store.is_processed(key) or (exclude and key in exclude):
             continue
         rule = cfg.rule_for(head.from_)
         if rule and rule.action == INBOX_ACTION:
@@ -170,11 +170,11 @@ def classify_new(
     for msg in mb.fetch(AND(uid=uids), mark_seen=False, bulk=BODY_CHUNK):
         # match by UID; fall back to the message key when the server's response carries
         # no usable UID (e.g. another client changed flags while we were fetching)
-        uid = msg.uid if msg.uid in pending else uid_by_key.get(message_key(msg)) if msg.headers else None
-        if uid is None or pending[uid] in done:
+        matched = msg.uid if msg.uid in pending else uid_by_key.get(message_key(msg)) if msg.headers else None
+        if matched is None or pending[matched] in done:
             continue  # unsolicited FETCH without a mail we asked for
-        done.add(pending[uid])
-        msg_uid = uid
+        done.add(pending[matched])
+        msg_uid = matched
         try:  # whatever goes wrong with one mail, the others are still sorted
             decision = classifier.decide(build_state(msg, cfg.max_body_chars), descriptions)
             folder, flag, note = plan(decision, cfg)
@@ -471,7 +471,7 @@ def run(cfg: Config, creds: Credentials, base_dir: Path, live: bool, limit: int 
             if live:
                 failures = apply(mb, outcomes, store)
                 tagged = move_expired(mb, cfg, store)
-            elif outcomes:
+            elif outcomes and report:
                 log.info("dry run - nothing changed. Report: %s", report.path)
             code = 1 if (failed or failures) else 0
             return finish(store, "run", None, started, with_outage(
@@ -547,7 +547,7 @@ def run_backfill(cfg: Config, creds: Credentials, base_dir: Path, live: bool,
             tagged = 0
             if live:
                 tagged = move_expired(mb, cfg, store)
-            elif all_outcomes:
+            elif all_outcomes and report:
                 log.info("dry run - nothing changed. Report: %s", report.path)
             if all_failed:
                 log.warning("%d mail(s) could not be classified; run the backfill again to retry", len(all_failed))

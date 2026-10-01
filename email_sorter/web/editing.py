@@ -54,13 +54,19 @@ def _one_at_a_time(fn):
 
 
 def writable(box: Mailbox) -> bool:
-    return bool(box.config_file) and box.config_file.exists() and os.access(box.config_file, os.W_OK)
+    file = box.config_file
+    return file is not None and file.exists() and os.access(file, os.W_OK)
+
+
+def _config_file(box: Mailbox) -> Path:
+    """The mailbox.toml the UI may change."""
+    if box.config_file is None or not writable(box):
+        raise EditError(_("These settings are read-only."))
+    return box.config_file
 
 
 def _doc(box: Mailbox) -> tomlkit.TOMLDocument:
-    if not writable(box):
-        raise EditError(_("These settings are read-only."))
-    return tomlkit.parse(box.config_file.read_text(encoding="utf-8"))
+    return tomlkit.parse(_config_file(box).read_text(encoding="utf-8"))
 
 
 def _checked_text(box: Mailbox, doc: tomlkit.TOMLDocument, shared_path: Path) -> str:
@@ -68,7 +74,7 @@ def _checked_text(box: Mailbox, doc: tomlkit.TOMLDocument, shared_path: Path) ->
     text = tomlkit.dumps(doc)
     try:
         config_from_raw({**tomllib.loads(text), "classifier": _read_toml(shared_path)["classifier"]},
-                        box.config_file.name)
+                        _config_file(box).name)
     except (ConfigError, tomllib.TOMLDecodeError, KeyError) as e:
         raise EditError(_("Not saved: %(e)s", e=e)) from None
     return text
@@ -83,7 +89,7 @@ def _write(path: Path, text: str) -> None:
 
 
 def _save(box: Mailbox, doc: tomlkit.TOMLDocument, shared_path: Path) -> None:
-    _write(box.config_file, _checked_text(box, doc, shared_path))
+    _write(_config_file(box), _checked_text(box, doc, shared_path))
 
 
 # ---------------------------------------------------------------- form parsing
@@ -109,7 +115,8 @@ def _number(form: dict, name: str, label: str, lo: float, hi: float, integer: bo
     except ValueError:
         raise EditError(_("%(label)s: please enter a number.", label=label)) from None
     if not lo <= value <= hi:
-        raise EditError(_("%(label)s: allowed are values from %(lo)s to %(hi)s.", label=label, lo=f"{lo:g}", hi=f"{hi:g}"))
+        raise EditError(_("%(label)s: allowed are values from %(lo)s to %(hi)s.", label=label, lo=f"{lo:g}",
+                          hi=f"{hi:g}"))
     if integer:
         if value != int(value):
             raise EditError(_("%(label)s: please enter a whole number.", label=label))
@@ -215,7 +222,8 @@ def save_settings(box: Mailbox, shared_path: Path, form: dict, busy: bool = Fals
     if "schedule_minutes" in form:  # the settings page always sends it; older callers leave the schedule alone
         schedule = doc.setdefault("schedule", tomlkit.table())
         schedule["enabled"] = _checked(form, "schedule_enabled")
-        schedule["interval_minutes"] = _number(form, "schedule_minutes", _("Interval in minutes"), 1, 1440, integer=True)
+        schedule["interval_minutes"] = _number(form, "schedule_minutes", _("Interval in minutes"), 1, 1440,
+                                               integer=True)
         if "reconcile_hours" in form:  # likewise
             schedule["reconcile_enabled"] = _checked(form, "reconcile_enabled")
             schedule["reconcile_hours"] = _number(form, "reconcile_hours", _("Interval in hours"), 1, 720,
@@ -229,7 +237,7 @@ def save_settings(box: Mailbox, shared_path: Path, form: dict, busy: bool = Fals
     text = _checked_text(box, doc, shared_path)
     new_id = _new_id(box, form)
     if new_id == box.id:
-        _write(box.config_file, text)
+        _write(_config_file(box), text)
     else:
         _move_mailbox(box, new_id, text, busy)
     secrets = box.workspace.with_name(new_id) / SECRETS_FILE  # it moved along with the folder
@@ -277,7 +285,7 @@ def _sign_in_method(form: dict, imap: Table, before: Config | None) -> tuple[str
     if tenant and not _TENANT_RE.match(tenant):
         raise EditError(_("Tenant: \"common\", \"consumers\", \"organizations\" or your tenant's ID or domain."))
     _set(imap, "oauth_tenant", tenant, default="")
-    oauth = {}
+    oauth: dict[str, str | None] = {}
     secret = _secret_text(form, "oauth_client_secret", _("Client secret"), strip=True) if auth == "google" else ""
     if secret:
         oauth["client_secret"] = secret
@@ -302,6 +310,7 @@ def _new_id(box: Mailbox, form: dict) -> str:
 def _move_mailbox(box: Mailbox, new_id: str, text: str, busy: bool) -> None:
     """Rename the mailbox folder to new_id and save its settings there - both or neither."""
     target = box.workspace.with_name(new_id)
+    file_name = _config_file(box).name  # before the move: afterwards the old path is gone
     refused = _("The mailbox is busy, so neither the name nor the folder was changed. Please try again "
                 "when the run or job is done.")
     if busy:
@@ -314,7 +323,7 @@ def _move_mailbox(box: Mailbox, new_id: str, text: str, busy: bool) -> None:
         except OSError as e:
             raise EditError(_("The folder could not be renamed: %(e)s", e=e)) from None
         try:
-            _write(target / box.config_file.name, text)
+            _write(target / file_name, text)
         except OSError as e:
             os.rename(target, box.workspace)
             raise EditError(_("Not saved: %(e)s", e=e)) from None

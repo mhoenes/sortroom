@@ -22,8 +22,8 @@ import logging
 import os
 import secrets
 from contextlib import asynccontextmanager
+from functools import partial
 from datetime import date
-from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -54,7 +54,7 @@ def _mailboxes() -> dict[str, Mailbox]:
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     try:
-        boxes = load_mailboxes(BASE_DIR, CONFIG_PATH).values()
+        boxes = list(load_mailboxes(BASE_DIR, CONFIG_PATH).values())
     except ConfigError:
         boxes = []
     for box in boxes:  # the PID lock files of versions up to 0.13.1; the lock is in mailboxes/.locks/ now
@@ -177,7 +177,7 @@ def run_now(req: RunRequest | None = None) -> dict:
     for box in selected:
         creds = _credentials(box)
         result = _run_locked(box, "LIVE run" if req.live else "dry run",
-                             lambda: run(box.cfg, creds, box.workspace, live=req.live, limit=req.limit))
+                             partial(run, box.cfg, creds, box.workspace, live=req.live, limit=req.limit))
         if result is None:
             if req.mailbox:
                 raise HTTPException(409, f"[{box.id}] another run is active")
@@ -194,7 +194,8 @@ def recheck(req: RecheckRequest | None = None) -> dict:
     req = req or RecheckRequest()
     box = _pick(_mailboxes(), req.mailbox)
     creds = _credentials(box)
-    result = _run_locked(box, "expiry recheck", lambda: run_recheck_expiry(box.cfg, creds, box.workspace, live=req.live))
+    result = _run_locked(box, "expiry recheck",
+                         partial(run_recheck_expiry, box.cfg, creds, box.workspace, live=req.live))
     if result is None:
         raise HTTPException(409, f"[{box.id}] another run is active")
     return result
@@ -209,9 +210,11 @@ def backfill(req: BackfillRequest) -> dict:
         raise HTTPException(409, f"[{box.id}] another run is active")
     creds = _credentials(box)
     # the label shows in the admin UI's job list, in its language (set by the language middleware)
-    label = _("Backfill since %(date)s", date=i18n.date(req.since.isoformat())) + ("" if req.live else f" ({_('dry run')})")
+    label = (_("Backfill since %(date)s", date=i18n.date(req.since.isoformat()))
+             + ("" if req.live else f" ({_('dry run')})"))
     job = jobs.start(box, "backfill", label,
-                     lambda: run_backfill(box.cfg, creds, box.workspace, live=req.live, since=req.since, limit=req.limit),
+                     partial(run_backfill, box.cfg, creds, box.workspace, live=req.live, since=req.since,
+                             limit=req.limit),
                      request=req.model_dump(mode="json"))
     return jobs.public(job)
 

@@ -39,7 +39,9 @@ def svg(v: dict) -> str:
 def png(v: dict, size: int, rounded: bool = True) -> Image.Image:
     k = 8                          # supersampling
     S = size * k / 64
-    s = lambda u: u * S
+
+    def s(u):
+        return u * S
     img = Image.new("RGBA", (size * k, size * k), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     if rounded:

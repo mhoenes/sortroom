@@ -36,7 +36,7 @@ def setup_logging(verbose: bool) -> None:
     logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 
-if os.name == "nt":
+if sys.platform == "win32":
     import msvcrt
 
     def _try_lock(fd: int) -> bool:
