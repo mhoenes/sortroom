@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from email_sorter import reconcile, unsubscribe
+from email_sorter import imap, reconcile, unsubscribe
 from email_sorter.classifier import Decision
 from email_sorter.config import Credentials
 from email_sorter.mailtext import unsubscribe_links
@@ -83,7 +83,7 @@ def test_reconcile_reads_the_links_of_logged_mails(tmp_path, monkeypatch):
     heads = [raw_headers("<a@x>", "News <news@shop.example>", date="Sun, 20 Sep 2026 10:00:00 +0000",
                          list_unsubscribe="<https://shop/u>", list_unsubscribe_post="List-Unsubscribe=One-Click"),
              raw_headers("<unknown@x>", "other@x", list_unsubscribe="<https://other/u>")]
-    monkeypatch.setattr(reconcile, "MailBox", lambda *a, **kw: FakeMailBox(heads))
+    monkeypatch.setattr(imap, "MailBox", lambda *a, **kw: FakeMailBox(heads))
     reconcile.run_reconcile(CFG, CREDS, tmp_path, live=False)
     store = Store(tmp_path / "data" / "state.db")
     assert store.sender("news@shop.example") is None  # a dry run changes nothing

@@ -19,9 +19,8 @@ from imap_tools import MailBox
 from .config import Config, Credentials
 from .i18n import _
 from .mailtext import message_key, received_of, unsubscribe_links
-from .sorter import IMAP_TIMEOUT, _delimiter, header_fields
+from .imap import connect, delimiter, header_fields
 from .store import Store
-from .oauth import sign_in
 
 log = logging.getLogger(__name__)
 
@@ -82,8 +81,8 @@ def _corrections(cfg: Config, store: Store, found: dict[str, str | None]) -> lis
 def run_reconcile(cfg: Config, creds: Credentials, base_dir: Path, live: bool) -> dict:
     store = Store(base_dir / "data" / "state.db")
     try:
-        with sign_in(MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT), creds, cfg.source_folder) as mb:
-            delim = _delimiter(mb)
+        with connect(cfg, creds) as mb:
+            delim = delimiter(mb)
             source = cfg.source_folder.strip("/")
             found: dict[str, str | None] = {}  # message key -> folder (config notation); None: only in a view
             links: dict[str, tuple] = {}  # message key -> (sender, links, one-click?, date), for the senders list

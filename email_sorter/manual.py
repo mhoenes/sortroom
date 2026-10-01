@@ -8,14 +8,11 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from imap_tools import MailBox
-
 from .config import INBOX_ACTION, Config, Credentials
 from .i18n import _
-from .sorter import (IMAP_TIMEOUT, MAX_EXPIRY_AGE_DAYS, move_uids, server_folder, _delimiter, _ensure_folder,
-                     _find_uids)
+from .imap import connect, delimiter, ensure_folder, find_uids, move_uids, server_folder
+from .sorter import MAX_EXPIRY_AGE_DAYS
 from .store import Store
-from .oauth import sign_in
 
 log = logging.getLogger(__name__)
 
@@ -57,17 +54,17 @@ def move_mail(cfg: Config, creds: Credentials, base_dir: Path, key: str, categor
         target = target_for(cfg, category)
         current = row["moved_to"]
         if (current or None) != (target or None):
-            with sign_in(MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT), creds, cfg.source_folder) as mb:
-                delim = _delimiter(mb)
+            with connect(cfg, creds) as mb:
+                delim = delimiter(mb)
                 src = server_folder(current or cfg.source_folder, delim)
                 dst = server_folder(target or cfg.source_folder, delim)
                 if not mb.folder.exists(src):
                     raise ManualError(_("The folder %(folder)s no longer exists.", folder=current or cfg.source_folder))
-                uids = _find_uids(mb, src, {key: row["received"]}, fallback_days=MAX_EXPIRY_AGE_DAYS)
+                uids = find_uids(mb, src, {key: row["received"]}, fallback_days=MAX_EXPIRY_AGE_DAYS)
                 if key not in uids:
                     raise ManualError(_("The mail is no longer in %(folder)s – deleted or moved by hand?",
                                         folder=current or cfg.source_folder))
-                _ensure_folder(mb, dst)
+                ensure_folder(mb, dst)
                 move_uids(mb, [uids[key]], dst)
                 mb.folder.set(cfg.source_folder)
             log.info("moved %r by hand: %s -> %s", row["subject"], src, dst)

@@ -1,7 +1,7 @@
 from datetime import datetime
 from types import SimpleNamespace
 
-from email_sorter import undo
+from email_sorter import imap, undo
 from email_sorter.classifier import Decision
 from email_sorter.config import Credentials
 from email_sorter.sorter import RunResult
@@ -71,7 +71,7 @@ def _run(store, started, kind="run", detail=None):
 
 def _setup(tmp_path, monkeypatch, folders, starred=()):
     fake = FakeMailBox(folders, starred)
-    monkeypatch.setattr(undo, "MailBox", lambda *a, **kw: fake)
+    monkeypatch.setattr(imap, "MailBox", lambda *a, **kw: fake)
     store = Store(tmp_path / "data" / "state.db")
     return fake, store
 

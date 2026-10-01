@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from email_sorter import maintenance
+from email_sorter import imap, maintenance
 from email_sorter.config import Credentials
 from email_sorter.classifier import Decision
 from email_sorter.store import Store
@@ -93,7 +93,7 @@ class FakeMailBox:
 
 def _setup(tmp_path, monkeypatch, folders):
     fake = FakeMailBox(FakeFolders(folders))
-    monkeypatch.setattr(maintenance, "MailBox", lambda *a, **kw: fake)
+    monkeypatch.setattr(imap, "MailBox", lambda *a, **kw: fake)
     store = Store(tmp_path / "data" / "state.db")
     _record(store, "a", "werbung", "INBOX/Newsletter")
     _record(store, "b", "werbung", "INBOX/Newsletter/Abgelaufen")
@@ -168,7 +168,7 @@ def _record_conf(store, key, category, moved_to, confidence):
 def _relocate_setup(tmp_path, monkeypatch):
     fake = RelocateMailBox({"INBOX": {"1": "<p1@x>", "2": "<p2@x>", "3": "<n1@x>"},
                             "INBOX.Benachrichtigungen": {}})
-    monkeypatch.setattr(maintenance, "MailBox", lambda *a, **kw: fake)
+    monkeypatch.setattr(imap, "MailBox", lambda *a, **kw: fake)
     store = Store(tmp_path / "data" / "state.db")
     _record_conf(store, "<p1@x>", "portal", None, 0.95)
     _record_conf(store, "<p2@x>", "portal", None, 0.50)                      # uncertain: not moved

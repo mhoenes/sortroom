@@ -17,13 +17,12 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from imap_tools import MailBox, MailMessageFlags
+from imap_tools import MailMessageFlags
 
 from .config import Config, Credentials
 from .i18n import _
-from .oauth import sign_in
-from .sorter import (IMAP_TIMEOUT, RunResult, move_uids, server_folder, _chunks, _delimiter, _ensure_folder,
-                     _find_uids, _finish, _group_by_folder)
+from .imap import chunks, connect, delimiter, ensure_folder, find_uids, group_by_folder, move_uids, server_folder
+from .sorter import RunResult, finish
 from .store import MOVED, Store
 
 log = logging.getLogger(__name__)
@@ -62,17 +61,16 @@ def run_undo(cfg: Config, creds: Credentials, base_dir: Path, run: str, live: bo
         failed: set[str] = set()
         moved = unflagged = 0
         if on_server:
-            with sign_in(MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT), creds,
-                         cfg.source_folder) as mb:
-                delim = _delimiter(mb)
+            with connect(cfg, creds) as mb:
+                delim = delimiter(mb)
                 rows = [(k, e["moved_to"], e["row"]["received"]) for k, e in on_server.items()]
                 try:
-                    for folder, wanted in _group_by_folder(rows, cfg, delim).items():
+                    for folder, wanted in group_by_folder(rows, cfg, delim).items():
                         if not mb.folder.exists(folder):
                             log.warning("%s no longer exists, skipping %d mail(s)", folder, len(wanted))
                             missing.update(wanted)
                             continue
-                        uids = _find_uids(mb, folder, wanted, fallback_days=3650)
+                        uids = find_uids(mb, folder, wanted, fallback_days=3650)
                         missing.update(set(wanted) - set(uids))
                         star = [uid for k, uid in uids.items() if on_server[k]["unflag"]]
                         back: dict[str, dict[str, str]] = defaultdict(dict)  # target -> {key: uid}
@@ -90,7 +88,7 @@ def run_undo(cfg: Config, creds: Credentials, base_dir: Path, run: str, live: bo
                             unflagged += len(star)
                             continue
                         try:
-                            for chunk in _chunks(star):  # before moving: a move gives the mails new UIDs
+                            for chunk in chunks(star):  # before moving: a move gives the mails new UIDs
                                 mb.flag(chunk, MailMessageFlags.FLAGGED, False)
                             unflagged += len(star)
                         except Exception as e:
@@ -98,8 +96,8 @@ def run_undo(cfg: Config, creds: Credentials, base_dir: Path, run: str, live: bo
                             failed.update(k for k, uid in uids.items() if uid in star)
                         for target, group in back.items():
                             try:
-                                _ensure_folder(mb, target)
-                                for chunk in _chunks(list(group.values())):
+                                ensure_folder(mb, target)
+                                for chunk in chunks(list(group.values())):
                                     move_uids(mb, chunk, target)
                                 moved += len(group)
                             except Exception as e:
@@ -119,7 +117,7 @@ def run_undo(cfg: Config, creds: Credentials, base_dir: Path, run: str, live: bo
                 else:
                     back_to[e["key"]] = e["origin"]
             store.undo(run, restore, forget, back_to, keep=failed)
-            _finish(store, "undo", run, started, RunResult(
+            finish(store, "undo", run, started, RunResult(
                 exit_code=1 if failed else 0, live=True, classified=len(handled), moved=moved, failed=len(failed)))
             if forget:
                 log.info("%d mail(s) will be sorted again at the next run", len(forget))

@@ -6,7 +6,8 @@ import requests
 from email_sorter import classifier as classifier_mod
 from email_sorter.classifier import Decision, ClassifierAuthError, ClassifierClient, ClassifierError, build_request, parse_response
 from email_sorter.mailtext import clean_body, html_to_text
-from email_sorter.sorter import plan, server_folder
+from email_sorter.imap import server_folder
+from email_sorter.sorter import plan
 from support import example_config
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -199,7 +200,7 @@ def test_clean_body_truncates():
 def test_move_creates_folder_the_server_says_is_missing():
     from types import SimpleNamespace
 
-    from email_sorter.sorter import move_uids
+    from email_sorter.imap import move_uids
 
     class Box:
         def __init__(self, create_ok=True):

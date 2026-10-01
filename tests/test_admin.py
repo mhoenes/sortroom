@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from email_sorter import api, jobs, manual
+from email_sorter import api, imap, jobs, manual
 from email_sorter.config import load_mailboxes
 from email_sorter.classifier import Decision
 from email_sorter.sorter import RunResult
@@ -79,7 +79,7 @@ def test_job_rejected_when_mailbox_locked(setup):
 
 def test_move_mail_to_category_without_folder_needs_no_imap(setup, monkeypatch):
     box = _box(setup)
-    monkeypatch.setattr(manual, "MailBox", None)  # would fail if IMAP were touched
+    monkeypatch.setattr(imap, "MailBox", None)  # would fail if IMAP were touched
     save = dict(box.cfg.categories)
     assert manual.target_for(box.cfg, "inbox") is None
     with pytest.raises(manual.ManualError):

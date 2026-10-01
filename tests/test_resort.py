@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 from imap_tools import MailMessage
 
-from email_sorter import resort, sorter
+from email_sorter import imap, resort, sorter
 from email_sorter.config import Config, Credentials, SenderRule
 from email_sorter.classifier import Decision
 from email_sorter.store import Store
@@ -83,7 +83,7 @@ def env(tmp_path, monkeypatch):
     reisen = {str(u): _mail(u, s) for u, s in enumerate(ANSWERS, start=1)}
     fake = FakeMailBox({"INBOX": {}, "INBOX.Reisen": reisen, "INBOX.Werbung.Abgelaufen": {}})
     classifier = FakeClassifier()
-    monkeypatch.setattr(resort, "MailBox", lambda *a, **kw: fake)
+    monkeypatch.setattr(imap, "MailBox", lambda *a, **kw: fake)
     monkeypatch.setattr(Config, "classifier_client", lambda self, key: classifier)
     return SimpleNamespace(mb=fake, classifier=classifier, tmp=tmp_path)
 
