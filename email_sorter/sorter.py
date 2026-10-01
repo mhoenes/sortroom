@@ -177,7 +177,7 @@ def _folder_hint(name: str) -> str:
     """Gmail keeps mail in labels, and a label below INBOX is not a place mail can be moved to."""
     if "/" in name and name.split("/", 1)[0].upper() == "INBOX":
         return (f" On Gmail use a top-level label such as {name.split('/', 1)[1]!r} instead of {name!r} "
-                "(Kategorien → Zielordner).")
+                "(Categories → Target folder).")
     return ""
 
 

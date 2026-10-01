@@ -39,7 +39,7 @@ class _Capture(logging.Handler):
             lines.append(f"{datetime.fromtimestamp(record.created):%H:%M:%S} {record.levelname:<7} "
                          f"{record.getMessage()}")
         elif len(lines) == MAX_LOG_LINES:
-            lines.append("… (weitere Zeilen im Log-File)")
+            lines.append("… (more lines in logs/sortroom.log)")
 
 
 _capture = _Capture(level=logging.INFO)

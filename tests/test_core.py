@@ -219,7 +219,7 @@ def test_move_creates_folder_the_server_says_is_missing():
     box = Box()
     move_uids(box, ["1"], "Werbung")
     assert box.created == ["Werbung"] and box.moves == [(["1"], "Werbung")]
-    with pytest.raises(RuntimeError, match="top-level label such as 'Werbung'"):
+    with pytest.raises(RuntimeError, match=r"top-level label such as 'Werbung' .*\(Categories → Target folder\)"):
         move_uids(Box(create_ok=False), ["1"], "INBOX/Werbung")
 
 
