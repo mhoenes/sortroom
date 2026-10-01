@@ -23,10 +23,12 @@
     <section class="card stack">
       <h2>{{ _('Mailbox') }}</h2>
       <div class="grid cols-3">
-        <label class="f"><span class="lt">{{ _('Display name') }} {{ help(_('Name of the mailbox in the interface. Its folder under mailboxes/ follows the name.')) }}</span>
-          <input type="text" name="name" value="{{ form.name }}" maxlength="60" required
-            data-id-preview="box-id" data-id-note="box-id-note" data-current="{{ box.id }}" data-taken='{{ taken_ids|tojson }}'>
-          <span class="hint muted" style="font-weight:400">{{ _('Folder') }}: <span class="mono">mailboxes/<span id="box-id">{{ box.id }}</span></span></span>
+        <label class="f"><span class="lt">{{ _('Display name') }} {{ help(_("Name of the mailbox in the interface. Changing it doesn't change the folder name.")) }}</span>
+          <input type="text" name="name" value="{{ form.name }}" maxlength="60" required></label>
+        <label class="f"><span class="lt">{{ _('Folder name') }} {{ help(_("Folder of the mailbox under mailboxes/, and its id for the HTTP API, --mailbox and the addresses of this interface. Change it only on purpose: scripts that use the old id need the new one.")) }}</span>
+          <input type="text" name="box_id" value="{{ form.box_id or box.id }}" maxlength="40" required class="mono"
+            pattern="[a-z0-9][a-z0-9_\-]{0,39}" spellcheck="false" autocomplete="off"
+            data-rename-note="box-id-note" data-current="{{ box.id }}">
           <span class="hint rename-note" id="box-id-note" hidden>{{ _('Saving renames the folder. Addresses in this interface and the id for the API and --mailbox change with it.') }}</span>
         </label>
         <label class="f"><span class="lt">{{ _('IMAP server') }} {{ help(_('Host name of the IMAP server, e.g. imap.example.com. The connection is always encrypted (SSL).')) }}</span>

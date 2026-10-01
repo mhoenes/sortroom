@@ -1,4 +1,4 @@
-// Live preview of a mailbox's folder name (its id), derived from the display name.
+// Add mailbox: live preview of the new mailbox's folder name (its id), derived from the display name.
 // Mirrors config.mailbox_id_for; the server decides, this only shows what it will do.
 (() => {
   const idFor = (name, taken) => {
@@ -23,6 +23,13 @@
       out.textContent = id;
       if (note) note.hidden = !current || id === current;
     };
+    input.addEventListener('input', show);
+    show();
+  });
+  // the settings page: the folder name is set by hand; say what changing it does
+  document.querySelectorAll('input[data-rename-note]').forEach(input => {
+    const note = document.getElementById(input.dataset.renameNote);
+    const show = () => { note.hidden = input.value.trim() === input.dataset.current; };
     input.addEventListener('input', show);
     show();
   });

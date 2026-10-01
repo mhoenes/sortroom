@@ -95,7 +95,7 @@ def test_concurrent_writes_keep_every_change(tmp_path):
 
 
 def test_login_moves_with_the_mailbox_folder(setup):
-    new_id = save_settings(_box(setup), setup / "config.toml", {**SETTINGS, "name": "Büro",
+    new_id = save_settings(_box(setup), setup / "config.toml", {**SETTINGS, "box_id": "buero",
                                                                 "imap_user": "buero@example.de", "imap_password": "pw"})
     assert new_id == "buero"
     assert _secrets(setup / "mailboxes" / "buero" / "secrets.toml")["imap"] == {"user": "buero@example.de",

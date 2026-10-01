@@ -225,6 +225,11 @@ def _sender_rules(raw: dict, categories: dict[str, Category], where: str) -> tup
 _MAILBOX_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
 
 
+def valid_mailbox_id(box_id: str) -> bool:
+    """A mailbox id (its folder name): lowercase letters, digits, _ and -, up to 40, not starting with _ or -."""
+    return bool(_MAILBOX_ID_RE.match(box_id))
+
+
 def mailbox_id_for(name: str, taken=()) -> str:
     """The folder name (id) for a mailbox's display name: 'mh@hoenes.de' -> 'mh-hoenes-de',
     'Büro' -> 'buero'; '-2', '-3' … when it is taken. Mirrored in web/static/mailbox-id.js."""

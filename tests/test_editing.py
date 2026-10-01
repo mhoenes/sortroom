@@ -298,7 +298,7 @@ def test_schedule_settings_saved(client, setup):
     assert "Zeitplan aus" in client.get("/ui/m/privat").text
 
 
-# ---------------------------------------------------------------- the folder follows the name
+# ---------------------------------------------------------------- the folder name (id) of a mailbox
 
 def test_mailbox_ids_from_names():
     from email_sorter.config import mailbox_id_for
@@ -316,18 +316,41 @@ def _settings_form(html, **changes):
             "expired_folder": "", "schedule_minutes": "10", **changes}
 
 
-def test_renaming_a_mailbox_moves_its_folder(client, setup):
+def test_a_new_display_name_keeps_the_folder(client, setup):
+    html = client.get("/ui/m/privat/settings").text
+    assert 'name="box_id" value="privat"' in html and 'data-current="privat"' in html
+    r = client.post("/ui/m/privat/settings", data=_settings_form(html, name="mh@hoenes.de", box_id="privat"),
+                    follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/ui/m/privat/settings"
+    assert load_mailboxes(setup, setup / "config.toml")["privat"].name == "mh@hoenes.de"
+
+
+def test_a_new_folder_name_moves_the_folder(client, setup):
     Store(setup / "mailboxes" / "privat" / "data" / "state.db").close()  # the log moves along
     html = client.get("/ui/m/privat/settings").text
-    assert 'data-current="privat"' in html and "mailboxes/<span id=\"box-id\">privat</span>" in html
-    r = client.post("/ui/m/privat/settings", data=_settings_form(html, name="mh@hoenes.de"), follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == "/ui/m/mh-hoenes-de/settings"
+    r = client.post("/ui/m/privat/settings", data=_settings_form(html, box_id="Mh-Hoenes"), follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/ui/m/mh-hoenes/settings"
     assert not (setup / "mailboxes" / "privat").exists()
-    moved = setup / "mailboxes" / "mh-hoenes-de"
-    assert (moved / "data" / "state.db").exists() and not (moved / "data" / "run.lock").exists()
-    assert load_mailboxes(setup, setup / "config.toml")["mh-hoenes-de"].name == "mh@hoenes.de"
-    assert "Ordner des Postfachs heißt jetzt mailboxes/mh-hoenes-de" in client.get(r.headers["location"]).text
+    assert (setup / "mailboxes" / "mh-hoenes" / "data" / "state.db").exists()
+    assert load_mailboxes(setup, setup / "config.toml")["mh-hoenes"].name == "Privat"  # the name stays
+    assert "Ordner des Postfachs heißt jetzt mailboxes/mh-hoenes" in client.get(r.headers["location"]).text
     assert client.get("/ui/m/privat").status_code == 404
+
+
+@pytest.mark.parametrize("box_id, message", [("-arbeit", "nur Kleinbuchstaben"), ("büro", "nur Kleinbuchstaben"),
+                                             ("x" * 41, "zu lang"), (".locks", "nur Kleinbuchstaben")])
+def test_invalid_folder_names_are_refused(client, setup, box_id, message):
+    html = client.get("/ui/m/privat/settings").text
+    r = client.post("/ui/m/privat/settings", data=_settings_form(html, box_id=box_id))
+    assert r.status_code == 422 and message in r.text
+    assert (setup / "mailboxes" / "privat").exists()
+
+
+def test_a_taken_folder_name_is_refused(client, setup):
+    (setup / "mailboxes" / "arbeit").mkdir()
+    html = client.get("/ui/m/privat/settings").text
+    r = client.post("/ui/m/privat/settings", data=_settings_form(html, box_id="arbeit"))
+    assert r.status_code == 422 and "mailboxes/arbeit gibt es schon" in r.text
 
 
 def test_rename_is_refused_while_the_mailbox_is_busy(client, setup):
@@ -335,7 +358,7 @@ def test_rename_is_refused_while_the_mailbox_is_busy(client, setup):
     with single_instance(_box(setup).lock_path) as held:  # a run of this very process holds the lock
         assert held
         html = client.get("/ui/m/privat/settings").text
-        r = client.post("/ui/m/privat/settings", data=_settings_form(html, name="Arbeit"))
+        r = client.post("/ui/m/privat/settings", data=_settings_form(html, name="Arbeit", box_id="arbeit"))
         assert r.status_code == 422 and "weder Name noch Ordner" in r.text
     assert (setup / "mailboxes" / "privat").exists() and not (setup / "mailboxes" / "arbeit").exists()
     assert load_mailboxes(setup, setup / "config.toml")["privat"].name == "Privat"  # nothing saved

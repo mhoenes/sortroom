@@ -264,8 +264,7 @@ def _settings_page(request: Request, box_id: str, form: dict | None = None, erro
         "secrets_file": SECRETS_FILE, "retype": retype, "retype_secret": retype_secret,
         "auth_methods": auth_methods(), "oauth_hint": oauth.provider_for_host(cfg.imap_host),
         "deletable": os.access(box.workspace.parent, os.W_OK),
-        "config_name": box.config_file.name if box.config_file else "–",
-        "taken_ids": sorted(p.name for p in box.workspace.parent.iterdir() if p.is_dir() and p.name != box.id)},
+        "config_name": box.config_file.name if box.config_file else "–"},
         status)
 
 
