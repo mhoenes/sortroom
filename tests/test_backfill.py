@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 from imap_tools import MailMessage
 
-from email_sorter import __main__ as cli
+from email_sorter import __main__ as cli, imap
 from email_sorter import sorter
 from email_sorter.config import Config, Credentials
 from email_sorter.classifier import Decision, ClassifierError
@@ -96,7 +96,7 @@ class FakeClassifier:
 @pytest.fixture
 def env(tmp_path, monkeypatch):
     FakeMailBox.instances.clear()
-    monkeypatch.setattr(sorter, "MailBox", FakeMailBox)
+    monkeypatch.setattr(imap, "MailBox", FakeMailBox)
     monkeypatch.setattr(sorter, "month_windows", lambda since, until: [(since, until)])
     small = Config(**{**CFG.__dict__, "max_per_run": 3, "min_age_hours": 0})
     return SimpleNamespace(cfg=small, tmp=tmp_path, monkeypatch=monkeypatch)
@@ -339,7 +339,7 @@ def test_whole_mails_are_fetched_in_small_batches(env):
     _use_classifier(env, FakeClassifier())
     sorter.run(Config(**{**env.cfg.__dict__, "max_per_run": 200}), CREDS, env.tmp, live=True, limit=None)
     bodies = [bulk for headers_only, bulk in FakeMailBox.instances[0].bulks if not headers_only]
-    assert bodies and all(bulk == sorter.BODY_CHUNK <= 20 for bulk in bodies)
+    assert bodies and all(bulk == imap.BODY_CHUNK <= 20 for bulk in bodies)
 
 
 def test_a_classifier_outage_applies_what_was_classified(env):

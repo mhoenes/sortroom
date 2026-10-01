@@ -21,11 +21,10 @@ from .mailtext import build_state, message_key, received_of, unsubscribe_links
 from datetime import datetime
 
 from .config import INBOX_ACTION
-from .sorter import (BODY_CHUNK, IMAP_TIMEOUT, Outcome, ReportWriter, RunResult, expiry_for, move_uids,
-                     mail_failed, outage, plan, ready_to_sort, rule_outcome, server_folder, _auth_failed, _chunks,
-                     _delimiter, _ensure_folder, _finish, _with_outage)
+from .imap import BODY_CHUNK, chunks, connect, delimiter, ensure_folder, move_uids, server_folder
+from .sorter import (Outcome, ReportWriter, RunResult, auth_failed, expiry_for, finish, mail_failed, outage, plan,
+                     ready_to_sort, rule_outcome, with_outage)
 from .store import Store
-from .oauth import sign_in
 
 log = logging.getLogger(__name__)
 
@@ -47,7 +46,7 @@ def resort_outcomes(mb: MailBox, cfg: Config, classifier: ClassifierClient, fold
     failed: list[str] = []
     seen: set[str] = set()
     kept = 0
-    for chunk in _chunks(uids):
+    for chunk in chunks(uids):
         wanted = set(chunk)
         for msg in mb.fetch(AND(uid=chunk), mark_seen=False, bulk=BODY_CHUNK):
             if msg.uid not in wanted or msg.uid in seen:
@@ -115,8 +114,8 @@ def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, liv
     report = None if live else ReportWriter(base_dir / "reports")
     started = datetime.now()
     try:
-        with sign_in(MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT), creds, cfg.source_folder) as mb:
-            delim = _delimiter(mb)
+        with connect(cfg, creds) as mb:
+            delim = delimiter(mb)
             # accept "INBOX/Reisen" (config notation) as well as "INBOX.Reisen" (server notation)
             folder = "/".join(p for p in folder.replace(delim, "/").split("/") if p)
             if live:
@@ -135,7 +134,7 @@ def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, liv
                                                            on_outcome=report.write if report else None,
                                                            min_age_hours=min_age)
             except ClassifierAuthError as e:
-                return _finish(store, "resort", folder, started, _auth_failed(cfg, e))
+                return finish(store, "resort", folder, started, auth_failed(cfg, e))
 
             move_failures: set[str] = set()
             if live:
@@ -144,8 +143,8 @@ def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, liv
                     by_target[server_folder(o.folder, delim)].append(o)
                 for target, group in by_target.items():
                     try:
-                        _ensure_folder(mb, target)
-                        for chunk in _chunks([o.uid for o in group]):
+                        ensure_folder(mb, target)
+                        for chunk in chunks([o.uid for o in group]):
                             move_uids(mb, chunk, target)
                         log.info("moved %d mail(s) %s -> %s", len(group), srv, target)
                     except Exception as e:
@@ -165,7 +164,7 @@ def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, liv
             log.info("%s %d mail(s) out of %s, %d stay%s", "moved" if live else "would move", moved, folder,
                      len(outcomes) - len(moving),
                      ": " + ", ".join(f"{t}={n}" for t, n in targets.most_common()) if targets else "")
-            return _finish(store, "resort", folder, started, _with_outage(RunResult(
+            return finish(store, "resort", folder, started, with_outage(RunResult(
                 exit_code=1 if (failed or move_failures) else 0,
                 live=live,
                 classified=len(outcomes),
@@ -177,7 +176,7 @@ def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, liv
                 report=str(report.path) if report and report.rows else None,
             ), classifier))
     except Exception as e:
-        _finish(store, "resort", folder, started, RunResult(exit_code=1, live=live, error=str(e)))
+        finish(store, "resort", folder, started, RunResult(exit_code=1, live=live, error=str(e)))
         raise
     finally:
         store.close()

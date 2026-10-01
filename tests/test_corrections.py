@@ -1,7 +1,7 @@
 from datetime import datetime
 from types import SimpleNamespace
 
-from email_sorter import i18n, manual, reconcile
+from email_sorter import i18n, imap, manual, reconcile
 from email_sorter.classifier import Decision
 from email_sorter.config import INBOX_ACTION, Credentials
 from email_sorter.store import MOVED, Store
@@ -81,7 +81,7 @@ def test_reconcile_finds_mails_moved_by_hand(tmp_path, monkeypatch):
     store.close()
     folders = {"INBOX": ["b", "f"], "INBOX.Werbung": ["a"], "INBOX.Finanzen": ["c", "h"], "INBOX.Archiv": ["d"],
                "INBOX.Benachrichtigungen": ["g"], "INBOX.Werbung.Abgelaufen": ["i"]}
-    monkeypatch.setattr(reconcile, "MailBox", lambda *a, **kw: FakeMailBox(folders))
+    monkeypatch.setattr(imap, "MailBox", lambda *a, **kw: FakeMailBox(folders))
     reconcile.run_reconcile(CFG, CREDS, tmp_path, live=True)
     store = Store(tmp_path / "data" / "state.db")
     rows = {k: (c, how) for k, c, how in store.db.execute("SELECT message_key, corrected_to, how FROM corrections")}

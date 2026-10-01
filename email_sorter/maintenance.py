@@ -10,14 +10,12 @@ from __future__ import annotations
 
 import logging
 
-from imap_tools import MailBox
-
 from .config import Config, Credentials
 from .runtime import BASE_DIR
-from .sorter import (IMAP_TIMEOUT, RunResult, move_uids, server_folder, _chunks, _delimiter, _ensure_folder,
-                     _find_uids, _group_by_folder)
+from .imap import (chunks, connect, delimiter, ensure_folder, find_uids, group_by_folder, move_uids,
+                   server_folder)
+from .sorter import RunResult
 from .store import Store
-from .oauth import sign_in
 
 log = logging.getLogger(__name__)
 
@@ -45,8 +43,8 @@ def rename_folder(cfg: Config, creds: Credentials, old: str, new: str, live: boo
     """
     store = Store(base_dir / "data" / "state.db")
     try:
-        with sign_in(MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT), creds, cfg.source_folder) as mb:
-            delim = _delimiter(mb)
+        with connect(cfg, creds) as mb:
+            delim = delimiter(mb)
             old_srv, new_srv = server_folder(old, delim), server_folder(new, delim)
             if not mb.folder.exists(old_srv):
                 log.error("folder %s does not exist on the server", old_srv)
@@ -99,23 +97,23 @@ def relocate_category(cfg: Config, creds: Credentials, category: str, live: bool
         log.info("%d %s mail(s) in the log are not in %s", len(rows), category, cat.folder)
         if not rows:
             return RunResult(exit_code=0, live=live)
-        with sign_in(MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT), creds, cfg.source_folder) as mb:
-            delim = _delimiter(mb)
+        with connect(cfg, creds) as mb:
+            delim = delimiter(mb)
             target = server_folder(cat.folder, delim)
             moved = missing = 0
             try:
-                for folder, wanted in _group_by_folder(rows, cfg, delim).items():
+                for folder, wanted in group_by_folder(rows, cfg, delim).items():
                     if not mb.folder.exists(folder):
                         log.warning("%s no longer exists, skipping %d mail(s)", folder, len(wanted))
                         missing += len(wanted)
                         continue
-                    uids = _find_uids(mb, folder, wanted, fallback_days=3650)
+                    uids = find_uids(mb, folder, wanted, fallback_days=3650)
                     missing += len(wanted) - len(uids)
                     log.info("%s %d mail(s) %s -> %s (%d not found)", "moving" if live else "would move",
                              len(uids), folder, target, len(wanted) - len(uids))
                     if live and uids:
-                        _ensure_folder(mb, target)
-                        for chunk in _chunks(list(uids.values())):
+                        ensure_folder(mb, target)
+                        for chunk in chunks(list(uids.values())):
                             move_uids(mb, chunk, target)
                         store.set_moved_to(uids, cat.folder)
                     moved += len(uids)

@@ -164,10 +164,10 @@ def test_move_expired_moves_and_marks_missing(tmp_path):
 
 
 def test_move_expired_splits_long_uid_lists(tmp_path, monkeypatch):
-    from email_sorter import sorter
+    from email_sorter import imap, sorter
     from pathlib import Path
 
-    monkeypatch.setattr(sorter, "UID_CHUNK", 2)
+    monkeypatch.setattr(imap, "UID_CHUNK", 2)
     cfg = example_config()
     store = Store(tmp_path / "s.db")
     for i in range(5):

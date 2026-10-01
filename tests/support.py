@@ -21,7 +21,7 @@ def raw_headers(message_id: str, sender: str = "s@example.org", subject: str = "
 
 
 class HeaderFetch:
-    """Mixin for fake mailboxes: answers sorter.header_fields (UID SEARCH, then UID FETCH of some header
+    """Mixin for fake mailboxes: answers imap.header_fields (UID SEARCH, then UID FETCH of some header
     lines) from raw_mails(), the raw headers of the selected folder."""
 
     fetch_commands: list

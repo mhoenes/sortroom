@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
-from email_sorter import sorter
+from email_sorter import imap, sorter
 
 NOW = datetime(2026, 9, 24, 12, 0, tzinfo=timezone.utc)
 
@@ -22,7 +22,7 @@ def test_received_times_parses_uid_and_internaldate_in_any_order():
         b'70 (INTERNALDATE "24-Sep-2026 09:55:40 +0000" UID 261879)',   # other item order
         b"* garbage",
     ])
-    times = sorter.received_times(SimpleNamespace(client=client), ["261848", "261877", "261879"])
+    times = imap.received_times(SimpleNamespace(client=client), ["261848", "261877", "261879"])
     assert times == {
         "261848": datetime(2026, 8, 18, 13, 29, 18, tzinfo=timezone.utc),
         "261877": datetime(2026, 9, 4, 7, 34, 45, tzinfo=timezone.utc),
@@ -51,7 +51,7 @@ def test_seen_uids_parses_flags():
         b'2 (UID 11 FLAGS ())',
         b'3 (FLAGS (\\Answered \\Seen) UID 12)',
     ])
-    assert sorter.seen_uids(SimpleNamespace(client=client), ["10", "11", "12"]) == {"10", "12"}
+    assert imap.seen_uids(SimpleNamespace(client=client), ["10", "11", "12"]) == {"10", "12"}
     assert client.calls == [("FETCH", "10,11,12", "(FLAGS)")]
 
 

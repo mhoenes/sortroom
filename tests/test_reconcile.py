@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
-from email_sorter import reconcile
+from email_sorter import imap, reconcile
 from email_sorter.config import Credentials
 from email_sorter.classifier import Decision
 from email_sorter.store import Store
@@ -48,7 +48,7 @@ def _record(store, key, moved_to, confidence=0.9):
 
 
 def _setup(tmp_path, monkeypatch, mails, flags=None):
-    monkeypatch.setattr(reconcile, "MailBox", lambda *a, **kw: FakeMailBox(mails, flags))
+    monkeypatch.setattr(imap, "MailBox", lambda *a, **kw: FakeMailBox(mails, flags))
     store = Store(tmp_path / "data" / "state.db")
     _record(store, "<kept@x>", "INBOX/Werbung")
     _record(store, "<deleted@x>", "INBOX/Werbung")
@@ -127,17 +127,16 @@ def test_old_source_name_is_renamed_when_the_log_is_opened(tmp_path):
 
 
 def test_only_a_few_header_lines_are_fetched_in_batches():
-    from email_sorter import sorter
     from email_sorter.mailtext import message_key, unsubscribe_links
 
     class Folder(HeaderFetch):
         def raw_mails(self):
             return [raw_headers(f"<m{i}@x>", "News <news@shop.example>", list_unsubscribe="<https://shop/u>")
-                    for i in range(sorter.UID_CHUNK + 5)]
+                    for i in range(imap.UID_CHUNK + 5)]
 
     mb = Folder()
-    heads = list(sorter.header_fields(mb))
-    assert [message_key(h) for h in heads[:2]] == ["<m0@x>", "<m1@x>"] and len(heads) == sorter.UID_CHUNK + 5
+    heads = list(imap.header_fields(mb))
+    assert [message_key(h) for h in heads[:2]] == ["<m0@x>", "<m1@x>"] and len(heads) == imap.UID_CHUNK + 5
     assert heads[0].from_ == "news@shop.example" and unsubscribe_links(heads[0]) == (["https://shop/u"], False)
     assert heads[0].date.year == 2026
     assert len(mb.fetch_commands) == 2  # UID_CHUNK per FETCH

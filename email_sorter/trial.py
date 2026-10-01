@@ -11,14 +11,14 @@ import sqlite3
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from imap_tools import AND, MailBox
+from imap_tools import AND
 
 from .config import Category, Config, Credentials
 from .classifier import ClassifierAuthError, ClassifierError
 from .i18n import _
 from .mailtext import build_state, message_key
-from .sorter import BODY_CHUNK, IMAP_TIMEOUT, MAX_EXPIRY_AGE_DAYS, _delimiter, _find_uids, _group_by_folder
-from .oauth import sign_in
+from .imap import BODY_CHUNK, connect, delimiter, find_uids, group_by_folder
+from .sorter import MAX_EXPIRY_AGE_DAYS
 
 log = logging.getLogger(__name__)
 
@@ -72,11 +72,11 @@ def run_trial(cfg: Config, creds: Credentials, db_path: Path, key: str, descript
     descriptions = with_category(cfg, key, description)
     classifier = cfg.classifier_client(creds.classifier_api_key)
     cost, done = 0.0, 0
-    with sign_in(MailBox(cfg.imap_host, cfg.imap_port, timeout=IMAP_TIMEOUT), creds, cfg.source_folder) as mb:
-        delim = _delimiter(mb)
-        for folder, wanted in _group_by_folder([(k, m, r) for k, m, r, *_ in picked], cfg, delim).items():
+    with connect(cfg, creds) as mb:
+        delim = delimiter(mb)
+        for folder, wanted in group_by_folder([(k, m, r) for k, m, r, *_ in picked], cfg, delim).items():
             try:
-                uids = _find_uids(mb, folder, wanted, fallback_days=MAX_EXPIRY_AGE_DAYS)
+                uids = find_uids(mb, folder, wanted, fallback_days=MAX_EXPIRY_AGE_DAYS)
             except Exception as e:
                 log.warning("trial: cannot read %s: %s", folder, e)
                 uids = {}
