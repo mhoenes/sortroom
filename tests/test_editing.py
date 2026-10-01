@@ -355,3 +355,32 @@ def test_reconcile_status_in_the_settings(client, setup, monkeypatch):
     store.close()
     html = client.get("/ui/m/privat/settings").text
     assert "zuletzt vor 3 Std · nächster" in html
+
+
+def test_concurrent_edits_of_a_mailbox_keep_both(setup, monkeypatch):
+    import threading
+    from email_sorter.web import editing
+    shared = setup / "config.toml"
+    first_read, go_on = threading.Event(), threading.Event()
+    real_doc = editing._doc
+
+    def slow_doc(box):  # the rules are read, then the category save starts while they are still unsaved
+        doc = real_doc(box)
+        if threading.current_thread().name == "rules":
+            first_read.set()
+            go_on.wait(2)
+        return doc
+
+    monkeypatch.setattr(editing, "_doc", slow_doc)
+    rules = threading.Thread(target=save_sender_rules, name="rules",
+                             args=(_box(setup), shared, [("@shop.de", "werbung")]))
+    rules.start()
+    first_read.wait(2)
+    category = threading.Thread(target=save_category, args=(_box(setup), shared, "werbung",
+                                                            {"description": "Neu", "folder": "INBOX/Werbung"}))
+    category.start()
+    go_on.set()
+    rules.join()
+    category.join()
+    box = _box(setup)
+    assert box.cfg.categories["werbung"].description == "Neu" and box.cfg.rule_for("x@shop.de")

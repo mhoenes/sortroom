@@ -9,3 +9,4 @@ mailboxes/
 *.bak
 *.tmp
 secrets.toml
+secrets.toml.lock

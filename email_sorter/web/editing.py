@@ -6,9 +6,11 @@ replaces it atomically. A run reads its settings when it starts, so edits apply 
 """
 from __future__ import annotations
 
+import functools
 import os
 import re
 import shutil
+import threading
 import tomllib
 from pathlib import Path
 
@@ -34,6 +36,20 @@ _FOLDER_RE = re.compile(r"^[^\\%*\x00-\x1f]{1,200}$")  # IMAP list wildcards and
 
 class EditError(ValueError):
     """A change the user has to fix; the file was not touched."""
+
+
+# Every change of a mailbox.toml or config.toml reads the file, changes it and writes it back; two at a
+# time (two browser tabs, a rename job and a save) would each write back what they read. Only this
+# process edits these files, so a lock of the process is enough.
+_edit_lock = threading.RLock()
+
+
+def _one_at_a_time(fn):
+    @functools.wraps(fn)
+    def locked(*args, **kwargs):
+        with _edit_lock:
+            return fn(*args, **kwargs)
+    return locked
 
 
 def writable(box: Mailbox) -> bool:
@@ -115,6 +131,7 @@ def _set(table, key: str, value, default=None) -> None:
 
 # ---------------------------------------------------------------- categories
 
+@_one_at_a_time
 def save_category(box: Mailbox, shared_path: Path, key: str, form: dict, create: bool = False) -> str:
     """Create or update one category. Returns its key."""
     key = key.strip().lower()
@@ -153,6 +170,7 @@ def save_category(box: Mailbox, shared_path: Path, key: str, form: dict, create:
     return key
 
 
+@_one_at_a_time
 def delete_category(box: Mailbox, shared_path: Path, key: str) -> None:
     doc = _doc(box)
     cats = doc.get("categories") or {}
@@ -167,6 +185,7 @@ def delete_category(box: Mailbox, shared_path: Path, key: str) -> None:
 
 # ---------------------------------------------------------------- mailbox settings
 
+@_one_at_a_time
 def save_settings(box: Mailbox, shared_path: Path, form: dict, busy: bool = False) -> str:
     """Save the settings page. The mailbox folder (its id) follows the display name, so a new
     name can move the folder; returns the id afterwards. `busy`: a job or test is running."""
@@ -289,6 +308,7 @@ def _move_mailbox(box: Mailbox, new_id: str, text: str, busy: bool) -> None:
     jobs.rename_mailbox(box.id, new_id)
 
 
+@_one_at_a_time
 def save_sender_rules(box: Mailbox, shared_path: Path, rules: list[tuple[str, str]]) -> None:
     """Replace all sender rules (order kept)."""
     doc = _doc(box)
@@ -344,6 +364,7 @@ def _detach_trailing(table: Table) -> list:
     return tail
 
 
+@_one_at_a_time
 def add_sender_rule(box: Mailbox, shared_path: Path, match: str, action: str) -> None:
     """Add a rule, or change the target of an existing rule for the same sender."""
     match = match.strip().lower()
@@ -368,6 +389,7 @@ def _renamed_path(path: str | None, old: str, new: str) -> str | None:
     return None
 
 
+@_one_at_a_time
 def rename_folder_refs(box: Mailbox, shared_path: Path, old: str, new: str) -> int:
     """Point category folders and expired folders below `old` to `new`. Returns how many changed."""
     doc = _doc(box)
@@ -384,6 +406,7 @@ def rename_folder_refs(box: Mailbox, shared_path: Path, old: str, new: str) -> i
     return changed
 
 
+@_one_at_a_time
 def rename_category_key(box: Mailbox, shared_path: Path, old: str, new: str) -> None:
     """Rename a category key in the settings, including sender rules pointing to it."""
     if not _KEY_RE.match(new):
@@ -449,6 +472,7 @@ def with_kind(form: dict) -> dict:
     return {**form, "kind": kind, **MAILBOX_KINDS[kind]}
 
 
+@_one_at_a_time
 def create_mailbox(base_dir: Path, shared_path: Path, template_file: Path, template_name: str, form: dict) -> str:
     """Write mailboxes/<id>/mailbox.toml with the rules, schedule and categories of `template_file`
     (another mailbox or the built-in example). The id comes from the display name. Returns it."""
@@ -506,6 +530,7 @@ def shared_writable(shared_path: Path) -> bool:
     return shared_path.exists() and os.access(shared_path, os.W_OK) and os.access(shared_path.parent, os.W_OK)
 
 
+@_one_at_a_time
 def save_shared(base_dir: Path, shared_path: Path, form: dict) -> None:
     """Update [classifier] in config.toml; every mailbox must still load with it."""
     from ..config import load_mailboxes
