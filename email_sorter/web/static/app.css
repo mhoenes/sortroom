@@ -12,7 +12,10 @@
   --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--sans); font-size: 14px; }
+/* figures all the same width, so numbers, times and amounts line up in columns without a monospace font;
+   monospace is kept for what is typed or read character by character (paths, keys, ids) */
+html, body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--sans); font-size: 14px;
+  font-variant-numeric: tabular-nums; }
 a { color: var(--accent); } a:hover { color: var(--accent-ink); }
 h1, h2 { margin: 0; }
 .mono { font-family: var(--mono); }
@@ -117,7 +120,7 @@ a.card.link:hover { border-color: var(--line-strong); }
 .bar .track { height: 10px; border-radius: 5px; background: var(--neutral-bg); }
 .bar .fill { display: block; height: 10px; border-radius: 5px; background: var(--accent); }
 .bar .fill.inbox { background: var(--faint); } .bar .fill.danger { background: var(--err-bar); }
-.bar .n { text-align: right; font-family: var(--mono); }
+.bar .n { text-align: right; }
 .meter { display: inline-flex; align-items: center; gap: 8px; }
 .meter .track { width: 56px; height: 6px; border-radius: 3px; background: var(--neutral-bg); }
 .meter .fill { display: block; height: 6px; border-radius: 3px; background: var(--accent); }
@@ -128,7 +131,7 @@ table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th { font-weight: 500; text-align: left; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--line); }
 td { padding: 10px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
 tr:last-child td { border-bottom: none; }
-td.num, th.num { text-align: right; font-family: var(--mono); }
+td.num, th.num { text-align: right; }
 td.clip { max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .scroll-x { overflow-x: auto; }
 tr.sel td { background: var(--accent-soft); }

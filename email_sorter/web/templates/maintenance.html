@@ -19,7 +19,7 @@
       <thead><tr><th scope="col">{{ _('Start') }}</th><th scope="col">{{ _('Task') }}</th><th scope="col">{{ _('Status') }}</th></tr></thead>
       <tbody>
       {% for j in jobs %}
-        <tr class="link"><td class="mono" style="white-space:nowrap"><a class="rowlink" href="/ui/m/{{ box.id }}/jobs/{{ j.id }}">{{ j.started|dt }}</a></td>
+        <tr class="link"><td style="white-space:nowrap"><a class="rowlink" href="/ui/m/{{ box.id }}/jobs/{{ j.id }}">{{ j.started|dt }}</a></td>
           <td class="clip" style="width:60%"><a class="rowlink" href="/ui/m/{{ box.id }}/jobs/{{ j.id }}">{{ j.label }}</a></td>
           <td>{% include "_job_status.html" %}</td></tr>
       {% endfor %}

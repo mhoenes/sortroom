@@ -33,7 +33,7 @@
         <td class="clip addr" title="{{ r.address }}"><a href="/ui/m/{{ box.id }}/mails?period=all&amp;q={{ r.address|urlencode }}">{{ r.address }}</a></td>
         <td class="opt">{{ label(r.category) if r.category else '–' }}</td>
         <td class="num">{{ r.mails|num }}</td>
-        <td class="mono opt" style="white-space:nowrap">{{ r.last|dt }}</td>
+        <td class="opt" style="white-space:nowrap">{{ r.last|dt }}</td>
         <td><div class="unsub">
           {% if r.unsubscribed %}
             <span class="pill ok">{{ _('Unsubscribed %(date)s', date=r.unsubscribed|date) }}</span>
