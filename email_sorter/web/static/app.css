@@ -301,6 +301,10 @@ pre.log { margin: 0; max-height: 520px; overflow: auto; padding: 14px 16px; bord
 details.more summary { cursor: pointer; color: var(--accent); font-weight: 500; min-height: 32px; display: flex; align-items: center; }
 details.more[open] summary { margin-bottom: 10px; }
 .btn[disabled] { opacity: .5; cursor: not-allowed; }
+.hint.unsaved { color: var(--warn); font-weight: 600; }
+/* Settings: the save button of the long form stays at the bottom of the window while its cards scroll past */
+.savebar { position: sticky; bottom: 0; z-index: 5; margin: 0 -16px; padding: 12px 16px;
+  background: var(--ground); border-top: 1px solid var(--line); }
 
 th.star-col, td.star-col { width: 30px; padding-left: 6px; padding-right: 0; }
 svg.star { display: block; width: 16px; height: 16px; fill: var(--star); }
