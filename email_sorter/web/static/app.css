@@ -275,6 +275,13 @@ div.f { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-w
 .btn.danger:hover { background: var(--err-bg); color: var(--err); }
 .banner.ok { background: var(--ok-bg); color: var(--ok); }
 .catgrid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: start; }
+/* headers on one line and the name with its Star/Expiry pills beside it; the folder takes what is left (clipped)
+   and goes when the card is too narrow - the editor shows it too */
+.cats-card { container-type: inline-size; }
+table.cats th, table.cats td.name { white-space: nowrap; }
+table.cats td.folder { width: 100%; }
+table.cats td.rate { font-weight: 600; }
+@container (max-width: 440px) { table.cats .folder { display: none; } }
 .editor { position: sticky; top: 24px; }
 .editor form:has(#track_expiry:not(:checked)) .expiry-folder { display: none; }
 .quote { margin: 0; white-space: pre-wrap; color: var(--muted); }
