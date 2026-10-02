@@ -11,6 +11,8 @@ max_body_chars = 3000       # body text sent to the model is cut to this length
 timeout_seconds = 20
 min_interval_seconds = 0    # pause between requests, for providers that limit requests per minute
 
-# Language of the admin UI ("en" or "de", default "en"); also under Global settings.
+# Language of the admin UI ("en" or "de", default "en") and its appearance ("auto" follows the
+# system setting of each device, "light" or "dark"); both also under Global settings.
 # [ui]
 # language = "de"
+# theme = "dark"

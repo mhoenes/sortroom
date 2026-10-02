@@ -53,6 +53,31 @@ def test_english_is_the_default_and_german_is_one_setting_away(client, setup, mo
     assert '[ui]\nlanguage = "de"' in (setup / "config.toml").read_text(encoding="utf-8")
 
 
+def test_appearance_follows_the_system_or_is_chosen(client, setup):
+    html = client.get("/ui").text
+    assert "data-theme" not in html and 'media="(prefers-color-scheme: dark)"' in html  # automatic by default
+    html = client.get("/ui/settings").text
+    assert '<option value="auto" selected>Automatisch</option>' in html
+    form = {"csrf": _csrf(html), "endpoint": "https://example.invalid/decisions", "model": "example/model-1",
+            "max_body_chars": "3000", "timeout_seconds": "20", "min_interval_seconds": "0", "language": "de",
+            "theme": "dark"}
+    assert client.post("/ui/settings", data=form, follow_redirects=False).status_code == 303
+    assert 'theme = "dark"' in (setup / "config.toml").read_text(encoding="utf-8")
+    html = client.get("/ui").text
+    assert '<html lang="de" data-theme="dark">' in html and '<meta name="theme-color" content="#0F0E0C">' in html
+    assert 'data-theme="dark"' in client.get("/login").text  # the login page too
+    r = client.post("/ui/settings", data={**form, "csrf": _csrf(client.get("/ui/settings").text), "theme": "blue"})
+    assert r.status_code == 422 and "Unbekannte Darstellung" in r.text
+
+
+def test_both_copies_of_the_dark_palette_are_the_same():
+    css = (Path(i18n.__file__).parent / "web" / "static" / "app.css").read_text(encoding="utf-8")
+    system = re.search(r'@media \(prefers-color-scheme: dark\) \{\n  :root:not\(\[data-theme="light"\]\) \{\n(.*?)\n  \}', css, re.S)
+    chosen = re.search(r':root\[data-theme="dark"\] \{\n(.*?)\n\}', css, re.S)
+    assert system and chosen  # the system's dark mode, and "Dark" chosen under Global settings
+    assert system.group(1).split() == chosen.group(1).split()
+
+
 def test_unknown_language_is_refused(client, setup):
     html = client.get("/ui/settings").text
     form = {"csrf": _csrf(html), "endpoint": "https://example.invalid/decisions", "model": "example/model-1",

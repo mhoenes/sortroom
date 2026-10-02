@@ -39,24 +39,40 @@ def reset_language(token: contextvars.Token) -> None:
     _current.reset(token)
 
 
-_config_cache: dict[Path, tuple[float, str | None]] = {}
+_config_cache: dict[Path, tuple[float, dict]] = {}
 
 
-def configured_language(config_path: Path) -> str:
-    """[ui] language from config.toml, re-read only when the file changes."""
+def ui_settings(config_path: Path) -> dict:
+    """The [ui] table of config.toml (language, theme), re-read only when the file changes."""
     try:
         mtime = config_path.stat().st_mtime
     except OSError:
-        return DEFAULT_LANGUAGE
+        return {}
     cached = _config_cache.get(config_path)
     if cached is None or cached[0] != mtime:
         try:
-            code = tomllib.loads(config_path.read_text(encoding="utf-8")).get("ui", {}).get("language")
-        except (OSError, tomllib.TOMLDecodeError, AttributeError):
-            code = None
-        cached = (mtime, code if code in LANGUAGES else None)
+            ui = tomllib.loads(config_path.read_text(encoding="utf-8")).get("ui", {})
+        except (OSError, tomllib.TOMLDecodeError):
+            ui = {}
+        cached = (mtime, ui if isinstance(ui, dict) else {})
         _config_cache[config_path] = cached
-    return cached[1] or DEFAULT_LANGUAGE
+    return cached[1]
+
+
+def configured_language(config_path: Path) -> str:
+    """[ui] language from config.toml."""
+    code = ui_settings(config_path).get("language")
+    return code if code in LANGUAGES else DEFAULT_LANGUAGE
+
+
+# the appearance of the UI: "auto" follows the system setting of each device, the others override it
+THEMES = ("auto", "light", "dark")
+
+
+def configured_theme(config_path: Path) -> str:
+    """[ui] theme from config.toml."""
+    theme = ui_settings(config_path).get("theme")
+    return theme if theme in THEMES else "auto"
 
 
 # ---------------------------------------------------------------- messages
