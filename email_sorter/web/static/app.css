@@ -423,3 +423,14 @@ svg.star { display: block; width: 16px; height: 16px; fill: var(--star); }
 .senders .addr { max-width: 320px; }
 .unsub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .unsub form { display: contents; }
+
+/* with a mouse or trackpad the controls can be lower than the 44px a finger needs: forms like Settings and
+   Maintenance get noticeably shorter. Touch screens keep the full height. */
+@media (pointer: fine) {
+  .btn, input[type=text], input[type=search], input[type=password], input[type=date], input[type=number], select {
+    height: 38px; }
+  .btn.small { height: 32px; }
+  .btn.icon { width: 38px; }
+  .check, .f .static { min-height: 38px; }
+  .check.small { min-height: 32px; }
+}
