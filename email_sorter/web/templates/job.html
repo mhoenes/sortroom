@@ -21,7 +21,7 @@
   <div class="card kpi"><span class="k">{{ _('Processed') }}</span><span class="v">{{ r.classified|num }}</span><span class="d">{{ _('for real') if r.live else _('Dry run – nothing changed') }}</span></div>
   <div class="card kpi"><span class="k">{{ _('Moved') if r.live else _('Would move') }}</span><span class="v">{{ r.moved|num }}</span><span class="d">{{ _('%(flagged)s starred · %(expired)s expired', flagged=r.flagged|num, expired=r.expired_moved|num) }}</span></div>
   <div class="card kpi"><span class="k">{{ _('Errors') }}</span><span class="v">{{ r.failed|num }}</span><span class="d">{{ _('are retried in the next run') }}</span></div>
-  <div class="card kpi"><span class="k">{{ _('Cost') }}</span><span class="v mono">{{ r.cost_usd|usd(4) }}</span><span class="d">{% if r.report %}{{ _('Report:') }} <span class="mono">{{ r.report.replace('\\', '/').split('/')[-1] }}</span>{% endif %}</span></div>
+  <div class="card kpi"><span class="k">{{ _('Cost') }}</span><span class="v">{{ r.cost_usd|usd(4) }}</span><span class="d">{% if r.report %}{{ _('Report:') }} <span class="mono">{{ r.report.replace('\\', '/').split('/')[-1] }}</span>{% endif %}</span></div>
 </div>
 {% if r.error %}<div class="banner err" role="alert">{{ r.error }}</div>{% endif %}
 {% elif r %}

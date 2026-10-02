@@ -33,7 +33,7 @@
     <tbody>
     {% for r in rows %}
       <tr {% if r.after and r.after != r.before %}class="changed"{% endif %}>
-        <td class="mono" style="white-space:nowrap">{{ r.received|dt }}</td>
+        <td style="white-space:nowrap">{{ r.received|dt }}</td>
         <td class="clip" style="width:20%">{{ r.sender }}</td>
         <td class="clip" style="width:34%">{{ r.subject or _('(no subject)') }}</td>
         <td><span class="pill">{{ label(r.before) }}</span></td>

@@ -44,7 +44,7 @@
   </a>
   <div class="card kpi">
     <span class="k">{{ _('Cost this month') }}</span>
-    <span class="v mono">{{ stats.cost_month|usd }}</span>
+    <span class="v">{{ stats.cost_month|usd }}</span>
     <span class="d">{{ _('Ø %(cost)s per mail', cost=stats.cost_per_mail|usd(5)) }} · {{ ngettext('%(num)s mail', '%(num)s mails', stats.classified_mails_month, num=stats.classified_mails_month|num) }}</span>
   </div>
 </div>
@@ -55,8 +55,8 @@
   <div class="review">
     {% for m in review %}
     <a href="/ui/m/{{ box.id }}/mails?uncertain=1&amp;period=30d&amp;key={{ m.message_key|urlencode }}">
-      <span class="what"><b>{{ m.subject or _('(no subject)') }}</b><span class="muted"><span class="mono">{{ m.received|dt }}</span> · {{ m.sender }}</span></span>
-      <span class="guess"><span class="muted">{{ _('Suggestion') }}</span><b>{{ label(m.category) }} <span class="mono muted">{{ m.confidence|conf }}</span></b></span>
+      <span class="what"><b>{{ m.subject or _('(no subject)') }}</b><span class="muted">{{ m.received|dt }} · {{ m.sender }}</span></span>
+      <span class="guess"><span class="muted">{{ _('Suggestion') }}</span><b>{{ label(m.category) }} <span class="muted">{{ m.confidence|conf }}</span></b></span>
     </a>
     {% endfor %}
   </div>
@@ -87,7 +87,7 @@
       {% for r in runs %}
         {% set st = run_status(r) %}
         <tr>
-          <td class="mono">{{ r.started|dt }}</td>
+          <td style="white-space:nowrap">{{ r.started|dt }}</td>
           <td>{{ run_kind(r.kind) }}{% if r.detail %} <span class="muted">{{ r.detail|dt if r.kind == 'undo' else r.detail }}</span>{% endif %}</td>
           <td class="num">{{ r.classified|num }}</td>
           <td class="num">{{ r.moved|num }}</td>

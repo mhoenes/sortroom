@@ -50,12 +50,12 @@
         {% set low = m.confidence < min_conf %}
         <tr class="link {% if selected and selected.message_key == m.message_key %}sel{% endif %}">
           <td class="star-col">{% if m.flagged %}<svg class="star" viewBox="0 0 24 24" role="img" aria-label="{{ _('starred') }}"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z"/></svg>{% endif %}</td>
-          <td class="mono date"><a class="rowlink" href="{{ href }}">{{ m.received|dt }}</a></td>
+          <td class="date"><a class="rowlink" href="{{ href }}">{{ m.received|dt }}</a></td>
           <td class="clip mail"><a class="rowlink" href="{{ href }}">
             <span class="subj">{{ m.subject or _('(no subject)') }}</span>
-            <span class="meta"><span class="mono date-inline">{{ m.received|dt }} · </span>{{ m.sender }}{% if m.expires %} · <span class="{{ 'expired' if m.expires < today }}" {% if m.expires < today %}title="{{ _('expired') }}"{% endif %}>{{ _('valid until %(date)s', date=m.expires|date) }}</span>{% endif %}</span></a></td>
+            <span class="meta"><span class="date-inline">{{ m.received|dt }} · </span>{{ m.sender }}{% if m.expires %} · <span class="{{ 'expired' if m.expires < today }}" {% if m.expires < today %}title="{{ _('expired') }}"{% endif %}>{{ _('valid until %(date)s', date=m.expires|date) }}</span>{% endif %}</span></a></td>
           <td><span class="pill {% if danger(m.category) %}err{% endif %}">{{ label(m.category) }}</span></td>
-          <td class="conf">{% if m.source == 'rule' %}<span class="muted">{{ _('Rule') }}</span>{% elif m.source == 'manual' %}<span class="muted">{{ _('by hand') }}</span>{% else %}<span class="meter" {% if low %}title="{{ _('below the minimum confidence %(min)s', min=min_conf|conf) }}"{% endif %}><span class="track"><span class="fill {% if low %}low{% endif %}" style="width:{{ (m.confidence * 100)|round|int }}%"></span></span><span class="mono">{{ m.confidence|conf }}</span></span>{% endif %}</td>
+          <td class="conf">{% if m.source == 'rule' %}<span class="muted">{{ _('Rule') }}</span>{% elif m.source == 'manual' %}<span class="muted">{{ _('by hand') }}</span>{% else %}<span class="meter" {% if low %}title="{{ _('below the minimum confidence %(min)s', min=min_conf|conf) }}"{% endif %}><span class="track"><span class="fill {% if low %}low{% endif %}" style="width:{{ (m.confidence * 100)|round|int }}%"></span></span><span>{{ m.confidence|conf }}</span></span>{% endif %}</td>
           <td class="where">{% if m.gone %}<span class="pill">{{ _('deleted') }}</span>{% elif m.moved_to %}{{ m.moved_to|folder_label }}{% else %}<span class="muted">{{ _('Inbox') }}</span>{% endif %}</td>
         </tr>
       {% endfor %}
@@ -74,7 +74,7 @@
       {% set m = selected %}
       <div style="display:flex;flex-direction:column;gap:4px">
         <div class="row" style="align-items:flex-start">
-          <div class="mono muted grow" style="font-size:12px;overflow-wrap:anywhere">{{ m.received|dt(true) }} · {{ m.sender }}</div>
+          <div class="muted grow" style="font-size:13px;overflow-wrap:anywhere">{{ m.received|dt(true) }} · {{ m.sender }}</div>
           <a class="close" href="{{ list_href }}" aria-label="{{ _('Close details') }}" title="{{ _('Close') }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></a>
         </div>
         <h2>{{ m.subject or _('(no subject)') }}</h2>
@@ -88,11 +88,11 @@
       <dl>
         <dt>{{ _('Category') }}</dt><dd>{{ label(m.category) }}</dd>
         <dt>{{ _('Decided by') }}</dt><dd>{{ {'rule': _('Sender rule'), 'manual': _('by hand')}.get(m.source, _('Model')) }}</dd>
-        {% if m.source not in ('rule', 'manual') %}<dt>{{ _('Confidence') }}</dt><dd class="mono">{{ m.confidence|conf }}</dd>
-        <dt>{{ _('Needs action') }}</dt><dd class="mono">{{ m.needs_action|conf }}</dd>{% endif %}
+        {% if m.source not in ('rule', 'manual') %}<dt>{{ _('Confidence') }}</dt><dd>{{ m.confidence|conf }}</dd>
+        <dt>{{ _('Needs action') }}</dt><dd>{{ m.needs_action|conf }}</dd>{% endif %}
         <dt>{{ _('Star') }}</dt><dd>{{ _('yes') if m.flagged else _('no') }}</dd>
         {% if m.expires %}<dt>{{ _('Valid until') }}</dt><dd>{{ m.expires|date }}{% if m.expired_tagged == 1 %} · {{ _('moved to "expired"') }}{% endif %}</dd>{% endif %}
-        <dt>{{ _('Cost') }}</dt><dd class="mono">{{ m.cost_usd|usd(6) }}</dd>
+        <dt>{{ _('Cost') }}</dt><dd>{{ m.cost_usd|usd(6) }}</dd>
         <dt>{{ _('Processed') }}</dt><dd>{{ m.processed_at|dt(true) }}</dd>
       </dl>
       {% if m.gone %}<p class="muted hint">{{ _('This mail was deleted or is in the trash – at the last reconcile it was in no folder any more.') }}</p>{% else %}

@@ -22,7 +22,7 @@
 <div class="grid totals">
   <div class="card kpi"><span class="k">{{ _('Sorted today') }}</span><span class="v">{{ totals.today|num }}</span></div>
   <div class="card kpi"><span class="k">{{ _('To review') }}</span><span class="v">{{ totals.uncertain|num }}</span><span class="d">{{ _('uncertain, last 30 days') }}</span></div>
-  <div class="card kpi"><span class="k">{{ _('Cost this month, total') }}</span><span class="v mono">{{ totals.cost|usd }}</span></div>
+  <div class="card kpi"><span class="k">{{ _('Cost this month, total') }}</span><span class="v">{{ totals.cost|usd }}</span></div>
 </div>
 
 <div class="grid boxes">
@@ -47,7 +47,7 @@
       <div><span>{{ _('Today') }}</span><b>{{ st.sorted_today|num }}</b></div>
       <a class="stat" href="/ui/m/{{ c.box.id }}/mails?uncertain=1&amp;period=30d"><span>{{ _('To review') }}</span><b>{{ st.uncertain|num }}</b></a>
       <a class="stat" href="/ui/m/{{ c.box.id }}/mails?flagged=1&amp;period=7d"><span>{{ _('Starred (7 days)') }}</span><b>{{ st.flagged_7d|num }}</b></a>
-      <div><span>{{ _('Cost this month') }}</span><b class="mono">{{ st.cost_month|usd }}</b></div>
+      <div><span>{{ _('Cost this month') }}</span><b>{{ st.cost_month|usd }}</b></div>
     </div>
     {% set s = c.schedule %}
     <div class="muted" style="font-size:13px">{% if s.running %}{{ _('A run is in progress') }}
