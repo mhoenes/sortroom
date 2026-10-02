@@ -356,7 +356,13 @@ svg.star { display: block; width: 16px; height: 16px; fill: var(--star); }
 }
 @media (max-width: 760px) {
   .main { padding: 20px 16px; }
-  .cols-4, .cols-2 { grid-template-columns: minmax(0, 1fr); }
+  .cols-2 { grid-template-columns: minmax(0, 1fr); }
+  /* the figures two by two and a little smaller, so what to review shows without scrolling far */
+  .cols-4 { gap: 10px; }
+  .kpi { gap: 4px; padding: 14px; }
+  .kpi .v { font-size: 22px; }
+  .kpi .v small { font-size: 13px; }
+  .kpi .k, .kpi .d { font-size: 12px; }
   .head { flex-wrap: wrap; align-items: flex-start; }
   .filters .sel { max-width: none; }
   .maillist .date { display: none; }
