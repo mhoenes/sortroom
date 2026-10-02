@@ -266,6 +266,16 @@ def test_formatters():  # German (the tests' default language); English in test_
     assert web.usd(0.00009, 5) == "$0.00009"
 
 
+def test_small_costs_keep_two_significant_digits():
+    usd = web.usd
+    assert usd(0) == "$0.00" and usd(None) == "$0.00" and usd(0, 4) == "$0.0000"
+    assert usd(12.345) == "$12.35" and usd(0.5) == "$0.50"        # a cent or more: as before
+    assert usd(0.0123) == "$0.012"
+    assert usd(0.00042) == "$0.00042" and usd(0.0004) == "$0.0004"  # no trailing zero beyond the minimum
+    assert usd(0.00002, 4) == "$0.00002" and usd(0.000021) == "$0.000021"
+    assert usd(0.0000004) == "<$0.000001"                           # below what the log keeps
+
+
 def test_all_mailboxes_subtitle_says_what_is_going_on(client, monkeypatch):
     c = _login(client)
     html = c.get("/ui").text  # privat's backfill failed today; the schedule is off in tests

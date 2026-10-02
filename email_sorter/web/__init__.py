@@ -171,8 +171,22 @@ def _safe_next(url: str) -> str:
 
 # ---------------------------------------------------------------- formatting
 
+USD_MAX_DECIMALS = 6  # what the log keeps per mail
+
+
 def usd(value, decimals: int = 2) -> str:
-    return f"${(value or 0):.{decimals}f}"
+    """At least `decimals` places, more where a small amount would otherwise show as $0.00: a model call costs
+    fractions of a cent, so a month's cost needs two significant digits to say anything."""
+    value = value or 0
+    if not 0 < value < 1:
+        return f"${value:.{decimals}f}"
+    places = max(decimals, min(USD_MAX_DECIMALS, 1 - math.floor(math.log10(value))))
+    if round(value, places) == 0:
+        return f"<${10 ** -places:.{places}f}"
+    text = f"{value:.{places}f}"
+    while places > decimals and text.endswith("0"):  # $0.0004, not $0.00040
+        text, places = text[:-1], places - 1
+    return f"${text}"
 
 
 for _name, _fn in (("num", i18n.num), ("conf", i18n.conf), ("dt", i18n.dt), ("date", i18n.date),
