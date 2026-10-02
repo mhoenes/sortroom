@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Undo a run') }} · {{ box.name }}{% endblock %}
+{% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text }}" data-tip="{{ text }}">?</span>{% endmacro %}
+{% block content %}
+{% set reasons = {'forgotten': _('No longer in the log'), 'later': _('Sorted again by a later run'),
+                  'gone': _('Deleted since'), 'expired': _('Moved to the expired folder'),
+                  'manual': _('Corrected by hand'), 'moved': _('Moved by you since')} %}
+<div class="head">
+  <div class="title">
+    <span class="eyebrow">{{ box.name }}</span>
+    <h1>{{ _('Undo a run') }}</h1>
+    <div class="sub">{{ run_kind(run.kind) }}{% if run.detail %} {{ run.detail }}{% endif %} · {{ run.started|dt(true) }} · {{ ngettext('%(num)s mail sorted', '%(num)s mails sorted', mails|length) }} · {{ ngettext('%(num)s can still be undone', '%(num)s can still be undone', undoable) }}</div>
+  </div>
+  <a class="btn" href="/ui/m/{{ box.id }}/maintenance">{{ _('To maintenance') }}</a>
+</div>
+
+{% if busy %}<div class="banner" role="status">{{ _('A run is in progress for this mailbox. New jobs wait until it is done.') }}</div>{% endif %}
+
+<form method="post" action="/ui/m/{{ box.id }}/maintenance/undo" class="stack">
+  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="run" value="{{ run.started }}">
+  <input type="hidden" name="chosen" value="1">
+  <section class="card" style="padding:6px 12px">
+    <div class="scroll-x"><table class="maillist runmails">
+      <thead><tr>
+        <th scope="col" class="pick">{% if undoable %}<input type="checkbox" class="pick-all" checked aria-label="{{ _('Choose all that can be undone') }}">{% endif %}</th>
+        <th scope="col" class="date">{{ _('Received') }}</th><th scope="col">{{ _('Mail') }}</th>
+        <th scope="col">{{ _('Sorted from → to') }}</th><th scope="col">{{ _('Undo') }}</th></tr></thead>
+      <tbody>
+      {% for m in mails %}
+        <tr>
+          <td class="pick">{% if not m.blocked %}<input type="checkbox" name="key" value="{{ m.key }}" checked
+            aria-label="{{ _('Undo for %(subject)s', subject=m.subject or _('(no subject)')) }}">{% endif %}</td>
+          <td class="date">{{ m.received|dt if m.received else '–' }}</td>
+          <td class="clip mail">{% if m.known %}<a class="rowlink" href="/ui/m/{{ box.id }}/mails?period=all&amp;key={{ m.key|urlencode }}">
+            <span class="subj">{{ m.subject or _('(no subject)') }}</span>
+            <span class="meta"><span class="date-inline">{{ m.received|dt }} · </span>{{ m.sender }}</span></a>
+            {% else %}<span class="muted">{{ m.key }}</span>{% endif %}</td>
+          <td class="route">{{ m.origin|folder_label if m.origin else _('Inbox') }} → {{ m.run_moved_to|folder_label if m.run_moved_to else _('Inbox') }}{% if m.starred %} <svg class="star inline" viewBox="0 0 24 24" role="img" aria-label="{{ _('starred') }}"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z"/></svg>{% endif %}</td>
+          <td>{% if m.blocked %}<span class="muted">{{ reasons[m.blocked] }}</span>{% else %}<span class="pill ok">{{ _('Possible') }}</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+
+  {% if undoable %}
+  <section class="card stack tight">
+    <p class="muted hint">{{ _('Undo moves the chosen mails back to where they came from and removes the stars the run set. Mails that changed since stay as they are. Those not chosen can still be undone later.') }}</p>
+    <label class="check small"><input type="checkbox" name="sort_again" value="1">{{ _('Sort them again at the next run') }}
+      {{ help(_('Otherwise they stay in the inbox and are not sorted again. The next run only picks up mails of the last %(days)s days; older ones need a backfill.', days=box.cfg.lookback_days)) }}</label>
+    <div class="actions">
+      {# the dry run comes first, so Enter only ever starts a dry run #}
+      <button class="btn" type="submit">{{ _('Dry run') }}</button>
+      <button class="btn primary" type="submit" name="live" value="1">{{ _('Undo the chosen mails') }}</button>
+      <span class="muted hint picked" aria-live="polite"></span>
+    </div>
+  </section>
+  {% else %}<div class="banner" role="status">{{ _('Every mail of this run changed since, so there is nothing left to undo.') }}</div>{% endif %}
+</form>
+<script>
+  // "all" ticks or clears every mail that can be undone; the count says how many are chosen
+  (() => {
+    const all = document.querySelector('.pick-all'), boxes = [...document.querySelectorAll('input[name=key]')];
+    const out = document.querySelector('.picked'), text = {{ _('%(n)s of %(total)s chosen', n='{n}', total=undoable)|tojson }};
+    if (!all) return;
+    const show = () => {
+      const n = boxes.filter(b => b.checked).length;
+      all.checked = n === boxes.length; all.indeterminate = n > 0 && n < boxes.length;
+      out.textContent = text.replace('{n}', n);
+    };
+    all.addEventListener('change', () => { boxes.forEach(b => { b.checked = all.checked; }); show(); });
+    boxes.forEach(b => b.addEventListener('change', show));
+    show();
+  })();
+</script>
+{% endblock %}

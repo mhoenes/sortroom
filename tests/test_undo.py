@@ -211,3 +211,29 @@ def test_queries_list_undoable_runs(tmp_path):
         assert [(r["started"], r["undoable"]) for r in runs] == [(LATER.isoformat(), 0), (RUN.isoformat(), 1)]
     finally:
         db.close()
+
+
+def test_undo_only_the_chosen_mails(tmp_path, monkeypatch):
+    fake, store = _sorted_by_a_run(tmp_path, monkeypatch)
+    store.close()
+    result = undo.run_undo(CFG, CREDS, tmp_path, RUN.isoformat(), live=True, keys=["c"])
+    assert result["ok"] and (result["moved"], result["unflagged"]) == (1, 0)
+    assert fake.where("c") == "INBOX" and fake.where("a") == "INBOX.Finanzen" and fake.starred == {"a"}
+    store = Store(tmp_path / "data" / "state.db")
+    assert store.undoable_runs() == [RUN.isoformat()]                         # a and b can still be undone
+    assert {e["key"] for e in store.undo_entries(RUN.isoformat())} == {"a", "b"}
+    store.close()
+    assert undo.run_undo(CFG, CREDS, tmp_path, RUN.isoformat(), live=True, keys=["x"])["exit_code"] == 2
+
+
+def test_the_run_page_lists_its_mails_and_why_some_cannot_be_undone(tmp_path, monkeypatch):
+    fake, store = _sorted_by_a_run(tmp_path, monkeypatch)
+    store.set_manual("c", "finanzen", "INBOX/Finanzen")
+    store.close()
+    db = queries.connect(tmp_path)
+    mails = {m["key"]: m for m in queries.run_mails(db, RUN.isoformat())}
+    db.close()
+    assert set(mails) == {"a", "b", "c"} and mails["a"]["starred"] and not mails["c"]["starred"]
+    assert (mails["a"]["origin"], mails["a"]["run_moved_to"], mails["b"]["run_moved_to"]) == (None, "INBOX/Finanzen", None)
+    why = {k: undo.changed_since(m if m["known"] else None, bool(m["later"]), m["run_moved_to"]) for k, m in mails.items()}
+    assert why == {"a": None, "b": None, "c": "manual"}

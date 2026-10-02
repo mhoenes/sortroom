@@ -362,6 +362,11 @@ details.more[open] summary { margin-bottom: 10px; }
 
 th.star-col, td.star-col { width: 30px; padding-left: 6px; padding-right: 0; }
 svg.star { display: block; width: 16px; height: 16px; fill: var(--star); }
+svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-align: -2px; }
+/* undo a run: one row per mail it sorted, a checkbox for those that can still be undone */
+.runmails th.pick, .runmails td.pick { width: 32px; padding-right: 0; }
+.runmails .pick input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+.runmails td.route { color: var(--muted); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 .expired { color: var(--muted); text-decoration: line-through; }

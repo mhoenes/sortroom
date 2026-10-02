@@ -94,7 +94,7 @@
           <td class="num">{{ r.moved|num }}</td>
           <td class="num">{{ r.cost_usd|usd(4) }}</td>
           <td style="white-space:nowrap"><span class="pill {{ st[1] }}" {% if r.error %}title="{{ r.error }}"{% endif %}>{{ st[0] }}</span>
-            {% if r.undoable %}<a style="font-size:13px;margin-left:6px" href="/ui/m/{{ box.id }}/maintenance?undo={{ r.started|urlencode }}#undo">{{ _('Undo') }}</a>{% endif %}</td>
+            {% if r.undoable %}<a style="font-size:13px;margin-left:6px" href="/ui/m/{{ box.id }}/undo?run={{ r.started|urlencode }}">{{ _('Undo') }}</a>{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>
