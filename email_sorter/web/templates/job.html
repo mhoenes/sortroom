@@ -5,6 +5,7 @@
 {% set j = job %}
 <div class="head">
   <div class="title">
+    <span class="eyebrow">{{ box.name }}</span>
     <h1>{{ job.label }}</h1>
     <div class="sub">{{ _('Started %(when)s', when=job.started|dt(true)) }}{% if job.finished %} · {{ _('finished %(when)s', when=job.finished|dt(true)) }}{% endif %} · {% include "_job_status.html" %}</div>
   </div>

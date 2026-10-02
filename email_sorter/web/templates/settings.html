@@ -5,7 +5,8 @@
 {% block content %}
 <div class="head">
   <div class="title">
-    <h1>{{ _('Settings') }} · {{ box.name }}</h1>
+    <span class="eyebrow">{{ box.name }}</span>
+    <h1>{{ _('Settings') }}</h1>
     <div class="sub">{{ _('Saved in <span class="mono">%(file)s</span> · changes apply from the next run', file=config_name) }}</div>
   </div>
 </div>

@@ -4,7 +4,8 @@
 {% set cfg = box.cfg %}
 <div class="head">
   <div class="title">
-    <h1>{{ _('Overview') }} · {{ box.name }}</h1>
+    <span class="eyebrow">{{ box.name }}</span>
+    <h1>{{ _('Overview') }}</h1>
     <div class="sub">{{ cfg.imap_host }}{% if cfg.min_age_hours %} · {{ _('New mails are sorted %(hours)s hours after they arrive', hours=cfg.min_age_hours|num) }}{% if cfg.sort_read_at_once %}{{ _(', read ones at once') }}{% endif %}{% endif %}</div>
   </div>
 </div>

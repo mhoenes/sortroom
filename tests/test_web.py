@@ -165,7 +165,8 @@ def test_all_mailboxes_page(client):
 
 def test_overview_page(client):
     html = _login(client).get("/ui/m/privat").text
-    assert "Übersicht · Privat" in html
+    assert "<title>Übersicht · Privat · Sortroom</title>" in html          # the tab names the mailbox
+    assert '<span class="eyebrow">Privat</span>\n    <h1>Übersicht</h1>' in html  # the page: above its title
     assert "Werbung" in html and "Finanzen" in html              # distribution bars
     assert "Backfill" in html and "Abgebrochen" in html          # run log with the failed backfill
     assert "1 Lauf mit Fehlern heute" in html

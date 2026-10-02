@@ -3,7 +3,8 @@
 {% block content %}
 <div class="head">
   <div class="title">
-    <h1>{{ _('Mails') }} · {{ box.name }}</h1>
+    <span class="eyebrow">{{ box.name }}</span>
+    <h1>{{ _('Mails') }}</h1>
     <div class="sub">{{ _('What the sorter processed in this mailbox') }} · {{ ngettext('%(num)s entry', '%(num)s entries', total) }}</div>
   </div>
 </div>
