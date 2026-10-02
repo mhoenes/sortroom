@@ -136,6 +136,9 @@ def test_maintenance_page_and_run_job(client, monkeypatch):
         return RunResult(exit_code=0, live=live, classified=5, moved=4)
 
     monkeypatch.setattr(admin, "run", fake_run)
+    with monkeypatch.context() as m:  # jobs live in memory, so other tests may have left some
+        m.setattr(admin.jobs, "recent", lambda box_id, n: [])
+        assert "Letzte Jobs" not in client.get("/ui/m/privat/maintenance").text  # no empty card before the first
     html = client.get("/ui/m/privat/maintenance").text
     assert "Wartung · Privat" in html and "Verbindung prüfen" not in html  # checked under the settings now
     r = client.post("/ui/m/privat/maintenance/run", data={"csrf": _csrf(html), "limit": "20"}, follow_redirects=False)
@@ -331,6 +334,13 @@ def test_undo_a_run_from_the_run_log(client, setup, monkeypatch):
     page = client.get(r.headers["location"]).text
     assert "Lauf vom 30.09." in page and "rückgängig machen (Probelauf)" in page and "zurückverschoben" in page
     assert "Jetzt ausführen" in page  # the dry run can be run for real with the same choice
+
+
+def test_senders_page_without_senders(client):
+    html = client.get("/ui/m/privat/senders").text
+    assert "Kein Absender mit Abmelde-Link" in html and 'name="category"' not in html  # nothing to filter yet
+    html = client.get("/ui/m/privat/senders?category=werbung").text                   # a filter set: it stays
+    assert "Kein Absender dieser Kategorie" in html and 'name="category"' in html
 
 
 def test_senders_page_and_unsubscribe(client, setup, monkeypatch):

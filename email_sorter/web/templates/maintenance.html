@@ -13,9 +13,10 @@
 
 {% if busy %}<div class="banner" role="status">{{ _('A run is in progress for this mailbox. New jobs wait until it is done.') }}</div>{% endif %}
 
+{# only once there is something to show: an empty card at the top would push the tasks down #}
+{% if jobs %}
 <section class="card stack">
     <h2>{{ _('Recent jobs') }}</h2>
-    {% if jobs %}
     <div class="scroll-x"><table>
       <thead><tr><th scope="col">{{ _('Start') }}</th><th scope="col">{{ _('Task') }}</th><th scope="col">{{ _('Status') }}</th></tr></thead>
       <tbody>
@@ -26,8 +27,8 @@
       {% endfor %}
       </tbody>
     </table></div>
-    {% else %}<div class="empty">{{ _('No job has been started since the last restart.') }}</div>{% endif %}
 </section>
+{% endif %}
 
 {% macro go(primary=false, danger=false, disabled=false, why=none) %}<div class="go">
       {# the dry run comes first, so Enter in a field only ever starts a dry run #}

@@ -14,6 +14,8 @@
   </div>
 </div>
 
+{# the filter only once there is something to filter, or while one is set #}
+{% if rows or category %}
 <form class="filters" method="get" action="/ui/m/{{ box.id }}/senders">
   <label class="f sel">{{ _('Category') }}
     <select name="category" onchange="this.form.submit()">
@@ -22,6 +24,7 @@
     </select>
   </label>
 </form>
+{% endif %}
 
 <section class="card stack">
   {% if rows %}
@@ -53,6 +56,7 @@
     </tbody>
   </table></div>
   <p class="muted hint">{{ _('"Unsubscribe" sends the one-click request of the sender (RFC 8058) from this server. For the other senders open the link or write the mail yourself, then mark them. Unsubscribe links are read when mails are sorted and when the log is reconciled.') }}</p>
+  {% elif category %}<div class="empty">{{ _('No sender of this category with an unsubscribe link in the last %(days)s days.', days=days) }}</div>
   {% else %}<div class="empty">{{ _('No sender with an unsubscribe link in the last %(days)s days. The links are read when mails are sorted and when the log is reconciled (Maintenance).', days=days) }}</div>{% endif %}
 </section>
 {% endblock %}
