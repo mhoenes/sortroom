@@ -171,15 +171,18 @@ input[type=text], input[type=search], input[type=password], input[type=date], in
   font: inherit; color: var(--ink); }
 input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, summary:focus-visible, button:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px; }
-.check { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border-radius: 8px;
-  border: 1px solid var(--line-strong); background: var(--surface); font-weight: 500; cursor: pointer; }
-.check input { width: 16px; height: 16px; accent-color: var(--accent); }
+.check { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 500; cursor: pointer; }
+.check input { width: 18px; height: 18px; margin: 0; flex-shrink: 0; accent-color: var(--accent); }
+/* no box of its own, so a checkbox doesn't look like an empty text field - except the Mails filters,
+   which are chips: outlined, and tinted while on */
+.filters .check { padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); }
+.filters .check:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
 .filters { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
 .filters .search { flex: 3 1 300px; }
 .filters .search > span { display: flex; gap: 8px; }
 .filters .search input { flex-grow: 1; min-width: 0; }
 .filters .sel { flex: 1 1 150px; max-width: 220px; }
-.filters .toggles { flex-basis: 100%; }
+.filters .toggles { flex-basis: 100%; gap: 8px; }
 
 /* mails page: the detail column only exists while a mail is open */
 .mails { grid-template-columns: minmax(0, 1fr); align-items: start; }
@@ -237,7 +240,6 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 .task .fields .f { flex: 1 1 0; min-width: 0; }
 .task .fields input, .task .fields select { width: 100%; height: 36px; }
 .task .fields.stacked { flex-direction: column; gap: 8px; }
-.task .fields .check input { width: 16px; height: 16px; }
 .task .go { display: flex; gap: 8px; }
 
 /* job page: start a finished dry run for real */
@@ -279,8 +281,8 @@ input[readonly] { background: var(--neutral-bg); }
 .f .static { display: flex; align-items: center; min-height: 44px; color: var(--muted); font-weight: 400; }
 div.f { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; }
 .f .lt { display: flex; align-items: center; gap: 2px; }
-.toggles { display: flex; flex-wrap: wrap; gap: 8px; }
-.check.small { min-height: 36px; padding: 0 10px; font-weight: 400; font-size: 13px; }
+.toggles { display: flex; flex-wrap: wrap; gap: 4px 24px; }
+.check.small { min-height: 36px; font-weight: 400; font-size: 13px; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .hint { font-size: 13px; margin: 0; }
 .rename-note { color: var(--warn); font-weight: 400; }
