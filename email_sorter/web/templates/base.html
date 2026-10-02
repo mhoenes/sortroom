@@ -92,6 +92,7 @@
 {% block content %}{% endblock %}
 </main>
 </div>
+<script src="{{ asset('unsaved.js') }}" data-other="{{ _('Not saved yet: %(what)s. Those changes will be lost. Continue anyway?', what='%s') }}"></script>
 <script>
   // narrow screens: the sidebar is a top bar whose menu opens on demand
   (() => {

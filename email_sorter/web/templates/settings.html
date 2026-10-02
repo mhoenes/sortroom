@@ -15,7 +15,7 @@
 {% endif %}
 {% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
 
-<form method="post" action="/ui/m/{{ box.id }}/settings">
+<form method="post" action="/ui/m/{{ box.id }}/settings" data-guard="{{ _('Mailbox, Login, Sorting and Schedule') }}">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   {# Enter in a field only saves: the first submit button is the default one #}
   {% if editable %}<button type="submit" class="sr-only" tabindex="-1" aria-hidden="true">{{ _('Save settings') }}</button>{% endif %}
@@ -147,7 +147,10 @@
         </div>
       </div>
     </section>
-    {% if editable %}<div class="actions"><button class="btn primary" type="submit">{{ _('Save settings') }}</button></div>{% endif %}
+    {# stays in view while the four cards above scroll past: it saves them, not the sender rules below #}
+    {% if editable %}<div class="actions savebar"><button class="btn primary" type="submit">{{ _('Save settings') }}</button>
+      <span class="muted hint">{{ _('Saves Mailbox, Login, Sorting and Schedule') }}</span>
+      <span class="hint unsaved" hidden>{{ _('Not saved yet') }}</span></div>{% endif %}
   </fieldset>
 </form>
 
@@ -160,7 +163,7 @@
             <td class="rule-del">{% if editable %}<button class="icon-btn rule-remove" type="button" aria-label="{{ _('Remove rule') }}" title="{{ _('Remove rule') }}">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>{% endif %}</td>
           </tr>{% endmacro %}
-<form method="post" action="/ui/m/{{ box.id }}/settings/sender-rules" id="regeln">
+<form method="post" action="/ui/m/{{ box.id }}/settings/sender-rules" id="regeln" data-guard="{{ _('Sender rules') }}">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   {# row numbers only grow; a removed row simply leaves a gap the server skips #}
   <input type="hidden" name="rows" value="{{ rules|length }}">
@@ -184,7 +187,7 @@
       <div class="actions">
         <button class="btn rule-add" type="button">{{ _('+ Add rule') }}</button>
         <button class="btn primary" type="submit">{{ _('Save rules') }}</button>
-        <span class="muted hint unsaved" hidden>{{ _('Not saved yet') }}</span>
+        <span class="hint unsaved" hidden>{{ _('Not saved yet') }}</span>
       </div>
       {% endif %}
     </section>
@@ -213,8 +216,7 @@
     const form = document.getElementById('regeln'), tpl = document.getElementById('rule-row');
     if (!tpl) return;
     const body = form.querySelector('tbody'), rows = form.querySelector('[name=rows]');
-    const unsaved = () => { form.querySelector('.unsaved').hidden = false; };
-    form.addEventListener('input', unsaved);
+    const unsaved = () => form.dispatchEvent(new Event('change', {bubbles: true}));  // see unsaved.js
     form.addEventListener('click', e => {
       if (e.target.closest('.rule-remove')) {
         e.target.closest('tr').remove();
