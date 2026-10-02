@@ -4,6 +4,7 @@
 {% block content %}
 <div class="head">
   <div class="title">
+    <span class="eyebrow">{{ box.name }}</span>
     <h1>{{ _('Test: %(category)s', category=cat_label) }}{% if job.new %} {{ _('(new)') }}{% endif %}</h1>
     <div class="sub">{{ _('The model files already sorted mails with the new description · nothing is moved or saved') }}</div>
   </div>

@@ -4,7 +4,8 @@
 {% block content %}
 <div class="head">
   <div class="title">
-    <h1>{{ _('Categories') }} · {{ box.name }}</h1>
+    <span class="eyebrow">{{ box.name }}</span>
+    <h1>{{ _('Categories') }}</h1>
     <div class="sub">{{ _('The model files every mail by these descriptions alone') }} · {{ ngettext('%(num)s category', '%(num)s categories', box.cfg.categories|length) }}</div>
   </div>
   {% if editable %}<a class="btn" href="/ui/m/{{ box.id }}/categories?new=1">{{ _('New category') }}</a>{% endif %}

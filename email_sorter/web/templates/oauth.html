@@ -3,7 +3,8 @@
 {% block content %}
 <div class="head">
   <div class="title">
-    <h1>{{ _('Sign in with %(provider)s', provider=provider) }} · {{ box.name }}</h1>
+    <span class="eyebrow">{{ box.name }}</span>
+    <h1>{{ _('Sign in with %(provider)s', provider=provider) }}</h1>
     <div class="sub">{{ _('Sortroom gets access to this mailbox through your own OAuth app – no password is stored.') }}</div>
   </div>
   <a class="btn" href="/ui/m/{{ box.id }}/settings">{{ _('Cancel') }}</a>
