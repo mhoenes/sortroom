@@ -439,6 +439,7 @@
  "Settings saved. The mailbox folder is now mailboxes/%(id)s.": "Einstellungen gespeichert. Der Ordner des Postfachs heißt jetzt mailboxes/%(id)s.",
  "Settings saved. They apply from the next run.": "Einstellungen gespeichert. Gilt ab dem nächsten Lauf.",
  "Share of the mails the model filed in this category in the last 30 days that were put into another category by hand – on the Mails page, or moved into the folder of another category or back into the inbox (found by the reconcile).": "Anteil der Mails, die das Modell in den letzten 30 Tagen hier einsortiert hat und die von Hand in eine andere Kategorie kamen – auf der Mails-Seite, oder in den Ordner einer anderen Kategorie bzw. zurück in den Posteingang verschoben (vom Abgleich erkannt).",
+ "Show": "Anzeigen",
  "Show all %(n)s": "Alle %(n)s anzeigen",
  "Show deleted": "Gelöschte anzeigen",
  "Show its mails": "Mails anzeigen",

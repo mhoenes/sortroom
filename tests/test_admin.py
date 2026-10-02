@@ -324,7 +324,7 @@ def test_undo_a_run_from_the_run_log(client, setup, monkeypatch):
 
     monkeypatch.setattr(admin, "run_undo", fake_undo)
     link = "/ui/m/privat/undo?run=2026-09-30T10%3A00%3A00"
-    assert f'href="{link}">Rückgängig</a>' in client.get("/ui/m/privat").text
+    assert f'href="{link}">Anzeigen</a>' in client.get("/ui/m/privat").text
     html = client.get("/ui/m/privat/maintenance").text  # the run can be picked there too
     assert '<option value="2026-09-30T10:00:00">' in html and 'action="/ui/m/privat/undo"' in html
     html = client.get(link).text                          # its page lists the mails, all chosen
