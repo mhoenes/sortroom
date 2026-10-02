@@ -224,7 +224,7 @@ def test_add_mailbox(client, setup):
     secrets = tomllib.loads((setup / "mailboxes" / "gmail" / "secrets.toml").read_text(encoding="utf-8"))
     assert secrets["imap"] == {"user": "me@gmail.com", "password": "app-pw"}
     html = client.get(r.headers["location"]).text
-    assert "Postfach angelegt" in html and "gesetzt" in html and "app-pw" not in html
+    assert "Postfach angelegt" in html and "gespeichert" in html and "app-pw" not in html
     r = client.post("/ui/mailboxes/new", data=form, follow_redirects=False)  # same name again: next free folder
     assert r.status_code == 303 and r.headers["location"] == "/ui/m/gmail-2/settings"
 

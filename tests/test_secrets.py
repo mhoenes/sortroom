@@ -114,7 +114,7 @@ def test_login_fields_are_checked(setup):
 
 def test_settings_login_is_write_only(client, setup):
     html = client.get("/ui/m/privat/settings").text
-    assert 'name="imap_user" value="u"' in html and 'name="imap_password"' in html and "gesetzt" in html
+    assert 'name="imap_user" value="u"' in html and 'name="imap_password"' in html and "gespeichert" in html
     form = {**SETTINGS, "csrf": _csrf(html), "imap_user": "me@example.de", "imap_password": "Geheim-123"}
     assert client.post("/ui/m/privat/settings", data=form, follow_redirects=False).status_code == 303
     path = setup / "mailboxes" / "privat" / "secrets.toml"
@@ -164,7 +164,7 @@ def test_shared_api_key_is_write_only(client, setup):
     assert client.post("/ui/settings", data=form, follow_redirects=False).status_code == 303
     assert _secrets(setup / "secrets.toml") == {"classifier": {"api_key": "sk-Geheim"}}
     html = client.get("/ui/settings").text
-    assert "sk-Geheim" not in html and "gesetzt" in html
+    assert "sk-Geheim" not in html and "gespeichert" in html
     assert load_credentials(_box(setup)).classifier_api_key == "sk-Geheim"
 
     assert client.post("/ui/settings", data={**form, "api_key": ""}, follow_redirects=False).status_code == 303
