@@ -21,7 +21,7 @@ from .. import jobs
 from ..config import (IMAP_AUTHS, INBOX_ACTION, SECRETS_FILE, Config, ConfigError, Mailbox, _read_toml,
                       config_from_raw, default_label, mailbox_id_for, read_secrets, secrets_writable, valid_mailbox_id,
                       write_secrets)
-from ..i18n import DEFAULT_LANGUAGE, LANGUAGES, _
+from ..i18n import DEFAULT_LANGUAGE, LANGUAGES, THEMES, _
 from ..runtime import single_instance
 
 
@@ -577,6 +577,10 @@ def save_shared(base_dir: Path, shared_path: Path, form: dict) -> None:
     if "ui" not in doc:
         doc["ui"] = tomlkit.table()
     doc["ui"]["language"] = language
+    theme = _text(form, "theme", 10) or "auto"
+    if theme not in THEMES:
+        raise EditError(_("Unknown appearance."))
+    doc["ui"]["theme"] = theme
     key = _secret_text(form, "api_key", _("API key"), strip=True)  # write-only: empty keeps the stored one
     secrets = shared_path.with_name(SECRETS_FILE)
     if key and not secrets_writable(secrets):

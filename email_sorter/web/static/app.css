@@ -16,10 +16,12 @@
   --mono: ui-monospace, 'Cascadia Mono', SFMono-Regular, Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
-/* dark mode follows the system setting. The same warm greys, turned around; the sidebar stays the darkest
-   part. Text keeps 4.5:1 and field borders 3:1 against the cards, like in light mode. */
+/* dark mode: the same warm greys, turned around; the sidebar stays the darkest part. Text keeps 4.5:1 and
+   field borders 3:1 against the cards, like in light mode. It follows the system setting unless Global
+   settings choose "Light" (data-theme="light") or "Dark" (data-theme="dark"); CSS can't share a block between
+   the two cases, so the palette is written twice - tests/test_web.py checks the copies are the same. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --ground: #161513; --surface: #1F1E1B; --line: #34322D; --line-soft: #2A2925; --line-strong: #45423B;
     --ink: #ECEAE4; --muted: #ABA69A; --faint: #8A8579;
     --field-line: #7C776D;
@@ -33,8 +35,23 @@
     --shadow: rgba(0, 0, 0, .5);
     color-scheme: dark;
   }
-  .side { box-shadow: inset -1px 0 0 var(--line-soft); }  /* close in tone to the page: a line keeps them apart */
+  :root:not([data-theme="light"]) .side { box-shadow: inset -1px 0 0 var(--line-soft); }
 }
+:root[data-theme="dark"] {
+  --ground: #161513; --surface: #1F1E1B; --line: #34322D; --line-soft: #2A2925; --line-strong: #45423B;
+  --ink: #ECEAE4; --muted: #ABA69A; --faint: #8A8579;
+  --field-line: #7C776D;
+  --accent: #3FB3A7; --accent-ink: #74D0C6; --accent-soft: #173431; --accent-line: #2D635C;
+  --side: #0F0E0C; --side-2: #1C1B18; --side-3: #2C2A25;
+  --ok-bg: #1B3326; --ok: #8FD3A8;
+  --warn-bg: #3A2A12; --warn: #F2B866; --warn-bar: #D98A2B;
+  --err-bg: #3D1E1A; --err: #F29B8E; --err-bar: #D2503F; --err-line: #B0645A;
+  --neutral-bg: #2E2C28; --star: #E0A82E;
+  --on-accent: #0B1F1D; --row-hover: #25231F; --row-changed: #2E2818; --tip-bg: #3A3833; --tip-ink: #F4F3EF;
+  --shadow: rgba(0, 0, 0, .5);
+  color-scheme: dark;
+}
+:root[data-theme="dark"] .side { box-shadow: inset -1px 0 0 var(--line-soft); }
 * { box-sizing: border-box; }
 /* figures all the same width, so numbers, times and amounts line up in columns without a monospace font;
    monospace is kept for what is typed or read character by character (paths, keys, ids) */

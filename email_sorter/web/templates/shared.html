@@ -24,6 +24,8 @@
       <div class="grid cols-3">
         <label class="f"><span class="lt">{{ _('Language') }} {{ help(_('Language of this interface for everybody who uses it.')) }}</span>
           <select name="language">{% for code, name in languages.items() %}<option value="{{ code }}" {% if form.language == code %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+        <label class="f"><span class="lt">{{ _('Appearance') }} {{ help(_('Light or dark, for everybody who uses this interface. "Automatic" follows the setting of each device.')) }}</span>
+          <select name="theme">{% for value, name in [('auto', _('Automatic')), ('light', _('Light')), ('dark', _('Dark'))] %}<option value="{{ value }}" {% if form.theme == value %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
       </div>
     </section>
     <section class="card stack">

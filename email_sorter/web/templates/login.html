@@ -1,5 +1,6 @@
 <!doctype html>
-<html lang="{{ lang() }}">
+{% set theme = request.state.theme if request is defined and request.state.theme is defined else 'auto' %}
+<html lang="{{ lang() }}"{% if theme != 'auto' %} data-theme="{{ theme }}"{% endif %}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,8 +10,8 @@
 <link rel="icon" href="{{ asset('icon-32.png') }}" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}">
 <link rel="manifest" href="/ui/static/manifest.webmanifest">
-<meta name="theme-color" content="#1B1A17" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0F0E0C" media="(prefers-color-scheme: dark)">
+{% if theme != 'dark' %}<meta name="theme-color" content="#1B1A17"{% if theme == 'auto' %} media="(prefers-color-scheme: light)"{% endif %}>{% endif %}
+{% if theme != 'light' %}<meta name="theme-color" content="#0F0E0C"{% if theme == 'auto' %} media="(prefers-color-scheme: dark)"{% endif %}>{% endif %}
 </head>
 <body>
 <div class="login">

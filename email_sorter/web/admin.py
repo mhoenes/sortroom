@@ -370,7 +370,7 @@ def _shared_page(request: Request, form: dict | None = None, error: str | None =
                 "max_body_chars": classifier.get("max_body_chars", 3000),
                 "timeout_seconds": form_number(float(classifier.get("timeout_seconds", 20))),
                 "min_interval_seconds": form_number(float(classifier.get("min_interval_seconds", 0))),
-                "language": i18n.configured_language(path)}
+                "language": i18n.configured_language(path), "theme": i18n.configured_theme(path)}
     return _page(request, "shared.html", {
         **_sidebar(request, boxes, None, "shared"), "form": form, "error": error, "editable": shared_writable(path),
         "config_name": path.name, "languages": i18n.LANGUAGES, "secrets_file": SECRETS_FILE, "retype": retype,
