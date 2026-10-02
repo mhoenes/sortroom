@@ -49,7 +49,7 @@
     </section>
     {% if editable %}<div class="actions"><button class="btn primary" type="submit">{{ _('Save') }}</button>
       <button class="btn" type="submit" name="then" value="check">{{ _('Save & check') }}</button>
-      {{ help(_('Saves, then sends the model one sample mail with the standard categories. Costs a fraction of a cent.')) }}
+      <span class="muted hint">{{ _('"Save & check" also sends the model one sample mail with the standard categories – a fraction of a cent.') }}</span>
       <span class="hint unsaved" hidden>{{ _('Not saved yet') }}</span></div>{% endif %}
   </fieldset>
 </form>
