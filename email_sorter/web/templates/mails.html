@@ -99,41 +99,38 @@
       {% set back = query ~ ('&' if query else '') ~ 'page=' ~ f.page ~ '&key=' ~ link_key(m.message_key) %}
       {% set token = csrf_token(request) %}
       {% set suggested = box.cfg.categories.get(m.category) %}
+      {# one look for every action: the suggestion as the main button, then field + button rows, the rule last #}
+      {% set hidden %}<input type="hidden" name="csrf" value="{{ token }}"><input type="hidden" name="key" value="{{ m.message_key }}">
+        <input type="hidden" name="back" value="{{ back }}">{% endset %}
       {% if not m.moved_to and suggested and suggested.folder %}
-      <form method="post" action="/ui/m/{{ box.id }}/mails/action" class="stack tight">
-        <input type="hidden" name="csrf" value="{{ token }}"><input type="hidden" name="key" value="{{ m.message_key }}">
-        <input type="hidden" name="back" value="{{ back }}"><input type="hidden" name="action" value="accept">
-        <input type="hidden" name="category" value="{{ m.category }}">
+      <form method="post" action="/ui/m/{{ box.id }}/mails/action" class="act">
+        {{ hidden }}<input type="hidden" name="action" value="accept"><input type="hidden" name="category" value="{{ m.category }}">
         <button class="btn primary" type="submit">{{ _('Accept: move to %(folder)s', folder=suggested.folder|folder_label) }}</button>
       </form>
       {% endif %}
-      {% if m.expired_tagged != 1 %}
-      <form method="post" action="/ui/m/{{ box.id }}/mails/action" class="stack tight">
-        <input type="hidden" name="csrf" value="{{ token }}"><input type="hidden" name="key" value="{{ m.message_key }}">
-        <input type="hidden" name="back" value="{{ back }}"><input type="hidden" name="action" value="expiry">
-        {% set tip = _('After this day the next run moves the mail to %(folder)s.', folder=expired_to(m.category)) if expired_to(m.category) else _('No folder for expired mail is set – the date is only shown.') %}
-        <label class="f"><span class="lt">{{ _('Valid until') }}
-          <span class="help" tabindex="0" role="note" data-tip="{{ tip }}" aria-label="{{ tip }}">?</span></span>
-          <input type="date" name="expires" value="{{ m.expires or '' }}"></label>
-        <div class="actions"><button class="btn small" type="submit">{{ _('Save date') }}</button>
-          {% if m.expires %}<button class="btn small" type="submit" name="clear" value="1">{{ _('Remove') }}</button>{% endif %}</div>
-      </form>
-      {% endif %}
-      <form method="post" action="/ui/m/{{ box.id }}/mails/action" class="stack tight">
-        <input type="hidden" name="csrf" value="{{ token }}"><input type="hidden" name="key" value="{{ m.message_key }}">
-        <input type="hidden" name="back" value="{{ back }}"><input type="hidden" name="action" value="move">
-        <label class="f">{{ _('Correct') }}
-          <select name="category">
+      <form method="post" action="/ui/m/{{ box.id }}/mails/action" class="act">
+        {{ hidden }}<input type="hidden" name="action" value="move">
+        <div class="f"><label for="correct">{{ _('Correct') }}</label>
+          <span class="combo"><select name="category" id="correct">
             {% for key, c in box.cfg.categories.items() %}{% set where = c.folder|folder_label %}<option value="{{ key }}" {% if key == m.category %}selected{% endif %}>{{ c.label }}{% if where != c.label %} → {{ where }}{% endif %}</option>{% endfor %}
             <option value="inbox">{{ _('Back to the inbox') }}</option>
-          </select></label>
-        <button class="btn" type="submit">{{ _('Move') }}</button>
+          </select><button class="btn" type="submit">{{ _('Move') }}</button></span></div>
       </form>
-      <details class="more">
+      {% if m.expired_tagged != 1 %}
+      <form method="post" action="/ui/m/{{ box.id }}/mails/action" class="act">
+        {{ hidden }}<input type="hidden" name="action" value="expiry">
+        {% set tip = _('After this day the next run moves the mail to %(folder)s.', folder=expired_to(m.category)) if expired_to(m.category) else _('No folder for expired mail is set – the date is only shown.') %}
+        <div class="f"><span class="lt"><label for="expires">{{ _('Valid until') }}</label>
+          <span class="help" tabindex="0" role="note" data-tip="{{ tip }}" aria-label="{{ tip }}">?</span></span>
+          <span class="combo"><input type="date" name="expires" id="expires" value="{{ m.expires or '' }}"><button class="btn" type="submit">{{ _('Save') }}</button>
+            {% if m.expires %}<button class="btn icon" type="submit" name="clear" value="1" aria-label="{{ _('Remove the date') }}" title="{{ _('Remove the date') }}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>{% endif %}</span></div>
+      </form>
+      {% endif %}
+      <details class="more act">
         <summary>{{ _('Create a sender rule') }}</summary>
         <form method="post" action="/ui/m/{{ box.id }}/mails/action" class="stack tight">
-          <input type="hidden" name="csrf" value="{{ token }}"><input type="hidden" name="key" value="{{ m.message_key }}">
-          <input type="hidden" name="back" value="{{ back }}"><input type="hidden" name="action" value="rule">
+          {{ hidden }}<input type="hidden" name="action" value="rule">
           {% set addr = (m.sender or '')|lower %}
           <label class="f">{{ _('Sender') }}
             <select name="match">
@@ -146,7 +143,7 @@
               {% for key, c in box.cfg.categories.items() %}<option value="{{ key }}" {% if key == m.category %}selected{% endif %}>{{ _('to %(category)s', category=c.label) }}</option>{% endfor %}
             </select></label>
           <label class="check small"><input type="checkbox" name="apply" value="1" checked>{{ _('Move this mail right away') }}</label>
-          <button class="btn" type="submit">{{ _('Save rule') }}</button>
+          <div class="actions"><button class="btn" type="submit">{{ _('Save rule') }}</button></div>
         </form>
       </details>
       {% endif %}
@@ -154,8 +151,8 @@
   {% endif %}
 </div>
 <script>
-  // Opening a mail reloads the page: keep the list where it was, or on narrow
-  // screens (detail above the list) jump straight to the detail.
+  // Opening a mail reloads the page: keep the list where it was, or on a phone
+  // (detail above the list) jump straight to the detail. Escape closes the detail.
   (() => {
     const key = 'mails-scroll:' + location.pathname;
     document.querySelectorAll('.maillist a.rowlink, .detail a.close').forEach(a => a.addEventListener('click', () => {
@@ -164,8 +161,13 @@
     let y = null;
     try { y = sessionStorage.getItem(key); sessionStorage.removeItem(key); } catch (e) {}
     const detail = document.querySelector('.detail');
-    if (detail && matchMedia('(max-width: 1100px)').matches) detail.scrollIntoView();
+    if (detail && matchMedia('(max-width: 760px)').matches) detail.scrollIntoView();
     else if (y !== null) scrollTo(0, Number(y));
+    const close = document.querySelector('.detail a.close');
+    document.addEventListener('keydown', e => {
+      if (close && e.key === 'Escape' && !e.target.closest('input, select, textarea, .help')
+          && !document.querySelector('.side.open, .help.open')) close.click();
+    });
   })();
 </script>
 {% endblock %}
