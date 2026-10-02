@@ -263,17 +263,24 @@ def test_formatters():  # German (the tests' default language); English in test_
     assert i18n.dt("2020-01-14T16:32:00", True) == "14.01.2020 16:32"
     utc = datetime(year, 9, 24, 10, 0, tzinfo=UTC)
     assert i18n.dt(utc.isoformat()) == utc.astimezone().strftime("%d.%m. %H:%M")  # sender's offset -> local
-    assert web.usd(0.00009, 5) == "$0.00009"
+    assert i18n.usd(0.00009, 5) == "0,00009\u00a0$"
 
 
 def test_small_costs_keep_two_significant_digits():
-    usd = web.usd
-    assert usd(0) == "$0.00" and usd(None) == "$0.00" and usd(0, 4) == "$0.0000"
-    assert usd(12.345) == "$12.35" and usd(0.5) == "$0.50"        # a cent or more: as before
-    assert usd(0.0123) == "$0.012"
-    assert usd(0.00042) == "$0.00042" and usd(0.0004) == "$0.0004"  # no trailing zero beyond the minimum
-    assert usd(0.00002, 4) == "$0.00002" and usd(0.000021) == "$0.000021"
-    assert usd(0.0000004) == "<$0.000001"                           # below what the log keeps
+    usd = i18n.usd
+    token = i18n.set_language("en")
+    try:
+        assert usd(0) == "$0.00" and usd(None) == "$0.00" and usd(0, 4) == "$0.0000"
+        assert usd(12.345) == "$12.35" and usd(0.5) == "$0.50" and usd(1234.5) == "$1,234.50"  # a cent or more
+        assert usd(0.0123) == "$0.012"
+        assert usd(0.00042) == "$0.00042" and usd(0.0004) == "$0.0004"  # no trailing zero beyond the minimum
+        assert usd(0.00002, 4) == "$0.00002" and usd(0.000021) == "$0.000021" and usd(0.00009, 5) == "$0.00009"
+        assert usd(0.0000004) == "<$0.000001"                           # below what the log keeps
+    finally:
+        i18n.reset_language(token)
+    # German: decimal comma and the sign after the amount, as for percentages
+    assert usd(0.00042) == "0,00042\u00a0$" and usd(1234.5) == "1 234,50\u00a0$" and usd(0) == "0,00\u00a0$"
+    assert usd(0.0000004) == "<0,000001\u00a0$"
 
 
 def test_all_mailboxes_subtitle_says_what_is_going_on(client, monkeypatch):

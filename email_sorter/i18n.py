@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextvars
 import json
+import math
 import tomllib
 from datetime import datetime
 from pathlib import Path
@@ -107,6 +108,26 @@ def percent(part: int, whole: int) -> str:
     value = 100 * part / whole
     s = num(value, 1 if 0 < value < 10 else 0)
     return f"{s} %" if language() == "de" else f"{s}%"
+
+
+USD_MAX_DECIMALS = 6  # what the log keeps per mail
+
+
+def usd(value, decimals: int = 2) -> str:
+    """'$0.00042' (en) / '0,00042 $' (de). At least `decimals` places, more where a small amount would otherwise
+    show as $0.00: a model call costs fractions of a cent, so a month's cost needs two significant digits."""
+    value = value or 0
+    places = decimals
+    if 0 < value < 1:
+        places = max(decimals, min(USD_MAX_DECIMALS, 1 - math.floor(math.log10(value))))
+        if round(value, places) == 0:
+            return "<" + usd(10 ** -places, places)
+    text = f"{value:,.{places}f}"
+    while places > decimals and text.endswith("0"):  # $0.0004, not $0.00040
+        text, places = text[:-1], places - 1
+    if language() == "de":
+        return text.replace(",", " ").replace(".", ",") + "\u00a0$"  # no break between amount and sign
+    return f"${text}"
 
 
 def conf(value) -> str:

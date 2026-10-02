@@ -312,7 +312,7 @@ svg.star { display: block; width: 16px; height: 16px; fill: var(--star); }
 
 .expired { color: var(--muted); text-decoration: line-through; }
 
-/* help tooltips: hover or keyboard focus */
+/* help tooltips: hover, keyboard focus, or a tap/click (base.html toggles .open) */
 .help { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
   margin-left: 4px; border-radius: 9px; border: 1px solid var(--line-strong); color: var(--muted); font-size: 11px;
   font-weight: 600; cursor: help; vertical-align: middle; }
@@ -322,7 +322,15 @@ svg.star { display: block; width: 16px; height: 16px; fill: var(--star); }
   font-size: 12px; font-weight: 400; line-height: 1.45; text-align: left; white-space: normal; z-index: 20;
   pointer-events: none; display: none; }
 /* display, not opacity: a hidden but laid-out tip would widen the page */
-.help:hover::after, .help:focus-visible::after { display: block; }
+.help:hover::after, .help:focus-visible::after, .help.open::after { display: block; }
+/* touch screens: no hover, and a tip beside a "?" near the edge would run off the screen - show it as a
+   panel along the bottom of the window instead */
+@media (hover: none) {
+  .help:hover::after { display: none; }
+  .help.open::after { display: block; position: fixed; left: 16px; right: 16px; bottom: 16px; top: auto;
+    transform: none; width: auto; max-width: none; padding: 12px 14px; font-size: 14px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, .25); }
+}
 
 @media (max-width: 1100px) {
   .cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }

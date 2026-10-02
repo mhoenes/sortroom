@@ -428,5 +428,5 @@ def _check_model(shared_path) -> tuple[str, str]:
     except ClassifierError as e:
         return "err", _("Model check failed: %(e)s", e=e)
     return "ok", _("Model works: a sample invoice was filed under \"%(category)s\" (confidence %(conf)s, "
-                   "cost $%(cost)s).",
-                   category=d.category, conf=i18n.conf(d.confidence), cost=f"{d.cost:.6f}")
+                   "cost %(cost)s).",
+                   category=d.category, conf=i18n.conf(d.confidence), cost=i18n.usd(d.cost, 6))
