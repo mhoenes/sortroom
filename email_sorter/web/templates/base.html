@@ -100,6 +100,21 @@
     btn.addEventListener('click', () => set(!side.classList.contains('open')));
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && side.classList.contains('open')) { set(false); btn.focus(); } });
   })();
+  // help tips (?): a tap or click opens and closes them. They often sit inside a <label>, where the click
+  // would otherwise tick the checkbox or jump into the field.
+  (() => {
+    const close = except => document.querySelectorAll('.help.open').forEach(h => { if (h !== except) h.classList.remove('open'); });
+    document.addEventListener('click', e => {
+      const help = e.target.closest('.help');
+      if (help) { e.preventDefault(); close(help); help.classList.toggle('open'); } else close();
+    });
+    document.addEventListener('keydown', e => {
+      const help = e.target.closest && e.target.closest('.help');
+      if (help && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); help.classList.toggle('open'); }
+      if (e.key === 'Escape') close();
+    });
+    document.addEventListener('focusout', e => { if (e.target.closest && e.target.closest('.help')) e.target.classList.remove('open'); });
+  })();
   // success messages disappear after 3 s; warnings and errors stay
   document.querySelectorAll('[data-autohide]').forEach(el => setTimeout(() => {
     el.classList.add('hiding');
