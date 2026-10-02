@@ -152,6 +152,27 @@ def undoable_runs(db: sqlite3.Connection | None) -> list[dict]:
         "FROM undo u JOIN runs r ON r.started = u.run AND r.live = 1 GROUP BY u.run ORDER BY u.run DESC")]
 
 
+def run_mails(db: sqlite3.Connection | None, run: str) -> list[dict]:
+    """The mails a run sorted, newest first: their log entry now (subject etc., None where the log forgot
+    the mail), where the run took them from (origin) and put them (run_moved_to), whether the run gave the
+    star, and whether a later run sorted them again."""
+    if db is None or not _has_table(db, "undo"):
+        return []
+    out = []
+    for r in db.execute(
+            "SELECT u.message_key AS key, u.origin, u.moved_to AS run_moved_to, u.before, "
+            "EXISTS (SELECT 1 FROM undo l WHERE l.message_key = u.message_key AND l.run > u.run) AS later, "
+            "p.message_key IS NOT NULL AS known, p.received, p.sender, p.subject, p.category, p.moved_to, "
+            "p.flagged, p.gone, p.expired_tagged, p.source "
+            f"FROM undo u LEFT JOIN processed p ON p.message_key = u.message_key WHERE u.run = ? "
+            f"ORDER BY {RECEIVED} DESC", (run,)):
+        m = dict(r)
+        before = json.loads(m.pop("before")) if r["before"] else None
+        m["starred"] = bool(m["flagged"]) and not (before and before.get("flagged"))
+        out.append(m)
+    return out
+
+
 SENDER_DAYS = 90
 
 

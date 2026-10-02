@@ -150,7 +150,7 @@ def test_maintenance_page_and_run_job(client, monkeypatch):
     assert "Lauf (Probelauf)" in client.get("/ui/m/privat/maintenance").text  # listed as recent job
     # "Ausführen" is the second submit button of each task; it posts live=1
     page = client.get("/ui/m/privat/maintenance").text
-    assert page.count('>Probelauf</button>') == page.count('name="live" value="1"') == 9
+    assert page.count('>Probelauf</button>') == page.count('name="live" value="1"') == 8  # undo: on the run's page
     r = client.post("/ui/m/privat/maintenance/run", data={"csrf": _csrf(page), "live": "1"}, follow_redirects=False)
     _wait(r.headers["location"].rsplit("/", 1)[1])
     assert calls[-1] == (True, None)
@@ -318,21 +318,28 @@ def test_undo_a_run_from_the_run_log(client, setup, monkeypatch):
     store.close()
     calls = []
 
-    def fake_undo(cfg, creds, ws, run, live, sort_again):
-        calls.append((run, live, sort_again))
+    def fake_undo(cfg, creds, ws, run, live, sort_again, keys=None):
+        calls.append((run, live, sort_again, keys))
         return {"ok": True, "live": live, "exit_code": 0, "summary": "1 Mail(s) zurückverschoben"}
 
     monkeypatch.setattr(admin, "run_undo", fake_undo)
-    link = "/ui/m/privat/maintenance?undo=2026-09-30T10%3A00%3A00#undo"
-    assert f'href="{link}">Rückgängig</a>' in client.get("/ui/m/privat").text
-    html = client.get(link).text
-    assert '<option value="2026-09-30T10:00:00" selected>' in html and "1 Mail" in html
-    r = client.post("/ui/m/privat/maintenance/undo", data={"csrf": _csrf(html), "run": "2026-09-30T10:00:00",
-                                                          "sort_again": "1"}, follow_redirects=False)
+    link = "/ui/m/privat/undo?run=2026-09-30T10%3A00%3A00"
+    assert f'href="{link}">Anzeigen</a>' in client.get("/ui/m/privat").text
+    html = client.get("/ui/m/privat/maintenance").text  # the run can be picked there too
+    assert '<option value="2026-09-30T10:00:00">' in html and 'action="/ui/m/privat/undo"' in html
+    html = client.get(link).text                          # its page lists the mails, all chosen
+    assert "Rechnung" in html and "a@b.de" in html and 'name="key" value="&lt;m2@x&gt;" checked' in html
+    assert "1 lässt sich noch rückgängig machen" in html
+    form = {"csrf": _csrf(html), "run": "2026-09-30T10:00:00", "chosen": "1", "sort_again": "1"}
+    r = client.post("/ui/m/privat/maintenance/undo", data=form, follow_redirects=False)  # none ticked
+    assert r.status_code == 303 and r.headers["location"] == "/ui/m/privat/undo?run=2026-09-30T10%3A00%3A00"
+    assert "Bitte mindestens eine Mail auswählen" in client.get(r.headers["location"]).text
+    r = client.post("/ui/m/privat/maintenance/undo", data={**form, "key": "<m2@x>"}, follow_redirects=False)
     _wait(r.headers["location"].rsplit("/", 1)[1])
-    assert calls == [("2026-09-30T10:00:00", False, True)]
+    assert calls == [("2026-09-30T10:00:00", False, True, ["<m2@x>"])]
     page = client.get(r.headers["location"]).text
-    assert "Lauf vom 30.09." in page and "rückgängig machen (Probelauf)" in page and "zurückverschoben" in page
+    assert "Lauf vom 30.09." in page and "1 Mail (Probelauf)" in page and "zurückverschoben" in page
+    assert 'name="keys"' in page  # "run it for real" undoes the same chosen mails
     assert "Jetzt ausführen" in page  # the dry run can be run for real with the same choice
 
 

@@ -95,17 +95,16 @@
           </select></label></div>
       {{ go() }}
     </form>
-    <form class="task" id="undo" method="post" action="/ui/m/{{ box.id }}/maintenance/undo">{{ hidden() }}
+    {# undoing happens on the run's own page, which lists its mails #}
+    <form class="task" id="undo" method="get" action="/ui/m/{{ box.id }}/undo">
       <div class="about"><h3>{{ _('Undo a run') }}</h3>
         <p>{{ _('Moves the mails a run sorted back to where they came from and removes the stars it set. Mails you moved, deleted or corrected since stay as they are; expired offers are not brought back.') }}</p></div>
       <div class="fields stacked">{% if undoable %}<label class="f">{{ _('Run') }}
           <select name="run" required>
-            {% for r in undoable %}<option value="{{ r.started }}" {% if r.started == undo_run %}selected{% endif %}>{{ r.started|dt }} · {{ run_kind(r.kind) }}{% if r.detail %} {{ r.detail }}{% endif %} · {{ ngettext('%(num)s mail', '%(num)s mails', r.mails, num=r.mails|num) }}</option>{% endfor %}
+            {% for r in undoable %}<option value="{{ r.started }}">{{ r.started|dt }} · {{ run_kind(r.kind) }}{% if r.detail %} {{ r.detail }}{% endif %} · {{ ngettext('%(num)s mail', '%(num)s mails', r.mails, num=r.mails|num) }}</option>{% endfor %}
           </select></label>
-        <label class="check small"><input type="checkbox" name="sort_again" value="1">{{ _('Sort them again at the next run') }}
-          {{ help(_('Otherwise they stay in the inbox and are not sorted again. The next run only picks up mails of the last %(days)s days; older ones need a backfill.', days=box.cfg.lookback_days)) }}</label>
         {% else %}<p class="muted">{{ _('No run to undo. A run can be undone as long as it is in the run log.') }}</p>{% endif %}</div>
-      {{ go(disabled=not undoable, why=_('No run to undo')) }}
+      <div class="go"><button class="btn small" type="submit" {% if not undoable %}disabled title="{{ _('No run to undo') }}"{% endif %}>{{ _('Show its mails') }}</button></div>
     </form>
   </div>
 </section>

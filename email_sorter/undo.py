@@ -1,5 +1,7 @@
 """Undo a live run:  python -m email_sorter --undo-run 2026-09-30T10:12:00 [--sort-again] [--live]
 
+The admin UI lists the mails of a run and can undo only some of them (`keys`).
+
 Every live run, backfill and re-sort notes in the log which mails it sorted, the folder they came
 from and how their log entry looked before. Undo uses that:
 - the mails go back to the folder they came from (the inbox, or the re-sorted folder) and lose the
@@ -14,6 +16,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from collections.abc import Collection, Mapping
 from datetime import datetime
 from pathlib import Path
 
@@ -28,16 +31,32 @@ from .store import MOVED, Store
 log = logging.getLogger(__name__)
 
 
+def changed_since(row: Mapping | None, later: bool, moved_to: str | None) -> str | None:
+    """Why a mail of a run can't be undone any more, or None while it is still as the run left it
+    (`row`: its log entry now, `later`: a later run sorted it again, `moved_to`: where the run put it)."""
+    if row is None:
+        return "forgotten"   # no longer in the log
+    if later:
+        return "later"
+    if row["gone"]:
+        return "gone"        # deleted, or in no folder at the last reconcile
+    if row["expired_tagged"] == MOVED:
+        return "expired"
+    if row["source"] == "manual":
+        return "manual"      # corrected by hand
+    if row["moved_to"] != moved_to:
+        return "moved"       # moved by you, seen by the reconcile
+    return None
+
+
 def _unchanged(entry: dict) -> bool:
-    """The mail is still as the run left it."""
-    row = entry["row"]
-    return (row is not None and not entry["later"] and not row["gone"] and row["expired_tagged"] != MOVED
-            and row["source"] != "manual" and row["moved_to"] == entry["moved_to"])
+    return changed_since(entry["row"], entry["later"], entry["moved_to"]) is None
 
 
 def run_undo(cfg: Config, creds: Credentials, base_dir: Path, run: str, live: bool,
-             sort_again: bool = False) -> dict:
-    """Undo the live run that started at `run` (as in the run log). Changes nothing without `live`."""
+             sort_again: bool = False, keys: Collection[str] | None = None) -> dict:
+    """Undo the live run that started at `run` (as in the run log), or only its mails in `keys`; the others
+    can still be undone later. Changes nothing without `live`."""
     store = Store(base_dir / "data" / "state.db")
     started = datetime.now()
     try:
@@ -48,6 +67,14 @@ def run_undo(cfg: Config, creds: Credentials, base_dir: Path, run: str, live: bo
             log.error("no run started at %r that can be undone", run)
             return {"ok": False, "live": live, "exit_code": 2,
                     "summary": _("This run cannot be undone (any more).")}
+        left_out: set[str] = set()
+        if keys is not None:
+            left_out = {e["key"] for e in entries} - set(keys)
+            entries = [e for e in entries if e["key"] not in left_out]
+            if not entries:
+                return {"ok": False, "live": live, "exit_code": 2,
+                        "summary": _("None of the chosen mails belongs to this run.")}
+            log.info("only %d chosen mail(s) of the run", len(entries))
         todo = [e for e in entries if _unchanged(e)]
         changed = len(entries) - len(todo)
         for e in todo:
@@ -116,7 +143,7 @@ def run_undo(cfg: Config, creds: Credentials, base_dir: Path, run: str, live: bo
                     forget.append(entry["key"])
                 else:
                     back_to[entry["key"]] = entry["origin"]
-            store.undo(run, restore, forget, back_to, keep=failed)
+            store.undo(run, restore, forget, back_to, keep=failed | left_out)
             finish(store, "undo", run, started, RunResult(
                 exit_code=1 if failed else 0, live=True, classified=len(handled), moved=moved, failed=len(failed)))
             if forget:

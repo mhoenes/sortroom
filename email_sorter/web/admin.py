@@ -1,6 +1,7 @@
 """Pages that act on mail: maintenance jobs, single-mail corrections, adding a mailbox, shared settings."""
 from __future__ import annotations
 
+import json
 import logging
 import time
 import tomllib
@@ -26,7 +27,7 @@ from ..reconcile import run_reconcile
 from ..resort import run_resort
 from ..runtime import single_instance
 from ..sorter import RunResult, expired_target, run, run_backfill, run_recheck_expiry
-from ..undo import run_undo
+from ..undo import changed_since, run_undo
 from ..store import Store
 from . import _box, _boxes, _sidebar, queries, require_login, router
 from .editing import (EditError, add_sender_rule, can_add_mailbox, create_mailbox, rename_category_key, with_kind,
@@ -45,7 +46,7 @@ RISKY_TASKS = {"rename_folder", "rename_category"}  # change the server and the 
 # ---------------------------------------------------------------- maintenance
 
 @router.get("/ui/m/{box_id}/maintenance", response_class=HTMLResponse, dependencies=[Depends(require_login)])
-def maintenance(request: Request, box_id: str, undo: str = ""):
+def maintenance(request: Request, box_id: str):
     boxes, box = _box(request, box_id)
     db = queries.connect(box.workspace)
     try:
@@ -58,7 +59,28 @@ def maintenance(request: Request, box_id: str, undo: str = ""):
     return _page(request, "maintenance.html", {
         **_sidebar(request, boxes, box, "maintenance"), "box": box, "tasks": TASKS,
         "jobs": jobs.recent(box.id, 15), "folders": cat_folders, "busy": request.app.state.is_busy(box),
-        "editable": writable(box), "today": date.today().isoformat(), "undoable": undoable, "undo_run": undo})
+        "editable": writable(box), "today": date.today().isoformat(), "undoable": undoable})
+
+
+@router.get("/ui/m/{box_id}/undo", response_class=HTMLResponse, dependencies=[Depends(require_login)])
+def undo_page(request: Request, box_id: str, run: str = ""):
+    """The mails of a run: which can still be undone, and why the others can't any more."""
+    boxes, box = _box(request, box_id)
+    db = queries.connect(box.workspace)
+    try:
+        info = next((r for r in queries.undoable_runs(db) if r["started"] == run), None)
+        mails = queries.run_mails(db, run) if info else []
+    finally:
+        if db:
+            db.close()
+    if info is None:
+        _flash(request, _("This run cannot be undone (any more)."), "warn")
+        return RedirectResponse(f"/ui/m/{box.id}/maintenance", status_code=303)
+    for m in mails:
+        m["blocked"] = changed_since(m if m["known"] else None, bool(m["later"]), m["run_moved_to"])
+    return _page(request, "undo.html", {
+        **_sidebar(request, boxes, box, "maintenance"), "box": box, "run": info, "mails": mails,
+        "undoable": sum(1 for m in mails if not m["blocked"]), "busy": request.app.state.is_busy(box)})
 
 
 def _flag(form: dict, name: str) -> bool:
@@ -95,9 +117,20 @@ def _job_for(request: Request, box: Mailbox, task: str, form: dict):
         stamp, sort_again = str(form.get("run") or ""), _flag(form, "sort_again")
         if not stamp:
             raise EditError(_("Please choose a run."))
+        keys: list[str] | None = None  # None: the whole run
+        if form.get("keys") is not None:
+            try:
+                keys = [str(k) for k in json.loads(str(form["keys"]))]
+            except (ValueError, TypeError):
+                raise EditError(_("Please choose at least one mail.")) from None
+            if not keys:
+                raise EditError(_("Please choose at least one mail."))
         creds = imap_credentials(box)
-        return (_("Undo the run of %(when)s", when=i18n.dt(stamp)) + mode,
-                lambda: run_undo(cfg, creds, ws, stamp, live=live, sort_again=sort_again), True)
+        label = _("Undo the run of %(when)s", when=i18n.dt(stamp))
+        if keys is not None:
+            label += " · " + i18n.ngettext("%(num)s mail", "%(num)s mails", len(keys))
+        return (label + mode,
+                lambda: run_undo(cfg, creds, ws, stamp, live=live, sort_again=sort_again, keys=keys), True)
     creds = load_credentials(box)
     shared = _shared_path(request)
     if task == "run":
@@ -172,14 +205,19 @@ async def maintenance_start(request: Request, box_id: str, task: str):
     _all_boxes, box = _box(request, box_id)
     if task not in TASKS:
         raise HTTPException(404, _("Unknown task"))
+    back = f"/ui/m/{box.id}/maintenance"
+    if task == "undo" and form.pop("chosen", None):  # the run's page: one checkbox per mail, maybe none ticked
+        form.pop("key", None)
+        form["keys"] = json.dumps((await request.form()).getlist("key"))
+        back = f"/ui/m/{box.id}/undo?run={quote(str(form.get('run') or ''))}"
     try:
         label, fn, needs_lock = _job_for(request, box, task, form)
     except (EditError, ConfigError) as e:
         _flash(request, str(e), "err")
-        return RedirectResponse(f"/ui/m/{box.id}/maintenance", status_code=303)
+        return RedirectResponse(back, status_code=303)
     if needs_lock and (request.app.state.is_busy(box) or jobs.running(box.id)):
         _flash(request, _("Something is running for this mailbox. Please wait until it is done."), "warn")
-        return RedirectResponse(f"/ui/m/{box.id}/maintenance", status_code=303)
+        return RedirectResponse(back, status_code=303)
     job = jobs.start(box, task, label, fn, request={k: v for k, v in form.items() if k != "csrf"},
                      needs_lock=needs_lock)
     return RedirectResponse(f"/ui/m/{box.id}/jobs/{job['id']}", status_code=303)
