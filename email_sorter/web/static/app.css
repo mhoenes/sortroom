@@ -181,6 +181,13 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 .detail h2 { font-size: 17px; line-height: 1.35; overflow-wrap: anywhere; }
 .detail dl { margin: 0; display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px 12px; font-size: 13px; }
 .detail dt { color: var(--muted); } .detail dd { margin: 0; overflow-wrap: anywhere; }
+/* its actions: one group each, divided by a line; a field and its button side by side */
+.detail .act + .act { padding-top: 16px; border-top: 1px solid var(--line-soft); }
+.detail form.act > .btn { width: 100%; }
+.combo { display: flex; gap: 8px; }
+.combo > input, .combo > select { flex: 1 1 0; min-width: 0; }
+.btn.icon { width: 44px; padding: 0; flex-shrink: 0; color: var(--muted); }
+.btn.icon:hover { color: var(--err); border-color: var(--err-line); background: var(--err-bg); }
 .pager { display: flex; align-items: center; gap: 12px; justify-content: flex-end; font-size: 13px; color: var(--muted); padding-top: 10px; }
 
 /* overview: uncertain mails to review */
@@ -338,9 +345,11 @@ svg.star { display: block; width: 16px; height: 16px; fill: var(--star); }
   .cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .split, .mails, .mails.has-detail, .cols-3, .catgrid { grid-template-columns: minmax(0, 1fr); }
   .detail, .editor { position: static; max-height: none; }
+  /* tablets: the open mail slides over the right edge of the list instead of pushing the list down */
+  .mails .detail { position: fixed; z-index: 40; top: 16px; right: 16px; max-height: calc(100vh - 32px);
+    width: min(400px, calc(100vw - 32px)); overflow-y: auto; box-shadow: 0 12px 40px rgba(0, 0, 0, .18); }
   .task { grid-template-columns: minmax(0, 1fr) auto; }
   .task .about { grid-column: 1 / -1; }
-  .mails .detail { order: -1; }
   .has-detail .maillist .conf { display: table-cell; }
   .maillist .where, .has-detail .maillist .where { display: none; }
 }
@@ -363,6 +372,8 @@ svg.star { display: block; width: 16px; height: 16px; fill: var(--star); }
   .head { flex-wrap: wrap; align-items: flex-start; }
   .filters .sel { max-width: none; }
   .maillist .date { display: none; }
+  /* phones: the open mail above the list, full width */
+  .mails .detail { position: static; width: auto; max-height: none; box-shadow: none; order: -1; }
   .maillist .date-inline { display: inline; }
   .maillist .pill { max-width: 110px; }
   .task { grid-template-columns: minmax(0, 1fr); }
