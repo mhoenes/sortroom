@@ -256,8 +256,12 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 .boxcard .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 16px; }
 .boxcard .stats > * { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .boxcard a.stat { color: inherit; text-decoration: none; border-radius: 6px; }
-.boxcard a.stat b { color: var(--accent-ink); }
-.boxcard a.stat:hover b { text-decoration: underline; }
+/* linked figures open the list they count: underlined so they read as links without hovering first */
+.boxcard a.stat b { color: var(--accent-ink); text-decoration: underline; text-decoration-color: var(--accent-line);
+  text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.boxcard a.stat:hover b { text-decoration-color: currentColor; }
+.boxcard a.boxname { color: inherit; text-decoration: none; }
+.boxcard a.boxname:hover { text-decoration: underline; }
 .boxcard .stats span { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .boxcard .stats b { font-size: 20px; font-weight: 600; line-height: 1.3; }
 /* a card too narrow for four figures side by side shows them two by two */
