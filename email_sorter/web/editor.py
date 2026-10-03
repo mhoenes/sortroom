@@ -377,9 +377,10 @@ async def rules_save(request: Request, box_id: str):
     _all_boxes, box = _box(request, box_id)
     sender_rules = [(str(form.get(f"match_{i}") or ""), str(form.get(f"action_{i}") or INBOX_ACTION))
                     for i in range(int(form.get("rows") or 0))]
-    delete_rules = [{"folder": str(form.get(f"dfolder_{i}") or ""), "days": str(form.get(f"ddays_{i}") or ""),
-                     "only_read": bool(form.get(f"dread_{i}")), "starred": bool(form.get(f"dstar_{i}"))}
-                    for i in range(int(form.get("drows") or 0))]
+    delete_rules: list[dict] = [
+        {"folder": str(form.get(f"dfolder_{i}") or ""), "days": str(form.get(f"ddays_{i}") or ""),
+         "only_read": bool(form.get(f"dread_{i}")), "starred": bool(form.get(f"dstar_{i}"))}
+        for i in range(int(form.get("drows") or 0))]
     try:
         save_rules(box, _shared_path(request), sender_rules, delete_rules)
     except EditError as e:
