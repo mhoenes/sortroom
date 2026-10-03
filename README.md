@@ -37,12 +37,13 @@ costs roughly $0.00002.
 
 ### Your mail and the model
 
-For each new mail Sortroom sends the model the sender, recipient, subject, attachment
-names, whether it is a mailing list and up to 3000 characters of the cleaned text.
-**With a hosted endpoint this data goes to that provider** and whoever runs the model
-behind it – check their privacy terms. With a self-hosted endpoint it stays in your
-network. Apart from that Sortroom only talks to your IMAP server – and to a sender's
-server when you unsubscribe from it in one click. Details: [PRIVACY.md](PRIVACY.md).
+For each mail it classifies Sortroom sends the model the sender, recipients, date,
+subject, attachment names, whether it is a mailing list and up to 3000 characters of the
+cleaned text. **With a hosted endpoint this data goes to that provider** and whoever runs
+the model behind it – check their privacy terms. With a self-hosted endpoint it stays in
+your network. Apart from that Sortroom only talks to your IMAP server, to a sender's
+server when you unsubscribe from it in one click, and – if you set it up – to your SMTP
+server to send you notices and a daily summary. Details: [PRIVACY.md](PRIVACY.md).
 
 ## What you need
 
