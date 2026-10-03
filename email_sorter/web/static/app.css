@@ -379,6 +379,15 @@ details.more[open] summary { margin-bottom: 10px; }
 .subhead { margin-bottom: -6px; font-size: 13px; font-weight: 600; color: var(--muted); }
 .subhead span { margin-left: 6px; font-weight: 400; }
 .subhead-hint { margin-top: 8px; }
+/* Schedule: one line per task – switch, interval, status – in columns; the interval fades while the task is off */
+.sched { display: grid; grid-template-columns: max-content max-content minmax(0, 1fr); align-items: center; gap: 6px 16px; }
+.sched-line { display: contents; }
+.sched > .field-error { grid-column: 1 / -1; }
+.sched-task { display: inline-flex; align-items: center; gap: 4px; }
+.sched-line .interval { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+.sched-line .interval input { width: 84px; }
+.sched-line:has(.check input:not(:checked)) .interval { opacity: .5; }
+.sched-status { font-size: 13px; }
 /* what a test found, e.g. the target folders of a mailbox */
 .test-details { margin: 8px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--neutral-bg); color: var(--ink);
   font: 12px/1.5 var(--mono); white-space: pre-wrap; overflow-x: auto; }
@@ -455,6 +464,8 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
 }
 @media (max-width: 760px) {
   .main { padding: 20px 16px; }
+  .sched { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+  .sched-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
   .cols-2, .cols-3 { grid-template-columns: minmax(0, 1fr); }
   /* the figures two by two and a little smaller, so what to review shows without scrolling far */
   .cols-4 { gap: 10px; }

@@ -1,10 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{{ _('Global settings') }}{% endblock %}
 {% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text|forceescape }}" data-tip="{{ text|forceescape }}">?</span>{% endmacro %}
-{# an error about one field: the field is marked and gets the focus (the page scrolls to it), the message below it #}
-{% macro invalid(name) %}{% if error_field == name %} aria-invalid="true" aria-describedby="error-{{ name }}" autofocus{% endif %}{% endmacro %}
-{% macro field_error(name) %}{% if error_field == name %}<span class="hint field-error" id="error-{{ name }}">{{ error }}</span>{% endif %}{% endmacro %}
 {% from "_secret.html" import source with context %}
+{% from "_fields.html" import invalid, field_error with context %}
 {% from "_test.html" import test_row, test_script, check_icon, send_icon, login_icon with context %}
 {% block content %}
 <div class="head">
