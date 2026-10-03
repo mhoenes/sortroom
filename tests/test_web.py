@@ -239,6 +239,13 @@ def test_static_urls_change_with_content(client):
     assert f'href="{url}"' in html and client.get(url).status_code == 200
 
 
+def test_wide_fields_use_the_span_class():
+    """A field two columns wide takes .span-2, which narrower screens undo; an inline grid-column: span 2
+    would force a second column into the one-column layout and squeeze the fields beside it."""
+    for path in (Path(web.__file__).parent / "templates").glob("*.html"):
+        assert "grid-column:span" not in path.read_text(encoding="utf-8").replace(" ", ""), path.name
+
+
 def test_static_css_and_icons_served(client):
     assert client.get("/ui/static/app.css").status_code == 200
     assert client.get("/ui/static/icon.svg").status_code == 200
