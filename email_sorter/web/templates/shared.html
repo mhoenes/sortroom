@@ -16,7 +16,7 @@
 {% if error and not error_field %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
 {% if key_error %}<div class="banner err" role="alert">{{ key_error }}</div>{% endif %}
 
-<form method="post" action="/ui/settings" data-guard="{{ _('Interface, AI service and Mail') }}">
+<form method="post" action="/ui/settings" {% if error or tested %}data-dirty{% endif %} data-guard="{{ _('Interface, AI service and Mail') }}">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   {# Enter in a field only saves: the first submit button is the default one #}
   {% if editable %}<button type="submit" class="sr-only" tabindex="-1" aria-hidden="true">{{ _('Save settings') }}</button>{% endif %}

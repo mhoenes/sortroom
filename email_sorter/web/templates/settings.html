@@ -20,7 +20,7 @@
 {# folders to suggest: the inbox, the categories' folders, the folders mail went to (folder fields, deletion rules) #}
 <datalist id="known-folders">{% for f in folders %}<option value="{{ f }}">{% endfor %}</datalist>
 
-<form method="post" action="/ui/m/{{ box.id }}/settings" data-guard="{{ _('Mailbox, Connection, Sorting and Schedule') }}">
+<form method="post" action="/ui/m/{{ box.id }}/settings" {% if error or tested %}data-dirty{% endif %} data-guard="{{ _('Mailbox, Connection, Sorting and Schedule') }}">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   {# Enter in a field only saves: the first submit button is the default one #}
   {% if editable %}<button type="submit" class="sr-only" tabindex="-1" aria-hidden="true">{{ _('Save settings') }}</button>{% endif %}
@@ -30,12 +30,15 @@
       <div class="grid cols-3">
         <label class="f"><span class="lt">{{ _('Display name') }} {{ help(_("Name of the mailbox in the interface. Changing it doesn't change the folder name.")) }}</span>
           <input type="text" name="name" value="{{ form.name }}" maxlength="60" required{{ invalid('name') }}>{{ field_error('name') }}</label>
-        <label class="f"><span class="lt">{{ _('Folder name') }} {{ help(_("Folder of the mailbox under mailboxes/, and its id for the HTTP API, --mailbox and the addresses of this interface. Change it only on purpose: scripts that use the old id need the new one.")) }}</span>
-          <input type="text" name="box_id" value="{{ form.box_id or box.id }}" maxlength="40" required class="mono"
+        {# shown as text with "Rename" (mailbox-id.js): a new name moves the folder and changes the addresses #}
+        <div class="f"><label class="lt" for="box_id">{{ _('Folder name') }} {{ help(_("Folder of the mailbox under mailboxes/, and its id for the HTTP API, --mailbox and the addresses of this interface. Change it only on purpose: scripts that use the old id need the new one.")) }}</label>
+          <span class="static rename-view" hidden><span class="mono">mailboxes/{{ box.id }}</span>
+            {% if editable %}<button class="text-btn" type="button">{{ _('Rename') }}</button>{% endif %}</span>
+          <input type="text" name="box_id" value="{{ form.box_id or box.id }}" id="box_id" maxlength="40" required class="mono"
             pattern="[a-z0-9][a-z0-9_\-]{0,39}" spellcheck="false" autocomplete="off"
             data-rename-note="box-id-note" data-current="{{ box.id }}"{{ invalid('box_id') }}>{{ field_error('box_id') }}
           <span class="hint rename-note" id="box-id-note" hidden>{{ _('Saving renames the folder. Addresses in this interface and the id for the API and --mailbox change with it.') }}</span>
-        </label>
+        </div>
       </div>
     </section>
 
