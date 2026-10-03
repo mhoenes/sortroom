@@ -34,8 +34,18 @@ jobs:
       - name: type check (mypy)
         run: mypy
 
-  image:
+  container:
+    # builds the image (pull requests too) and starts it the ways the docs describe: who it runs as,
+    # and who owns the mounted folders afterwards
     needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - run: docker build -t sortroom:ci .
+      - run: bash tools/container_check.sh sortroom:ci
+
+  image:
+    needs: [test, container]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
