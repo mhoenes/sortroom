@@ -178,6 +178,8 @@ def test_mail_settings_in_global_settings(client, setup, smtp, monkeypatch):  # 
     monkeypatch.setattr(mail.smtplib, "SMTP_SSL", FakeSMTP)
     r = client.post("/ui/settings", data={**form, "then": "testmail"})
     assert "Testmail an me@example.com geschickt" in r.text
+    assert r.text.index('id="mail"') < r.text.index("Testmail an me@example.com geschickt")  # in the Mail card
+    assert "an me@example.com geschickt" not in client.get("/ui/settings").text               # shown once
     s = mail.mail_settings(setup / "config.toml")
     assert (s.host, s.port, s.security, s.digest_time, s.notify_failures) == ("smtp.example.com", 465, "ssl", "06:30", True)
     assert mail.smtp_password(setup / "config.toml") == "geheim" and "geheim" not in r.text
