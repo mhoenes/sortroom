@@ -7,6 +7,7 @@ import pytest
 from email_sorter import scheduler
 from email_sorter.config import EXAMPLE_MAILBOXES, ConfigError, _read_toml, config_from_raw
 from email_sorter.runtime import BASE_DIR, single_instance
+from email_sorter.sorter import RunResult
 from support import example_config
 
 T0 = datetime(2026, 9, 26, 12, 0)
@@ -97,12 +98,17 @@ def test_scheduled_run_skips_a_busy_mailbox(tmp_path, monkeypatch):
     box.cfg, box.workspace = example_config(), tmp_path
     monkeypatch.setattr(scheduler, "load_credentials", lambda cfg: "creds")
     runs = []
-    monkeypatch.setattr(scheduler, "run", lambda *a, **kw: runs.append(kw))
+    monkeypatch.setattr(scheduler, "run", lambda *a, **kw: runs.append(kw) or result)
+    result = RunResult(exit_code=0)
     with single_instance(box.lock_path):                      # a run holds the lock
-        scheduler.run_scheduled(box)
+        assert scheduler.run_scheduled(box) is None           # skipped: nothing to report
     assert runs == []
-    scheduler.run_scheduled(box)
+    assert scheduler.run_scheduled(box) == (False, "")
     assert runs == [{"live": True, "limit": None}]
+    result = RunResult(exit_code=2, error="IMAP login failed")
+    assert scheduler.run_scheduled(box) == (True, "IMAP login failed")
+    result = RunResult(exit_code=1, failed=1)                  # one mail failed: retried, no alarm
+    assert scheduler.run_scheduled(box) == (False, "")
 
 
 def test_schedule_settings_in_config():

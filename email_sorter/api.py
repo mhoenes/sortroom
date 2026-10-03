@@ -34,6 +34,7 @@ from .config import ConfigError, Mailbox, load_credentials, load_mailboxes
 from .i18n import _
 from .removal import MailboxBusy, delete_mailbox
 from .runtime import BASE_DIR, default_config_path, is_locked, setup_logging, single_instance
+from . import digest, notify
 from .scheduler import Scheduler, enabled_by_env
 from .sorter import run, run_backfill, run_recheck_expiry
 
@@ -243,7 +244,13 @@ app.state.load_mailboxes = lambda: load_mailboxes(BASE_DIR, CONFIG_PATH)
 app.state.is_busy = _busy
 app.state.config_path = CONFIG_PATH
 app.state.base_dir = BASE_DIR
-app.state.scheduler = Scheduler(lambda: app.state.load_mailboxes())
+app.state.scheduler = Scheduler(
+    lambda: app.state.load_mailboxes(),
+    # mail on failed scheduled tasks and the daily summary, both under Global settings → Mail
+    report=lambda box, task, failed, why: notify.report(app.state.config_path, box, task, failed, why),
+    digest_due=lambda now: digest.due(app.state.config_path, app.state.base_dir / "mailboxes", now),
+    send_digest=lambda: digest.send_digest(app.state.config_path, app.state.load_mailboxes,
+                                           app.state.base_dir / "mailboxes"))
 app.add_middleware(SessionMiddleware, secret_key=web.session_secret(), session_cookie="email_sorter_session",
                    max_age=web.SESSION_DAYS * 86400, same_site="lax",
                    https_only=os.environ.get("UI_SECURE_COOKIES") == "1")

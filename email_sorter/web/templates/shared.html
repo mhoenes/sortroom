@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ _('Global settings') }}{% endblock %}
-{% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text }}" data-tip="{{ text }}">?</span>{% endmacro %}
+{% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text|forceescape }}" data-tip="{{ text|forceescape }}">?</span>{% endmacro %}
 {% from "_secret.html" import source with context %}
 {% block content %}
 <div class="head">
@@ -14,7 +14,7 @@
 {% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
 {% if key_error %}<div class="banner err" role="alert">{{ key_error }}</div>{% endif %}
 
-<form method="post" action="/ui/settings" data-guard="{{ _('Interface and Model') }}">
+<form method="post" action="/ui/settings" data-guard="{{ _('Interface, Model and Mail') }}">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   {# Enter in a field only saves: the first submit button is the default one #}
   {% if editable %}<button type="submit" class="sr-only" tabindex="-1" aria-hidden="true">{{ _('Save') }}</button>{% endif %}
@@ -49,8 +49,41 @@
           <input type="number" name="min_interval_seconds" min="0" max="60" step="any" value="{{ form.min_interval_seconds }}" required></label>
       </div>
     </section>
+    <section class="card stack" id="mail">
+      <div><h2>{{ _('Mail') }}</h2>
+        <p class="muted hint">{{ _('Optional: an SMTP account Sortroom sends its own mail with – a note when a scheduled task fails, and a daily summary. For all mailboxes, to one recipient.') }}</p></div>
+      <div class="grid cols-3">
+        <label class="f"><span class="lt">{{ _('SMTP server') }} {{ help(_('The outgoing mail server of your provider, e.g. smtp.example.com. Empty: Sortroom sends no mail.')) }}</span>
+          <input type="text" name="smtp_host" value="{{ form.smtp_host }}" spellcheck="false" autocomplete="off"></label>
+        <label class="f"><span class="lt">{{ _('Port') }}</span>
+          <input type="number" name="smtp_port" min="1" max="65535" step="1" value="{{ form.smtp_port }}"></label>
+        <label class="f"><span class="lt">{{ _('Encryption') }} {{ help(_('STARTTLS on port 587 is the usual choice; SSL/TLS on port 465 the other one. None only for a mail server in your own network.')) }}</span>
+          <select name="smtp_security">{% for value, name in [('starttls', 'STARTTLS'), ('ssl', 'SSL/TLS'), ('none', _('None'))] %}<option value="{{ value }}" {% if form.smtp_security == value %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+        <label class="f"><span class="lt">{{ _('User') }} {{ help(_('Usually the full e-mail address. Empty: no login.')) }}</span>
+          <input type="text" name="smtp_user" value="{{ form.smtp_user }}" spellcheck="false" autocomplete="off"></label>
+        <label class="f"><span class="lt">{{ _('Password') }} {{ help(_('Stored in %(file)s next to %(config)s, like the API key, and never shown again. Leave empty to keep the current one.', file=secrets_file, config=config_name)) }}</span>
+          <input type="password" name="smtp_password" autocomplete="new-password" spellcheck="false" {% if not key_writable %}disabled{% endif %}
+            {% if smtp_password_set %}placeholder="{{ _('unchanged') }}"{% endif %}>
+          <span class="hint">{% if retype_smtp %}<span class="pill warn">{{ _('Please enter it again') }}</span>{% elif smtp_password_set %}{{ source(true) }}{% endif %}</span></label>
+        <div></div>
+        <label class="f"><span class="lt">{{ _('From') }} {{ help(_('The sender of the mails, e.g. "Sortroom <me@example.com>". Many providers only accept your own address.')) }}</span>
+          <input type="text" name="mail_sender" value="{{ form.mail_sender }}" spellcheck="false" autocomplete="off"></label>
+        <label class="f"><span class="lt">{{ _('To') }}</span>
+          <input type="text" name="mail_recipient" value="{{ form.mail_recipient }}" spellcheck="false" autocomplete="off"></label>
+        <label class="f"><span class="lt">{{ _('Address of this interface') }} {{ help(_('E.g. http://nas:8765 – then the mails link to the pages they are about. Empty: no links.')) }}</span>
+          <input type="text" name="ui_url" value="{{ form.ui_url }}" placeholder="http://…:8765" spellcheck="false" autocomplete="off"></label>
+      </div>
+      <div class="toggles">
+        <label class="check"><input type="checkbox" name="notify_failures" value="1" {% if form.notify_failures %}checked{% endif %}>{{ _('Mail when a scheduled task fails') }}
+          {{ help(_('When a scheduled run, reconcile or the deletion rules of a mailbox fail – e.g. the login or the model key – one mail, and another one when it works again. Single mails that fail are retried and don\'t count.')) }}</label>
+        <label class="check"><input type="checkbox" name="digest" value="1" {% if form.digest %}checked{% endif %}>{{ _('Daily summary at') }}</label>
+        <input type="time" name="digest_time" value="{{ form.digest_time }}" aria-label="{{ _('Time of the daily summary') }}" class="digest-time">
+        {{ help(_('One mail for all mailboxes: what waits under To review, the starred mail of the last day, offers that expire today or tomorrow, and runs with errors. Not sent on days with nothing to report.')) }}
+      </div>
+    </section>
     {% if editable %}<div class="actions"><button class="btn primary" type="submit">{{ _('Save') }}</button>
       <button class="btn" type="submit" name="then" value="check">{{ _('Save & check') }}</button>
+      <button class="btn" type="submit" name="then" value="testmail">{{ _('Save & send a test mail') }}</button>
       <span class="muted hint">{{ _('"Save & check" also sends the model one sample mail with the standard categories – a fraction of a cent.') }}</span>
       <span class="hint unsaved" hidden>{{ _('Not saved yet') }}</span></div>{% endif %}
   </fieldset>

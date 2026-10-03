@@ -307,7 +307,7 @@ input[readonly] { background: var(--neutral-bg); }
 .f .static { display: flex; align-items: center; min-height: 44px; color: var(--muted); font-weight: 400; }
 div.f { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; }
 .f .lt { display: flex; align-items: center; gap: 2px; }
-.toggles { display: flex; flex-wrap: wrap; gap: 4px 24px; }
+.toggles { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 24px; }
 .check.small { min-height: 36px; font-weight: 400; font-size: 13px; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .hint { font-size: 13px; margin: 0; }
@@ -364,6 +364,8 @@ details.more summary { cursor: pointer; color: var(--accent); font-weight: 500; 
 details.more[open] summary { margin-bottom: 10px; }
 .btn[disabled] { opacity: .5; cursor: not-allowed; }
 .hint.unsaved { color: var(--warn); font-weight: 600; }
+input.digest-time { width: 120px; height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--field-line);
+  background: var(--surface); color: var(--ink); font: inherit; align-self: center; }
 /* Settings: the save button of the long form stays at the bottom of the window while its cards scroll past */
 .savebar { position: sticky; bottom: 0; z-index: 5; margin: 0 -16px; padding: 12px 16px;
   background: var(--ground); border-top: 1px solid var(--line); }

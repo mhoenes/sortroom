@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ _('Add mailbox') }}{% endblock %}
-{% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text }}" data-tip="{{ text }}">?</span>{% endmacro %}
+{% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text|forceescape }}" data-tip="{{ text|forceescape }}">?</span>{% endmacro %}
 {% block content %}
 <div class="head">
   <div class="title">

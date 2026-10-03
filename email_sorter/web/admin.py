@@ -28,6 +28,7 @@ from ..resort import run_resort
 from ..runtime import single_instance
 from ..sorter import RunResult, expired_target, run, run_backfill, run_recheck_expiry
 from ..cleanup import run_cleanup
+from ..mail import MailError, mail_settings, send, smtp_password
 from ..undo import changed_since, run_undo
 from ..store import Store
 from . import _box, _boxes, _sidebar, queries, require_login, router
@@ -402,7 +403,7 @@ async def mailbox_create(request: Request):
 # ---------------------------------------------------------------- shared settings
 
 def _shared_page(request: Request, form: dict | None = None, error: str | None = None, status: int = 200,
-                 retype: bool = False):
+                 retype: bool = False, retype_smtp: bool = False):
     boxes = _boxes(request)
     path = _shared_path(request)
     secrets = path.with_name(SECRETS_FILE)
@@ -417,11 +418,16 @@ def _shared_page(request: Request, form: dict | None = None, error: str | None =
                 "timeout_seconds": form_number(float(classifier.get("timeout_seconds", 20))),
                 "min_interval_seconds": form_number(float(classifier.get("min_interval_seconds", 0))),
                 "language": i18n.configured_language(path), "theme": i18n.configured_theme(path)}
+        mail = mail_settings(path)
+        form.update({"smtp_host": mail.host, "smtp_port": mail.port, "smtp_security": mail.security,
+                     "smtp_user": mail.user, "mail_sender": mail.sender, "mail_recipient": mail.recipient,
+                     "ui_url": mail.ui_url, "notify_failures": mail.notify_failures, "digest": mail.digest,
+                     "digest_time": mail.digest_time})
     return _page(request, "shared.html", {
         **_sidebar(request, boxes, None, "shared"), "form": form, "error": error, "editable": shared_writable(path),
         "config_name": path.name, "languages": i18n.LANGUAGES, "secrets_file": SECRETS_FILE, "retype": retype,
-        "key_set": key_set, "key_error": key_error,
-        "key_writable": secrets_writable(secrets)}, status)
+        "key_set": key_set, "key_error": key_error, "smtp_password_set": bool(smtp_password(path)),
+        "retype_smtp": retype_smtp, "key_writable": secrets_writable(secrets)}, status)
 
 
 @router.get("/ui/settings", response_class=HTMLResponse, dependencies=[Depends(require_login)])
@@ -450,12 +456,31 @@ async def shared_settings_save(request: Request):
         save_shared(request.app.state.base_dir, _shared_path(request), form)
     except EditError as e:
         form, retype = without_secrets(form, "api_key")
-        return _shared_page(request, form=form, error=str(e), status=422, retype=retype)
+        form, retype_smtp = without_secrets(form, "smtp_password")
+        for name in ("notify_failures", "digest"):  # shown again as they were ticked
+            form[name] = _flag(form, name)
+        return _shared_page(request, form=form, error=str(e), status=422, retype=retype, retype_smtp=retype_smtp)
     _flash(request, _("Saved. Applies to all mailboxes from the next run."))
     if form.get("then") == "check":  # "Save and check model": test what was just saved
         tone, text = await run_in_threadpool(_check_model, _shared_path(request))
         _flash(request, text, tone)
-    return RedirectResponse("/ui/settings", status_code=303)
+    elif form.get("then") == "testmail":
+        tone, text = await run_in_threadpool(_test_mail, _shared_path(request))
+        _flash(request, text, tone)
+    return RedirectResponse("/ui/settings#mail" if form.get("then") == "testmail" else "/ui/settings",
+                            status_code=303)
+
+
+def _test_mail(shared_path) -> tuple[str, str]:
+    settings = mail_settings(shared_path)
+    if not settings.ready:
+        return "err", _("Please fill in the SMTP server, From and To first.")
+    try:
+        send(settings, smtp_password(shared_path), _("Sortroom: test mail"),
+             _("This is a test mail from Sortroom. Sending mail works.") + "\n")
+    except MailError as e:
+        return "err", _("The test mail could not be sent: %(e)s", e=e)
+    return "ok", _("Test mail sent to %(recipient)s.", recipient=settings.recipient)
 
 
 def _check_model(shared_path) -> tuple[str, str]:

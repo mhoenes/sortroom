@@ -233,6 +233,11 @@ def test_forms_need_csrf_token(client, setup):
     assert _box(setup).cfg.categories["finanzen"].description == "Rechnungen und Kontoauszüge"
 
 
+def test_help_tips_with_quotes_and_brackets_stay_whole(client):
+    html = client.get("/ui/settings").text  # translations count as safe HTML: the tip escapes them anyway
+    assert 'data-tip="Der Absender der Mails, z. B. „Sortroom &lt;ich@example.com&gt;“. Viele Anbieter' in html
+
+
 def test_category_error_is_shown(client):
     html = client.get("/ui/m/privat/categories?new=1").text
     r = client.post("/ui/m/privat/categories", data={"csrf": _csrf(html), "new": "1", "key": "finanzen",
