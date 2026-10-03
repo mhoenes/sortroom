@@ -1,17 +1,11 @@
 {% extends "base.html" %}
 {% block title %}{{ _('Global settings') }}{% endblock %}
 {% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text|forceescape }}" data-tip="{{ text|forceescape }}">?</span>{% endmacro %}
-{# a test of the values in the form, saving nothing: a button that tries them (global-settings.js asks the server
-   and puts the answer into .test-result; without JavaScript the page comes back with it) #}
-{% macro test_row(card, label, icon, hint) %}<div class="test-row">
-  <button class="btn tonal" type="submit" formaction="/ui/settings/test/{{ card }}" data-test="{{ card }}">{{ icon|safe }}<span>{{ label }}</span></button>
-  <span class="muted hint">{{ hint }}</span>
-  <div class="test-result" data-result="{{ card }}" aria-live="polite">{% if tested and tested[0] == card %}<div class="banner {{ tested[1] }}">{{ tested[2] }}</div>{% endif %}</div>
-</div>{% endmacro %}
 {# an error about one field: the field is marked and gets the focus (the page scrolls to it), the message below it #}
 {% macro invalid(name) %}{% if error_field == name %} aria-invalid="true" aria-describedby="error-{{ name }}" autofocus{% endif %}{% endmacro %}
 {% macro field_error(name) %}{% if error_field == name %}<span class="hint field-error" id="error-{{ name }}">{{ error }}</span>{% endif %}{% endmacro %}
 {% from "_secret.html" import source with context %}
+{% from "_test.html" import test_row, test_script, check_icon, send_icon, login_icon with context %}
 {% block content %}
 <div class="head">
   <div class="title">
@@ -62,7 +56,7 @@
         <label class="f"><span class="lt">{{ _('Minimum interval in seconds') }} {{ help(_('Pause between two requests, for providers that limit the requests per minute. Usually 0.')) }}</span>
           <input type="number" name="min_interval_seconds" min="0" max="60" step="any" value="{{ form.min_interval_seconds }}" required{{ invalid('min_interval_seconds') }}>{{ field_error('min_interval_seconds') }}</label>
       </div>
-      {% if editable %}{{ test_row('model', _('Check model'), '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.8 2.8L16 9.8"/></svg>',
+      {% if editable %}{{ test_row('model', '/ui/settings/test/model', _('Check model'), check_icon,
         _('Sends the model one sample mail with the values above – a fraction of a cent. Saves nothing.')) }}{% endif %}
     </section>
     <section class="card stack" id="mail">
@@ -106,7 +100,7 @@
           <p class="muted hint">{{ _('One mail for all mailboxes: what waits under To review, the starred mail of the last day, offers that expire today or tomorrow, and runs with errors. Not sent on days with nothing to report.') }}</p>
         </div>
       </div>
-      {% if editable %}{{ test_row('mail', _('Send test mail'), '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg>',
+      {% if editable %}{{ test_row('mail', '/ui/settings/test/mail', _('Send test mail'), send_icon,
         _('Sends a mail to the recipient with the values above. Saves nothing.')) }}{% endif %}
     </section>
     {# stays in view while the cards above scroll past; the tests in them save nothing #}
@@ -122,6 +116,6 @@
   <div class="actions"><button class="btn danger" type="submit" {% if not key_writable %}disabled title="{{ _('%(file)s is read-only.', file=secrets_file) }}"{% endif %}
     onclick='return confirm({{ _("Log out every browser, this one too?")|tojson }})'>{{ _('Log out everywhere') }}</button></div>
 </form>
-<script src="{{ asset('global-settings.js') }}" data-busy="{{ _('Please wait …') }}"
-  data-failed="{{ _('The test could not be run. Please reload the page and try again.') }}"></script>
+{{ test_script() }}
+<script src="{{ asset('global-settings.js') }}"></script>
 {% endblock %}

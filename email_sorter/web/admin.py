@@ -109,7 +109,7 @@ def _job_for(request: Request, box: Mailbox, task: str, form: dict):
         except ConfigError:
             if cfg.imap_auth == "password":
                 raise ConfigError(_("The login of this mailbox is not set yet.")) from None
-            raise ConfigError(_("Sign in with %(provider)s first, in the login section.",
+            raise ConfigError(_("Sign in with %(provider)s first, in the connection section.",
                                 provider=PROVIDERS[cfg.imap_auth].label)) from None
 
         def run_check() -> dict:
@@ -229,12 +229,6 @@ async def maintenance_start(request: Request, box_id: str, task: str):
     job = jobs.start(box, task, label, fn, request={k: v for k, v in form.items() if k != "csrf"},
                      needs_lock=needs_lock)
     return RedirectResponse(f"/ui/m/{box.id}/jobs/{job['id']}", status_code=303)
-
-
-def start_check(request: Request, box: Mailbox) -> dict:
-    """Start "Check connection" in the background, e.g. right after the settings were saved."""
-    label, fn, needs_lock = _job_for(request, box, "check", {})
-    return jobs.start(box, "check", label, fn, request={}, needs_lock=needs_lock)
 
 
 @router.get("/ui/m/{box_id}/jobs/{job_id}", response_class=HTMLResponse, dependencies=[Depends(require_login)])
@@ -397,7 +391,7 @@ async def mailbox_create(request: Request):
     if str(form.get("imap_auth") or "password") != "password":  # next: the sign-in with the account
         _flash(request, _("Mailbox created. Now sign in with your account."))
         return RedirectResponse(f"/ui/m/{box_id}/oauth", status_code=303)
-    _flash(request, _('Mailbox created. "Save & check" in the login section tests it.'))
+    _flash(request, _('Mailbox created. "Check connection" in the connection section tests it.'))
     return RedirectResponse(f"/ui/m/{box_id}/settings", status_code=303)
 
 

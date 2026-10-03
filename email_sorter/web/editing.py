@@ -6,6 +6,7 @@ replaces it atomically. A run reads its settings when it starts, so edits apply 
 """
 from __future__ import annotations
 
+import dataclasses
 import functools
 import os
 import re
@@ -18,9 +19,9 @@ import tomlkit
 from tomlkit.items import AoT, Table
 
 from .. import jobs
-from ..config import (DELETE_MAX_DAYS, IMAP_AUTHS, INBOX_ACTION, SECRETS_FILE, Config, ConfigError, Mailbox, _read_toml,
-                      config_from_raw, default_label, mailbox_id_for, read_secrets, secrets_writable, valid_mailbox_id,
-                      write_secrets)
+from ..config import (DELETE_MAX_DAYS, IMAP_AUTHS, INBOX_ACTION, SECRETS_FILE, Config, ConfigError, Credentials,
+                      Mailbox, _imap_login, _read_toml, config_from_raw, default_label, mailbox_id_for, read_secrets,
+                      secrets_writable, stored_credentials, valid_mailbox_id, write_secrets)
 from ..i18n import DEFAULT_LANGUAGE, LANGUAGES, THEMES, _
 from ..runtime import single_instance
 
@@ -202,6 +203,52 @@ def delete_category(box: Mailbox, shared_path: Path, key: str) -> None:
 def save_settings(box: Mailbox, shared_path: Path, form: dict, busy: bool = False) -> str:
     """Save the settings page; returns the mailbox's id afterwards. The display name never changes the id:
     only the field box_id (the folder name) does, which moves the folder. `busy`: a job or test is running."""
+    doc, auth, oauth = _settings_doc(box, form)
+    login = _login_changes(box, form, auth)
+    if (login or any(oauth.values())) and not secrets_writable(box.secrets_path):
+        raise EditError(_("%(file)s is not writable, so the login cannot be stored.", file=SECRETS_FILE))
+    text = _checked_text(box, doc, shared_path)
+    new_id = _new_id(box, form)
+    if new_id == box.id:
+        _write(_config_file(box), text)
+    else:
+        _move_mailbox(box, new_id, text, busy)
+    secrets = box.workspace.with_name(new_id) / SECRETS_FILE  # it moved along with the folder
+    if login:
+        write_secrets(secrets, "imap", login)
+    if oauth:
+        write_secrets(secrets, "oauth", oauth)
+    return new_id
+
+
+def connection_from_form(box: Mailbox, shared_path: Path, form: dict) -> tuple[Config, Credentials]:
+    """The connection as the settings form has it, for "Check connection" without saving: the settings the
+    sorter would load, and the login – what is typed in, the stored password or secret for an empty field."""
+    doc, auth, oauth = _settings_doc(box, form)
+    try:
+        raw = {**tomllib.loads(tomlkit.dumps(doc)), "classifier": _read_toml(shared_path)["classifier"]}
+        cfg = config_from_raw(raw, _config_file(box).name)
+    except (ConfigError, tomllib.TOMLDecodeError, KeyError) as e:
+        raise EditError(str(e)) from None
+    found = stored_credentials(box)
+    if "imap_user" in form:  # not sent when the login fields are read-only: the stored ones
+        found["imap_user"] = _secret_text(form, "imap_user", _("User"), strip=True)
+        found["imap_password"] = _secret_text(form, "imap_password", _("Password")) or found["imap_password"]
+    found["oauth_client_secret"] = oauth.get("client_secret") or found["oauth_client_secret"]
+    if "refresh_token" in oauth:  # another method, app or tenant: the sign-in belongs to the old one
+        found["oauth_refresh_token"] = ""
+    creds, missing = _imap_login(dataclasses.replace(box, cfg=cfg), found)
+    if missing and auth == "password":
+        raise EditError(_("Please enter the user and the password."))
+    if missing:
+        from ..oauth import PROVIDERS
+        raise EditError(_("Sign in with %(provider)s first: \"Save & sign in\".", provider=PROVIDERS[auth].label))
+    return cfg, creds
+
+
+def _settings_doc(box: Mailbox, form: dict) -> tuple[tomlkit.TOMLDocument, str, dict]:
+    """The mailbox.toml as the settings form changes it, field by field checked; with the sign-in method and
+    the changes for the [oauth] secrets (see _sign_in_method)."""
     doc = _doc(box)
     name = _text(form, "name", 60)
     if not name:
@@ -210,7 +257,7 @@ def save_settings(box: Mailbox, shared_path: Path, form: dict, busy: bool = Fals
     imap = doc.setdefault("imap", tomlkit.table())
     host = _text(form, "imap_host", 200)
     if not host or " " in host:
-        raise EditError(_("IMAP server: please enter a host name."))
+        raise EditError(_("IMAP server: please enter a host name."), "imap_host")
     imap["host"] = host
     imap["port"] = _number(form, "imap_port", _("Port"), 1, 65535, integer=True)
     source = _folder(form, "source_folder", _("Inbox"))
@@ -236,21 +283,7 @@ def save_settings(box: Mailbox, shared_path: Path, form: dict, busy: bool = Fals
     rules["lookback_days"] = _number(form, "lookback_days", _("Look-back in days"), 1, 365, integer=True)
     rules["max_per_run"] = _number(form, "max_per_run", _("Max. mails per run"), 1, 5000, integer=True)
     _set(rules, "expired_folder", _folder(form, "expired_folder", _("Default folder for expired mail")))
-    login = _login_changes(box, form, auth)
-    if (login or any(oauth.values())) and not secrets_writable(box.secrets_path):
-        raise EditError(_("%(file)s is not writable, so the login cannot be stored.", file=SECRETS_FILE))
-    text = _checked_text(box, doc, shared_path)
-    new_id = _new_id(box, form)
-    if new_id == box.id:
-        _write(_config_file(box), text)
-    else:
-        _move_mailbox(box, new_id, text, busy)
-    secrets = box.workspace.with_name(new_id) / SECRETS_FILE  # it moved along with the folder
-    if login:
-        write_secrets(secrets, "imap", login)
-    if oauth:
-        write_secrets(secrets, "oauth", oauth)
-    return new_id
+    return doc, auth, oauth
 
 
 def _login_changes(box: Mailbox, form: dict, auth: str) -> dict:
@@ -278,17 +311,18 @@ def _sign_in_method(form: dict, imap: Table, before: Config | None) -> tuple[str
     method, app or tenant changed (that needs a new sign-in)."""
     auth = _text(form, "imap_auth", 20) or "password"
     if auth not in IMAP_AUTHS:
-        raise EditError(_("Unknown sign-in method."))
+        raise EditError(_("Unknown sign-in method."), "imap_auth")
     _set(imap, "auth", auth, default="password")
     if auth == "password":
         return auth, {}
     client_id = _text(form, "oauth_client_id", 200)  # Microsoft: empty = Sortroom's own app
     if (client_id or auth == "google") and not _CLIENT_ID_RE.match(client_id):
-        raise EditError(_("Client ID: please copy it from your OAuth app."))
+        raise EditError(_("Client ID: please copy it from your OAuth app."), "oauth_client_id")
     _set(imap, "oauth_client_id", client_id, default="")
     tenant = _text(form, "oauth_tenant", 100) if auth == "microsoft" else ""
     if tenant and not _TENANT_RE.match(tenant):
-        raise EditError(_("Tenant: \"common\", \"consumers\", \"organizations\" or your tenant's ID or domain."))
+        raise EditError(_("Tenant: \"common\", \"consumers\", \"organizations\" or your tenant's ID or domain."),
+                        "oauth_tenant")
     _set(imap, "oauth_tenant", tenant, default="")
     oauth: dict[str, str | None] = {}
     secret = _secret_text(form, "oauth_client_secret", _("Client secret"), strip=True) if auth == "google" else ""
@@ -549,7 +583,7 @@ def create_mailbox(base_dir: Path, shared_path: Path, template_file: Path, templ
     folder = root / box_id
     host = _text(form, "imap_host", 200)
     if not host or " " in host:
-        raise EditError(_("IMAP server: please enter a host name."))
+        raise EditError(_("IMAP server: please enter a host name."), "imap_host")
     user = _secret_text(form, "imap_user", _("User"), strip=True)
     imap = tomlkit.table()
     auth, oauth = _sign_in_method(form, imap, None)
