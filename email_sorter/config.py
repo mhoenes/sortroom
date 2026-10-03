@@ -54,6 +54,15 @@ class SenderRule:
         return self.match in address
 
 
+@dataclass(frozen=True)
+class DeleteRule:
+    """Mail in `folder` that arrived more than `days` days ago goes to the trash (see cleanup.py)."""
+    folder: str               # config notation, e.g. "INBOX/Promotions"
+    days: int
+    only_read: bool = False   # leave unread mail alone
+    starred: bool = False     # starred mail too (left alone by default)
+
+
 # Logins and the API key, set in the admin UI: mailboxes/<id>/secrets.toml ([imap] user, password;
 # [oauth] client_secret, refresh_token) and secrets.toml next to config.toml ([classifier] api_key of
 # the classification endpoint). Plain text, mode 0600, never backed up as .bak.
@@ -84,6 +93,7 @@ class Config:
     oauth_client_id: str = ""        # the user's own OAuth client (not secret); Microsoft: "" = Sortroom's
     oauth_tenant: str = ""           # Microsoft only: "common" (default), "consumers" or a tenant id
     sender_rules: tuple[SenderRule, ...] = ()  # checked in order, first match wins
+    delete_rules: tuple[DeleteRule, ...] = ()  # run once a day by the schedule, and under Maintenance
     sort_read_at_once: bool = False  # mail already read skips the min_age_hours wait
     schedule_enabled: bool = True    # built-in schedule: a normal run every schedule_minutes
     schedule_minutes: int = 10
@@ -180,6 +190,7 @@ def config_from_raw(raw: dict, where: str) -> Config:
             max_per_run=int(rules["max_per_run"]),
             categories=categories,
             sender_rules=_sender_rules(raw, categories, where),
+            delete_rules=_delete_rules(raw, imap.get("source_folder", "INBOX"), where),
             sort_read_at_once=bool(rules.get("sort_read_at_once", False)),
             schedule_enabled=bool(raw.get("schedule", {}).get("enabled", True)),
             schedule_minutes=int(raw.get("schedule", {}).get("interval_minutes", 10)),
@@ -217,6 +228,28 @@ def _sender_rules(raw: dict, categories: dict[str, Category], where: str) -> tup
             raise ConfigError(f"{where}: sender rule {i} ({match}): action must be "
                               f"{INBOX_ACTION!r} or a category, not {action!r}")
         out.append(SenderRule(match, action))
+    return tuple(out)
+
+
+DELETE_MAX_DAYS = 3650
+
+
+def _delete_rules(raw: dict, source_folder: str, where: str) -> tuple[DeleteRule, ...]:
+    """[[delete_rules]] entries. The inbox can't have one; trash, sent and drafts are refused when they run."""
+    out = []
+    for i, r in enumerate(raw.get("delete_rules", []), start=1):
+        folder = str(r.get("folder", "")).strip().strip("/")
+        if not folder:
+            raise ConfigError(f"{where}: deletion rule {i} needs a folder")
+        if folder.lower() == source_folder.strip("/").lower():
+            raise ConfigError(f"{where}: deletion rule {i}: the inbox ({folder}) can't be emptied by a rule")
+        try:
+            days = int(r.get("days", 0))
+        except (TypeError, ValueError):
+            days = 0
+        if not 1 <= days <= DELETE_MAX_DAYS:
+            raise ConfigError(f"{where}: deletion rule {i} ({folder}): days must be between 1 and {DELETE_MAX_DAYS}")
+        out.append(DeleteRule(folder, days, bool(r.get("only_read", False)), bool(r.get("starred", False))))
     return tuple(out)
 
 
