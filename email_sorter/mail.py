@@ -1,7 +1,8 @@
 """Sending mail: the notifications on failed scheduled runs (notify.py) and the daily summary (digest.py).
 
 One SMTP account for all mailboxes, set under Global settings: [mail] in config.toml, its password in
-config/secrets.toml ([smtp] password) like the API key. Plain text in the UI language.
+config/secrets.toml ([smtp] password) like the API key. Plain text in the UI language; the daily summary
+also as HTML.
 """
 from __future__ import annotations
 
@@ -73,8 +74,9 @@ def smtp_password(config_path: Path) -> str:
         return ""
 
 
-def send(settings: MailSettings, password: str, subject: str, body: str) -> None:
-    """Send one plain-text mail to the recipient. Raises MailError with the server's reason."""
+def send(settings: MailSettings, password: str, subject: str, body: str, html: str = "") -> None:
+    """Send one mail to the recipient: plain text, and with `html` also that as the part mail programs show.
+    Raises MailError with the server's reason."""
     if not settings.ready:
         raise MailError("sending mail is not set up (server, sender and recipient)")
     msg = EmailMessage()
@@ -85,6 +87,8 @@ def send(settings: MailSettings, password: str, subject: str, body: str) -> None
     msg["Message-ID"] = make_msgid(domain=parseaddr(settings.sender)[1].rpartition("@")[2] or None)
     msg["Auto-Submitted"] = "auto-generated"  # no out-of-office replies to it
     msg.set_content(body)
+    if html:
+        msg.add_alternative(html, subtype="html")
     context = ssl.create_default_context()
     try:
         if settings.security == "ssl":
@@ -102,10 +106,10 @@ def send(settings: MailSettings, password: str, subject: str, body: str) -> None
     log.info("mail sent to %s: %s", settings.recipient, subject)
 
 
-def send_configured(config_path: Path, subject: str, body: str) -> bool:
+def send_configured(config_path: Path, subject: str, body: str, html: str = "") -> bool:
     """Send with the configured account; logs instead of raising (for the schedule)."""
     try:
-        send(mail_settings(config_path), smtp_password(config_path), subject, body)
+        send(mail_settings(config_path), smtp_password(config_path), subject, body, html)
         return True
     except MailError as e:
         log.error("could not send %r: %s", subject, e)
