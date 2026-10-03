@@ -187,28 +187,45 @@ def test_read_only_secrets(client, setup, monkeypatch):
     assert 'name="api_key" autocomplete="new-password" spellcheck="false" disabled' in html
 
 
-def test_save_and_check_tests_the_new_login(client, setup, monkeypatch):
-    import time
-    from email_sorter import jobs
+def test_check_connection_tries_the_form_without_saving_it(client, setup, monkeypatch):
     seen = []
-    monkeypatch.setattr(admin, "check_imap", lambda cfg, creds, out: seen.append(creds.imap_password) or True)
-    (setup / "secrets.toml").unlink()  # the mailbox check does not need the API key
-    html = client.get("/ui/m/privat/settings").text
-    assert 'name="then" value="check"' in html
-    form = {**SETTINGS, "csrf": _csrf(html), "imap_user": "u", "imap_password": "Neu-789", "then": "check"}
-    r = client.post("/ui/m/privat/settings", data=form, follow_redirects=False)
-    assert r.status_code == 303 and "/ui/m/privat/jobs/" in r.headers["location"]
-    job_id = r.headers["location"].rsplit("/", 1)[1]
-    for _ in range(100):
-        if jobs.get(job_id)["status"] != "running":
-            break
-        time.sleep(0.02)
-    assert seen == ["Neu-789"] and jobs.get(job_id)["request"] == {}  # the password is not kept with the job
-    assert "Neu-789" not in client.get(r.headers["location"]).text
 
-    # an error: nothing saved, no check started
-    r = client.post("/ui/m/privat/settings", data={**form, "imap_password": "x", "imap_port": "abc"})
-    assert r.status_code == 422 and seen == ["Neu-789"]
+    def fake_check(cfg, creds, out):
+        seen.append((cfg.imap_host, creds.imap_user, creds.imap_password))
+        out("IMAP  host:993 as user")
+        out("  target folders:")
+        if creds.imap_password == "falsch":
+            out("  FAILED: [AUTHENTICATIONFAILED] Invalid credentials")
+            return False
+        return True
+
+    monkeypatch.setattr(editor, "check_imap", fake_check)
+    (setup / "secrets.toml").unlink()  # the mailbox check does not need the API key
+    mailbox_toml = (setup / "mailboxes" / "privat" / "mailbox.toml").read_text(encoding="utf-8")
+    html = client.get("/ui/m/privat/settings").text
+    assert 'formaction="/ui/m/privat/settings/test"' in html and 'id="connection"' in html
+    form = {**SETTINGS, "csrf": _csrf(html), "imap_host": "imap.neu.example", "imap_user": "u2",
+            "imap_password": "Neu-789"}
+    json = {"Accept": "application/json"}  # as the page's script asks
+    r = client.post("/ui/m/privat/settings/test", data=form, headers=json)
+    assert seen == [("imap.neu.example", "u2", "Neu-789")]
+    assert r.json() == {"tone": "ok", "text": "Die Verbindung funktioniert.", "field": None,
+                        "details": "IMAP  host:993 as user\n  target folders:"}
+    # nothing saved: neither the server nor the login
+    assert (setup / "mailboxes" / "privat" / "mailbox.toml").read_text(encoding="utf-8") == mailbox_toml
+    assert _secrets(setup / "mailboxes" / "privat" / "secrets.toml")["imap"] == {"user": "u", "password": "p"}
+
+    r = client.post("/ui/m/privat/settings/test", data={**form, "imap_password": ""}, headers=json)
+    assert seen[-1] == ("imap.neu.example", "u2", "p")                      # empty: the stored password
+    r = client.post("/ui/m/privat/settings/test", data={**form, "imap_password": "falsch"}, headers=json)
+    assert r.json()["tone"] == "err" and "[AUTHENTICATIONFAILED] Invalid credentials" in r.json()["text"]
+    r = client.post("/ui/m/privat/settings/test", data={**form, "imap_host": ""}, headers=json)
+    assert r.json()["field"] == "imap_host" and len(seen) == 3                # not tried
+
+    # without JavaScript the page comes back, the form as it was, the password to be entered again
+    r = client.post("/ui/m/privat/settings/test", data=form)
+    assert "Die Verbindung funktioniert." in r.text and 'value="imap.neu.example"' in r.text
+    assert "Neu-789" not in r.text and "Bitte erneut eingeben" in r.text and "target folders:" in r.text
 
 
 def test_check_model_tries_the_form_without_saving_it(client, setup, monkeypatch):

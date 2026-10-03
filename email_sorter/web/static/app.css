@@ -378,6 +378,10 @@ details.more[open] summary { margin-bottom: 10px; }
 /* a group of fields within a card, e.g. "Fine-tuning" */
 .subhead { margin-bottom: -6px; font-size: 13px; font-weight: 600; color: var(--muted); }
 .subhead span { margin-left: 6px; font-weight: 400; }
+.subhead-hint { margin-top: 8px; }
+/* what a test found, e.g. the target folders of a mailbox */
+.test-details { margin: 8px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--neutral-bg); color: var(--ink);
+  font: 12px/1.5 var(--mono); white-space: pre-wrap; overflow-x: auto; }
 /* switches with their explanation below them, in line with the label */
 .option { display: flex; flex-direction: column; }
 .option-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }

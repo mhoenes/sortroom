@@ -2,6 +2,7 @@
 {% block title %}{{ _('Settings') }} · {{ box.name }}{% endblock %}
 {% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text|forceescape }}" data-tip="{{ text|forceescape }}">?</span>{% endmacro %}
 {% from "_secret.html" import source with context %}
+{% from "_test.html" import test_row, test_script, check_icon, send_icon, login_icon with context %}
 {% block content %}
 <div class="head">
   <div class="title">
@@ -16,7 +17,7 @@
 {% endif %}
 {% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
 
-<form method="post" action="/ui/m/{{ box.id }}/settings" data-guard="{{ _('Mailbox, Login, Sorting and Schedule') }}">
+<form method="post" action="/ui/m/{{ box.id }}/settings" data-guard="{{ _('Mailbox, Connection, Sorting and Schedule') }}">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   {# Enter in a field only saves: the first submit button is the default one #}
   {% if editable %}<button type="submit" class="sr-only" tabindex="-1" aria-hidden="true">{{ _('Save settings') }}</button>{% endif %}
@@ -32,6 +33,14 @@
             data-rename-note="box-id-note" data-current="{{ box.id }}">
           <span class="hint rename-note" id="box-id-note" hidden>{{ _('Saving renames the folder. Addresses in this interface and the id for the API and --mailbox change with it.') }}</span>
         </label>
+      </div>
+    </section>
+
+    {# server and login together: "Check connection" tries both #}
+    <section class="card stack" id="connection">
+      <h2>{{ _('Connection') }}</h2>
+      <h3 class="subhead">{{ _('Server') }}</h3>
+      <div class="grid cols-3">
         <label class="f"><span class="lt">{{ _('IMAP server') }} {{ help(_('Host name of the IMAP server, e.g. imap.example.com. The connection is always encrypted (SSL).')) }}</span>
           <input type="text" name="imap_host" value="{{ form.imap_host }}" required>
         </label>
@@ -42,11 +51,8 @@
           <input type="text" name="source_folder" value="{{ form.source_folder }}">
         </label>
       </div>
-    </section>
-
-    <section class="card stack">
-      <div><h2>{{ _('Login') }}</h2>
-        <p class="muted hint">{{ _('Stored in <span class="mono">mailboxes/%(id)s/%(file)s</span>, readable only by Sortroom. The password is never shown again.', id=box.id, file=secrets_file) }}</p></div>
+      <div><h3 class="subhead">{{ _('Login') }}</h3>
+        <p class="muted hint subhead-hint">{{ _('Stored in <span class="mono">mailboxes/%(id)s/%(file)s</span>, readable only by Sortroom. The password is never shown again.', id=box.id, file=secrets_file) }}</p></div>
       {% if login_error %}<div class="banner err" role="alert">{{ login_error }}</div>{% endif %}
       {% if not login_writable %}<div class="banner" role="status">{{ _('%(file)s is not writable, so the login cannot be stored.', file=secrets_file) }}</div>{% endif %}
       {% if form.imap_auth == 'password' and oauth_hint == 'microsoft' %}<div class="banner" role="status">{{ _('Microsoft no longer accepts passwords for IMAP. Choose "Microsoft (OAuth)" as the sign-in method.') }}</div>{% endif %}
@@ -79,15 +85,13 @@
         {% if editable %}<div class="f" data-auth="oauth"><span class="lt">{{ _('Signed in') }} {{ help(_('Saves the settings, then opens the sign-in with your account. Needed once, and again after changing the method, client ID or tenant.')) }}</span>
           <div class="login-actions">
             {% if login.oauth_refresh_token and cfg.imap_auth == form.imap_auth %}<span class="pill ok">{{ _('yes') }}</span>{% else %}<span class="pill err">{{ _('not yet') }}</span>{% endif %}
-            <button class="btn" type="submit" name="then" value="oauth">{{ _('Save & sign in') }}</button>
-          </div>
-        </div>{% endif %}
-        {% if editable %}<div class="f"><span class="lt">{{ _('Test') }} {{ help(_('Saves the settings, then logs in to the IMAP server and lists the target folders. Moves nothing. The model is checked under Global settings.')) }}</span>
-          <div class="login-actions">
-            <button class="btn" type="submit" name="then" value="check">{{ _('Save & check') }}</button>
+            {# it has to save: the provider sends the sign-in back to the stored app #}
+            <button class="btn tonal" type="submit" name="then" value="oauth">{{ login_icon|safe }}<span>{{ _('Save & sign in') }}</span></button>
           </div>
         </div>{% endif %}
       </div>
+      {% if editable %}{{ test_row('connection', '/ui/m/' ~ box.id ~ '/settings/test', _('Check connection'), check_icon,
+        _('Logs in with the values above and lists the target folders. Moves nothing, saves nothing.')) }}{% endif %}
     </section>
 
     <section class="card stack">
@@ -151,9 +155,10 @@
         </div>
       </div>
     </section>
-    {# stays in view while the four cards above scroll past: it saves them, not the sender rules below #}
+    {# stays in view while the four cards above scroll past: it saves them, not the sender rules below; the
+       connection test saves nothing #}
     {% if editable %}<div class="actions savebar"><button class="btn primary" type="submit">{{ _('Save settings') }}</button>
-      <span class="muted hint">{{ _('Saves Mailbox, Login, Sorting and Schedule') }}</span>
+      <span class="muted hint">{{ _('Saves Mailbox, Connection, Sorting and Schedule') }}</span>
       <span class="hint unsaved" hidden>{{ _('Not saved yet') }}</span></div>{% endif %}
   </fieldset>
 </form>
@@ -253,6 +258,7 @@
 {% endif %}
 <script src="{{ asset('mailbox-id.js') }}"></script>
 <script src="{{ asset('login-method.js') }}"></script>
+{{ test_script() }}
 <script>
   // add and remove rule rows in place (sender rules, deletion rules); nothing is saved until "Save …"
   document.querySelectorAll('form[data-row-template]').forEach(form => {

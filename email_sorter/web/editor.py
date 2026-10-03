@@ -18,9 +18,10 @@ from urllib.parse import quote
 
 from fastapi import Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from .. import jobs, oauth
+from ..check import check_imap
 from ..config import (INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, load_credentials, stored_credentials,
                       write_secrets)
 from ..classifier import ClassifierAuthError
@@ -28,8 +29,8 @@ from ..i18n import _
 from ..removal import MailboxBusy, delete_mailbox
 from ..trial import OTHER_SAMPLE, OWN_SAMPLE, run_trial
 from . import _box, _sidebar, queries, require_login, router, templates
-from .editing import (EditError, delete_category, save_category, save_delete_rules, save_sender_rules,
-                      save_settings, secrets_writable, writable)
+from .editing import (EditError, connection_from_form, delete_category, save_category, save_delete_rules,
+                      save_sender_rules, save_settings, secrets_writable, writable)
 
 log = logging.getLogger(__name__)
 
@@ -243,7 +244,8 @@ def auth_methods() -> dict[str, str]:
 
 def _settings_page(request: Request, box_id: str, form: dict | None = None, error: str | None = None,
                    rules: list[tuple[str, str]] | None = None, status: int = 200, retype: bool = False,
-                   retype_secret: bool = False, delete_rules: list[dict] | None = None):
+                   retype_secret: bool = False, delete_rules: list[dict] | None = None,
+                   tested: tuple[str, str, str, str] | None = None):
     boxes, box = _box(request, box_id)
     cfg = box.cfg
     login, login_error = credential_view(box)
@@ -278,7 +280,7 @@ def _settings_page(request: Request, box_id: str, form: dict | None = None, erro
         "login": login, "login_error": login_error, "login_writable": secrets_writable(box.secrets_path),
         "secrets_file": SECRETS_FILE, "retype": retype, "retype_secret": retype_secret,
         "auth_methods": auth_methods(), "oauth_hint": oauth.provider_for_host(cfg.imap_host),
-        "deletable": os.access(box.workspace.parent, os.W_OK),
+        "deletable": os.access(box.workspace.parent, os.W_OK), "tested": tested,
         "config_name": box.config_file.name if box.config_file else "–"},
         status)
 
@@ -306,15 +308,32 @@ async def settings_save(request: Request, box_id: str):
         _flash(request, _("Settings saved. They apply from the next run."))
     if form.get("then") == "oauth":  # "Save & sign in"
         return RedirectResponse(f"/ui/m/{new_id}/oauth", status_code=303)
-    if form.get("then") == "check":  # "Save and check connection": test what was just saved
-        from .admin import start_check
-        try:
-            job = start_check(request, _box(request, new_id)[1])
-        except ConfigError as e:
-            _flash(request, str(e), "err")
-        else:
-            return RedirectResponse(f"/ui/m/{new_id}/jobs/{job['id']}", status_code=303)
     return RedirectResponse(f"/ui/m/{new_id}/settings", status_code=303)
+
+
+@router.post("/ui/m/{box_id}/settings/test", response_class=HTMLResponse, dependencies=[Depends(require_login)])
+async def settings_test(request: Request, box_id: str):
+    """Check connection: log in with the server and login in the form without saving them, and list the
+    target folders. An empty password or secret means the stored one. The page's script asks for JSON and
+    shows the result below the button; without JavaScript the page comes back."""
+    form = await _form(request)
+    _all_boxes, box = _box(request, box_id)
+    lines: list[str] = []
+    field = None
+    try:
+        cfg, creds = connection_from_form(box, _shared_path(request), form)
+        ok = await run_in_threadpool(check_imap, cfg, creds, lines.append)
+        failure = next((line.split("FAILED: ", 1)[1] for line in lines if "FAILED: " in line), "")
+        tone, text = ("ok", _("Connection works.")) if ok else ("err", _("Connection failed: %(e)s", e=failure))
+    except (EditError, ConfigError) as e:
+        tone, text, field = "err", str(e), getattr(e, "field", None)
+    details = "\n".join(line for line in lines if "FAILED: " not in line)  # server, inbox, target folders
+    if "application/json" in request.headers.get("accept", ""):
+        return JSONResponse({"tone": tone, "text": text, "field": field, "details": details})
+    form, retype = without_secrets(form, "imap_password")
+    form, retype_secret = without_secrets(form, "oauth_client_secret")
+    return _settings_page(request, box_id, form=form, retype=retype, retype_secret=retype_secret,
+                          tested=("connection", tone, text, details))
 
 
 @router.post("/ui/m/{box_id}/settings/sender-rules", response_class=HTMLResponse,
@@ -445,7 +464,7 @@ def _pending(state: str, box_id: str | None = None) -> dict | None:
 
 
 def _signed_in(request: Request, box: Mailbox):
-    _flash(request, _('Signed in with %(provider)s. "Save & check" tests the connection.',
+    _flash(request, _('Signed in with %(provider)s. "Check connection" tests the connection.',
                       provider=oauth.PROVIDERS[box.cfg.imap_auth].label))
     return RedirectResponse(f"/ui/m/{box.id}/settings", status_code=303)
 
