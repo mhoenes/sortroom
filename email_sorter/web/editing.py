@@ -36,7 +36,12 @@ _FOLDER_RE = re.compile(r"^[^\\%*\x00-\x1f]{1,200}$")  # IMAP list wildcards and
 
 
 class EditError(ValueError):
-    """A change the user has to fix; the file was not touched."""
+    """A change the user has to fix; the file was not touched. `field`: the form field it is about, if any,
+    so the page can mark it."""
+
+    def __init__(self, message: str, field: str | None = None):
+        super().__init__(message)
+        self.field = field
 
 
 # Every change of a mailbox.toml or config.toml reads the file, changes it and writes it back; two at a
@@ -97,14 +102,14 @@ def _save(box: Mailbox, doc: tomlkit.TOMLDocument, shared_path: Path) -> None:
 def _text(form: dict, name: str, max_len: int = 4000) -> str:
     value = str(form.get(name, "") or "").strip()
     if len(value) > max_len:
-        raise EditError(_("\"%(name)s\" is too long (max. %(n)s characters).", name=name, n=max_len))
+        raise EditError(_("\"%(name)s\" is too long (max. %(n)s characters).", name=name, n=max_len), name)
     return value
 
 
 def _folder(form: dict, name: str, label: str) -> str:
     value = _text(form, name, 200).strip("/")
     if value and not _FOLDER_RE.match(value):
-        raise EditError(_("%(label)s: invalid folder name.", label=label))
+        raise EditError(_("%(label)s: invalid folder name.", label=label), name)
     return value
 
 
@@ -113,13 +118,13 @@ def _number(form: dict, name: str, label: str, lo: float, hi: float, integer: bo
     try:
         value = float(raw)
     except ValueError:
-        raise EditError(_("%(label)s: please enter a number.", label=label)) from None
+        raise EditError(_("%(label)s: please enter a number.", label=label), name) from None
     if not lo <= value <= hi:
         raise EditError(_("%(label)s: allowed are values from %(lo)s to %(hi)s.", label=label, lo=f"{lo:g}",
-                          hi=f"{hi:g}"))
+                          hi=f"{hi:g}"), name)
     if integer:
         if value != int(value):
-            raise EditError(_("%(label)s: please enter a whole number.", label=label))
+            raise EditError(_("%(label)s: please enter a whole number.", label=label), name)
         return int(value)
     return round(value, 4)
 
@@ -643,10 +648,10 @@ def classifier_from_form(form: dict) -> tuple[dict, str]:
     for field, label in (("endpoint", _("Endpoint")), ("model", _("Model"))):
         value = _text(form, field, 300)
         if not value or " " in value:
-            raise EditError(_("%(label)s: please fill in.", label=label))
+            raise EditError(_("%(label)s: please fill in.", label=label), field)
         values[field] = value
     if not values["endpoint"].startswith("https://"):
-        raise EditError(_("Endpoint: please enter an https address."))
+        raise EditError(_("Endpoint: please enter an https address."), "endpoint")
     values["max_body_chars"] = _number(form, "max_body_chars", _("Mail text length"), 200, 20000, integer=True)
     values["timeout_seconds"] = _number(form, "timeout_seconds", _("Timeout in seconds"), 1, 300)
     values["min_interval_seconds"] = _number(form, "min_interval_seconds", _("Minimum interval in seconds"), 0, 60)
@@ -678,18 +683,21 @@ def mail_from_form(form: dict) -> tuple[dict, str]:
     notify, digest = _flag(form, "notify_failures"), _flag(form, "digest")
     ui_url = _text(form, "ui_url", 300)
     if (notify or digest) and not (host and sender and recipient):
-        raise EditError(_("Mail: to send notifications or the summary, please fill in the SMTP server, From and To."))
-    for value, label in ((sender, _("From")), (recipient, _("To"))):
+        missing = next(name for name, value in (("smtp_host", host), ("mail_sender", sender),
+                                                ("mail_recipient", recipient)) if not value)
+        raise EditError(_("Mail: to send notifications or the summary, please fill in the SMTP server, From and To."),
+                        missing)
+    for value, label, field in ((sender, _("From"), "mail_sender"), (recipient, _("To"), "mail_recipient")):
         if value and "@" not in parseaddr(value)[1]:
-            raise EditError(_("%(label)s: please enter an e-mail address.", label=label))
+            raise EditError(_("%(label)s: please enter an e-mail address.", label=label), field)
     if ui_url and not ui_url.startswith(("http://", "https://")):
-        raise EditError(_("Address of this interface: please start with http:// or https://."))
+        raise EditError(_("Address of this interface: please start with http:// or https://."), "ui_url")
     security = _text(form, "smtp_security", 10) or "starttls"
     if security not in SECURITY:
-        raise EditError(_("Unknown encryption."))
+        raise EditError(_("Unknown encryption."), "smtp_security")
     digest_time = _text(form, "digest_time", 5) or "07:00"
     if not _TIME_RE.match(digest_time):
-        raise EditError(_("Daily summary: please enter a time such as 07:00."))
+        raise EditError(_("Daily summary: please enter a time such as 07:00."), "digest_time")
     port = _number(form, "smtp_port", _("Port"), 1, 65535, integer=True) if _text(form, "smtp_port", 6) else 587
     values = {"host": host, "port": port, "security": security, "user": _text(form, "smtp_user", 200),
               "sender": sender, "recipient": recipient, "ui_url": ui_url, "notify_failures": notify,
@@ -711,7 +719,7 @@ def _secret_text(form: dict, name: str, label: str, strip: bool = False) -> str:
     value = str(form.get(name) or "")
     value = value.strip() if strip else value
     if value and not _SECRET_RE.match(value):
-        raise EditError(_("%(label)s: at most 500 characters, no line breaks.", label=label))
+        raise EditError(_("%(label)s: at most 500 characters, no line breaks.", label=label), name)
     return value
 
 

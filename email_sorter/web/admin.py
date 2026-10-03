@@ -403,7 +403,13 @@ async def mailbox_create(request: Request):
 
 # ---------------------------------------------------------------- shared settings
 
-def _shared_page(request: Request, form: dict | None = None, error: str | None = None, status: int = 200,
+# the fields of Global settings that show their own error (shared.html); an error about another one shows on top
+SHARED_FIELDS = {"endpoint", "model", "api_key", "max_body_chars", "timeout_seconds", "min_interval_seconds",
+                 "smtp_host", "smtp_security", "smtp_port", "smtp_user", "smtp_password", "mail_sender",
+                 "mail_recipient", "ui_url", "digest_time"}
+
+
+def _shared_page(request: Request, form: dict | None = None, error: EditError | None = None, status: int = 200,
                  retype: bool = False, retype_smtp: bool = False, tested: tuple[str, str, str] | None = None):
     boxes = _boxes(request)
     path = _shared_path(request)
@@ -425,11 +431,14 @@ def _shared_page(request: Request, form: dict | None = None, error: str | None =
                      "ui_url": mail.ui_url, "notify_failures": mail.notify_failures, "digest": mail.digest,
                      "digest_time": mail.digest_time})
     return _page(request, "shared.html", {
-        **_sidebar(request, boxes, None, "shared"), "form": form, "error": error, "editable": shared_writable(path),
+        **_sidebar(request, boxes, None, "shared"), "form": form, "editable": shared_writable(path),
         "config_name": path.name, "languages": i18n.LANGUAGES, "secrets_file": SECRETS_FILE, "retype": retype,
         "key_set": key_set, "key_error": key_error, "smtp_password_set": bool(smtp_password(path)),
         "retype_smtp": retype_smtp, "key_writable": secrets_writable(secrets),
-        "tested": tested}, status)
+        "tested": tested, "here": str(request.base_url).rstrip("/"),
+        # an error about one field shows at that field, which gets the focus; others at the top
+        "error": str(error) if error else None,
+        "error_field": error.field if error and error.field in SHARED_FIELDS else None}, status)
 
 
 @router.get("/ui/settings", response_class=HTMLResponse, dependencies=[Depends(require_login)])
@@ -458,7 +467,7 @@ async def shared_settings_save(request: Request):
         save_shared(request.app.state.base_dir, _shared_path(request), form)
     except EditError as e:
         form, retype, retype_smtp = _shared_form_again(form)
-        return _shared_page(request, form=form, error=str(e), status=422, retype=retype, retype_smtp=retype_smtp)
+        return _shared_page(request, form=form, error=e, status=422, retype=retype, retype_smtp=retype_smtp)
     _flash(request, _("Saved. Applies to all mailboxes from the next run."))
     return RedirectResponse("/ui/settings", status_code=303)
 
@@ -481,6 +490,7 @@ async def shared_settings_test(request: Request, card: str):
         raise HTTPException(404)
     form = await _form(request)
     path = _shared_path(request)
+    field = None
     try:
         if card == "model":
             values, key = classifier_from_form(form)
@@ -490,9 +500,9 @@ async def shared_settings_test(request: Request, card: str):
             mail, password = mail_from_form(form)
             tone, text = await run_in_threadpool(_test_mail, MailSettings(**mail), password or smtp_password(path))
     except (EditError, ConfigError) as e:
-        tone, text = "err", str(e)
+        tone, text, field = "err", str(e), getattr(e, "field", None)
     if "application/json" in request.headers.get("accept", ""):
-        return JSONResponse({"tone": tone, "text": text})
+        return JSONResponse({"tone": tone, "text": text, "field": field})
     form, retype, retype_smtp = _shared_form_again(form)
     return _shared_page(request, form=form, retype=retype, retype_smtp=retype_smtp, tested=(card, tone, text))
 

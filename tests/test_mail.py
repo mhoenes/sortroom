@@ -188,7 +188,7 @@ def test_mail_settings_in_global_settings(client, setup, smtp, monkeypatch):  # 
             "ui_url": "http://nas:8765", "notify_failures": "1", "digest": "1", "digest_time": "06:30"}
     monkeypatch.setattr(mail.smtplib, "SMTP_SSL", FakeSMTP)
     r = client.post("/ui/settings/test/mail", data=form, headers={"Accept": "application/json"})
-    assert r.json() == {"tone": "ok", "text": "Testmail an me@example.com geschickt."}
+    assert r.json() == {"tone": "ok", "text": "Testmail an me@example.com geschickt.", "field": None}
     assert smtp[0][0][-1] == ("login", "me@example.com", "geheim")              # the values in the form
     assert not mail.mail_settings(setup / "config.toml").ready                   # ... not saved
     assert mail.smtp_password(setup / "config.toml") == ""
@@ -206,3 +206,7 @@ def test_mail_settings_in_global_settings(client, setup, smtp, monkeypatch):  # 
                          ({"ui_url": "nas:8765"}, "http://")):
         r = client.post("/ui/settings", data={**form, "csrf": _csrf(html), **bad})
         assert r.status_code == 422 and message in r.text and "geheim" not in r.text
+        # the message is at the field, which is marked and gets the focus – not in a banner on top
+        name = next(iter(bad))
+        assert f'name="{name}"' in r.text and f'aria-describedby="error-{name}" autofocus' in r.text
+        assert f'id="error-{name}">' in r.text and 'class="banner err"' not in r.text

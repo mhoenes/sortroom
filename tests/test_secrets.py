@@ -240,7 +240,7 @@ def test_check_model_tries_the_form_without_saving_it(client, setup, monkeypatch
     r = client.post("/ui/settings/test/model", data={**form, "api_key": ""}, headers=json)
     assert calls[-1] == ("k", "example/model-2")                       # empty: the stored key
     r = client.post("/ui/settings/test/model", data={**form, "model": ""}, headers=json)
-    assert r.json() == {"tone": "err", "text": "Modell: bitte angeben."} and len(calls) == 2
+    assert r.json() == {"tone": "err", "text": "Modell: bitte angeben.", "field": "model"} and len(calls) == 2
 
     # without JavaScript the page comes back, the form as it was, the key to be entered again
     r = client.post("/ui/settings/test/model", data=form)

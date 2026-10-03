@@ -375,11 +375,24 @@ details.more[open] summary { margin-bottom: 10px; }
   border-top: 1px solid var(--line-soft); }
 .test-result { flex-basis: 100%; }
 .test-result:empty { display: none; }
+/* a group of fields within a card, e.g. "Fine-tuning" */
+.subhead { margin-bottom: -6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.subhead span { margin-left: 6px; font-weight: 400; }
+/* switches with their explanation below them, in line with the label */
+.option { display: flex; flex-direction: column; }
+.option-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.option > .hint { padding-left: 26px; max-width: 60ch; }
+/* a field the server or a test found wrong, and what is wrong with it */
+[aria-invalid="true"] { border-color: var(--err-bar) !important; box-shadow: 0 0 0 1px var(--err-bar); }
+.field-error { color: var(--err); font-weight: 500; }
+.text-btn { padding: 0; border: 0; background: none; font: inherit; color: var(--accent); text-decoration: underline;
+  text-align: left; cursor: pointer; }
 input.digest-time { width: 120px; height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--field-line);
   background: var(--surface); color: var(--ink); font: inherit; align-self: center; }
 /* Settings: the save button of the long form stays at the bottom of the window while its cards scroll past */
-.savebar { position: sticky; bottom: 0; z-index: 5; margin: 0 -16px; padding: 12px 16px;
-  background: var(--ground); border-top: 1px solid var(--line); }
+.savebar { position: sticky; bottom: 0; z-index: 5; margin: 0 -16px; padding: 12px 16px; background: var(--ground); }
+/* the ground reaches past the cards, so nothing shows beside it while they scroll by; the line ends with them */
+.savebar::before { content: ""; position: absolute; top: 0; left: 16px; right: 16px; border-top: 1px solid var(--line); }
 
 th.star-col, td.star-col { width: 30px; padding-left: 6px; padding-right: 0; }
 svg.star { display: block; width: 16px; height: 16px; fill: var(--star); }
