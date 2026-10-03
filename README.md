@@ -73,7 +73,7 @@ curl -fsSL -o config/config.toml https://raw.githubusercontent.com/mhoenes/sortr
 2. `docker compose up -d`, open `http://<docker-host>:8765` and log in. Without Compose, the
    same works with `docker run`: see
    [Installation](https://github.com/mhoenes/sortroom/wiki/Installation#with-docker-run-instead-of-compose).
-3. Under **Global settings** enter the API key and press **Save & check**.
+3. Under **Global settings** enter the API key, press **Check model**, then **Save settings**.
 4. Under **Add mailbox** choose Gmail, Outlook.com / Microsoft 365 or another IMAP server,
    enter the login and pick the standard categories.
 

@@ -187,14 +187,20 @@ def test_mail_settings_in_global_settings(client, setup, smtp, monkeypatch):  # 
             "smtp_password": "geheim", "mail_sender": "me@example.com", "mail_recipient": "me@example.com",
             "ui_url": "http://nas:8765", "notify_failures": "1", "digest": "1", "digest_time": "06:30"}
     monkeypatch.setattr(mail.smtplib, "SMTP_SSL", FakeSMTP)
-    r = client.post("/ui/settings", data={**form, "then": "testmail"})
-    assert "Testmail an me@example.com geschickt" in r.text
+    r = client.post("/ui/settings/test/mail", data=form, headers={"Accept": "application/json"})
+    assert r.json() == {"tone": "ok", "text": "Testmail an me@example.com geschickt."}
+    assert smtp[0][0][-1] == ("login", "me@example.com", "geheim")              # the values in the form
+    assert not mail.mail_settings(setup / "config.toml").ready                   # ... not saved
+    assert mail.smtp_password(setup / "config.toml") == ""
+    r = client.post("/ui/settings/test/mail", data=form)                         # without JavaScript
     assert r.text.index('id="mail"') < r.text.index("Testmail an me@example.com geschickt")  # in the Mail card
-    assert "an me@example.com geschickt" not in client.get("/ui/settings").text               # shown once
+    assert 'value="smtp.example.com"' in r.text and "geheim" not in r.text
+
+    r = client.post("/ui/settings", data=form)
     s = mail.mail_settings(setup / "config.toml")
     assert (s.host, s.port, s.security, s.digest_time, s.notify_failures) == ("smtp.example.com", 465, "ssl", "06:30", True)
     assert mail.smtp_password(setup / "config.toml") == "geheim" and "geheim" not in r.text
-    assert smtp[0][0][-1] == ("login", "me@example.com", "geheim")
+    assert len(smtp) == 2  # the two tests; saving sends nothing
     for bad, message in (({"mail_recipient": ""}, "SMTP-Server, Absender und Empfänger"),
                          ({"mail_sender": "kein-mail"}, "E-Mail-Adresse"), ({"digest_time": "25:00"}, "Uhrzeit"),
                          ({"ui_url": "nas:8765"}, "http://")):

@@ -5,7 +5,7 @@ import tomllib
 
 import pytest
 
-from email_sorter.config import ConfigError, load_credentials, load_mailboxes, stored_credentials
+from email_sorter.config import ConfigError, load_credentials, load_mailboxes, read_secrets, stored_credentials
 from email_sorter.web import admin, editing, editor
 from email_sorter.web.editing import EditError, save_settings, write_secrets
 
@@ -211,12 +211,12 @@ def test_save_and_check_tests_the_new_login(client, setup, monkeypatch):
     assert r.status_code == 422 and seen == ["Neu-789"]
 
 
-def test_save_and_check_model(client, setup, monkeypatch):
+def test_check_model_tries_the_form_without_saving_it(client, setup, monkeypatch):
     calls = []
 
     class FakeClient:
         def __init__(self, key, endpoint, model, **kw):
-            calls.append(key)
+            calls.append((key, model))
 
         def decide(self, state, categories):
             from email_sorter.classifier import Decision
@@ -225,13 +225,28 @@ def test_save_and_check_model(client, setup, monkeypatch):
 
     monkeypatch.setattr(admin, "ClassifierClient", FakeClient)
     html = client.get("/ui/settings").text
-    form = {"csrf": _csrf(html), "endpoint": "https://example.invalid/decisions", "model": "example/model-1",
+    form = {"csrf": _csrf(html), "endpoint": "https://example.invalid/decisions", "model": "example/model-2",
             "max_body_chars": "3000", "timeout_seconds": "20", "min_interval_seconds": "0", "language": "de",
-            "api_key": "sk-Neu", "then": "check"}
-    r = client.post("/ui/settings", data=form)
-    assert calls == ["sk-Neu"] and "Modell funktioniert" in r.text and "„finanzen“" in r.text
-    assert "sk-Neu" not in r.text
+            "api_key": "sk-Neu"}
+    config = (setup / "config.toml").read_text(encoding="utf-8")
+    json = {"Accept": "application/json"}  # as the page's script asks
+    r = client.post("/ui/settings/test/model", data=form, headers=json)
+    assert calls == [("sk-Neu", "example/model-2")] and r.json()["tone"] == "ok"
+    assert "Modell funktioniert" in r.json()["text"] and "„finanzen“" in r.json()["text"]
+    # nothing saved: neither the model nor the key
+    assert (setup / "config.toml").read_text(encoding="utf-8") == config
+    assert read_secrets(setup / "secrets.toml")["classifier"]["api_key"] == "k"
+
+    r = client.post("/ui/settings/test/model", data={**form, "api_key": ""}, headers=json)
+    assert calls[-1] == ("k", "example/model-2")                       # empty: the stored key
+    r = client.post("/ui/settings/test/model", data={**form, "model": ""}, headers=json)
+    assert r.json() == {"tone": "err", "text": "Modell: bitte angeben."} and len(calls) == 2
+
+    # without JavaScript the page comes back, the form as it was, the key to be entered again
+    r = client.post("/ui/settings/test/model", data=form)
+    assert "Modell funktioniert" in r.text and 'value="example/model-2"' in r.text
+    assert "sk-Neu" not in r.text and "Bitte erneut eingeben" in r.text
 
     (setup / "secrets.toml").unlink()
-    r = client.post("/ui/settings", data={**form, "api_key": ""})
-    assert "API-Schlüssel ist noch nicht gesetzt" in r.text and calls == ["sk-Neu"]
+    r = client.post("/ui/settings/test/model", data={**form, "api_key": ""}, headers=json)
+    assert "API-Schlüssel ist noch nicht gesetzt" in r.json()["text"] and len(calls) == 3

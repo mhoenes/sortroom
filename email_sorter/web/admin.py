@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 from fastapi import Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from .. import jobs
 from ..check import check_imap, check_model
@@ -28,12 +28,13 @@ from ..resort import run_resort
 from ..runtime import single_instance
 from ..sorter import RunResult, expired_target, run, run_backfill, run_recheck_expiry
 from ..cleanup import run_cleanup
-from ..mail import MailError, mail_settings, send, smtp_password
+from ..mail import MailError, MailSettings, mail_settings, send, smtp_password
 from ..undo import changed_since, run_undo
 from ..store import Store
 from . import _box, _boxes, _sidebar, queries, require_login, router
-from .editing import (EditError, add_sender_rule, can_add_mailbox, create_mailbox, rename_category_key, with_kind,
-                      rename_folder_refs, reserved_key_text, save_shared, secrets_writable, shared_writable, writable)
+from .editing import (EditError, add_sender_rule, can_add_mailbox, classifier_from_form, create_mailbox,
+                      mail_from_form, rename_category_key, rename_folder_refs, reserved_key_text, save_shared,
+                      secrets_writable, shared_writable, with_kind, writable)
 from .editor import _flash, _form, _page, _shared_path, form_number, without_secrets
 
 log = logging.getLogger(__name__)
@@ -403,7 +404,7 @@ async def mailbox_create(request: Request):
 # ---------------------------------------------------------------- shared settings
 
 def _shared_page(request: Request, form: dict | None = None, error: str | None = None, status: int = 200,
-                 retype: bool = False, retype_smtp: bool = False):
+                 retype: bool = False, retype_smtp: bool = False, tested: tuple[str, str, str] | None = None):
     boxes = _boxes(request)
     path = _shared_path(request)
     secrets = path.with_name(SECRETS_FILE)
@@ -428,7 +429,7 @@ def _shared_page(request: Request, form: dict | None = None, error: str | None =
         "config_name": path.name, "languages": i18n.LANGUAGES, "secrets_file": SECRETS_FILE, "retype": retype,
         "key_set": key_set, "key_error": key_error, "smtp_password_set": bool(smtp_password(path)),
         "retype_smtp": retype_smtp, "key_writable": secrets_writable(secrets),
-        "tested": request.session.pop("tested", None)}, status)
+        "tested": tested}, status)
 
 
 @router.get("/ui/settings", response_class=HTMLResponse, dependencies=[Depends(require_login)])
@@ -456,43 +457,63 @@ async def shared_settings_save(request: Request):
     try:
         save_shared(request.app.state.base_dir, _shared_path(request), form)
     except EditError as e:
-        form, retype = without_secrets(form, "api_key")
-        form, retype_smtp = without_secrets(form, "smtp_password")
-        for name in ("notify_failures", "digest"):  # shown again as they were ticked
-            form[name] = _flag(form, name)
+        form, retype, retype_smtp = _shared_form_again(form)
         return _shared_page(request, form=form, error=str(e), status=422, retype=retype, retype_smtp=retype_smtp)
     _flash(request, _("Saved. Applies to all mailboxes from the next run."))
-    tests = {"check": ("model", _check_model), "testmail": ("mail", _test_mail)}
-    if form.get("then") in tests:  # "Save & check" / "Save & send a test mail": test what was just saved
-        card, test = tests[form["then"]]
-        tone, text = await run_in_threadpool(test, _shared_path(request))
-        request.session["tested"] = [card, tone, text]  # shown in that card, by its button
-        return RedirectResponse(f"/ui/settings#{card}", status_code=303)
     return RedirectResponse("/ui/settings", status_code=303)
 
 
-def _test_mail(shared_path) -> tuple[str, str]:
-    settings = mail_settings(shared_path)
+def _shared_form_again(form: dict) -> tuple[dict, bool, bool]:
+    """The Global settings form to show again: (form, retype the API key, retype the SMTP password)."""
+    form, retype = without_secrets(form, "api_key")
+    form, retype_smtp = without_secrets(form, "smtp_password")
+    for name in ("notify_failures", "digest"):  # shown again as they were ticked
+        form[name] = _flag(form, name)
+    return form, retype, retype_smtp
+
+
+@router.post("/ui/settings/test/{card}", response_class=HTMLResponse, dependencies=[Depends(require_login)])
+async def shared_settings_test(request: Request, card: str):
+    """Check model / Send test mail: try the values in the form without saving them, so a wrong one never
+    reaches the scheduled runs. An empty API key or password means the stored one. The page's script asks
+    for JSON and shows the result below the button; without JavaScript the page comes back."""
+    if card not in ("model", "mail"):
+        raise HTTPException(404)
+    form = await _form(request)
+    path = _shared_path(request)
+    try:
+        if card == "model":
+            values, key = classifier_from_form(form)
+            tone, text = await run_in_threadpool(
+                _check_model, values, key or classifier_key(path.with_name(SECRETS_FILE)))
+        else:
+            mail, password = mail_from_form(form)
+            tone, text = await run_in_threadpool(_test_mail, MailSettings(**mail), password or smtp_password(path))
+    except (EditError, ConfigError) as e:
+        tone, text = "err", str(e)
+    if "application/json" in request.headers.get("accept", ""):
+        return JSONResponse({"tone": tone, "text": text})
+    form, retype, retype_smtp = _shared_form_again(form)
+    return _shared_page(request, form=form, retype=retype, retype_smtp=retype_smtp, tested=(card, tone, text))
+
+
+def _test_mail(settings: MailSettings, password: str) -> tuple[str, str]:
     if not settings.ready:
         return "err", _("Please fill in the SMTP server, From and To first.")
     try:
-        send(settings, smtp_password(shared_path), _("Sortroom: test mail"),
+        send(settings, password, _("Sortroom: test mail"),
              _("This is a test mail from Sortroom. Sending mail works.") + "\n")
     except MailError as e:
         return "err", _("The test mail could not be sent: %(e)s", e=e)
     return "ok", _("Test mail sent to %(recipient)s.", recipient=settings.recipient)
 
 
-def _check_model(shared_path) -> tuple[str, str]:
+def _check_model(classifier: dict, key: str) -> tuple[str, str]:
     """Send the model one sample mail with the standard categories of the UI language."""
-    try:
-        key = classifier_key(shared_path.with_name(SECRETS_FILE))
-        c = _read_toml(shared_path)["classifier"]
-    except ConfigError as e:
-        return "err", str(e)
     if not key:
         return "err", _("The API key is not set yet.")
-    client = ClassifierClient(key, c["endpoint"], c["model"], timeout=float(c.get("timeout_seconds", 20)), retries=2)
+    client = ClassifierClient(key, classifier["endpoint"], classifier["model"],
+                              timeout=float(classifier["timeout_seconds"]), retries=2)
     example = tomllib.loads(EXAMPLE_MAILBOXES[i18n.language()].read_text(encoding="utf-8"))["categories"]
     try:
         d = check_model(client, {k: v["description"] for k, v in example.items()})

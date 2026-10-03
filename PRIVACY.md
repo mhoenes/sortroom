@@ -39,7 +39,7 @@ For each mail it classifies – new mail, a backfill, a re-sort or a **Test with
 model** – Sortroom sends the classification endpoint you configured the sender (name
 and address), the recipients, the date it was sent, the subject, the attachment names,
 whether it is a mailing list and up to 3000 characters of the text (by default; quotes
-and signatures removed). **Save & check** under Global settings sends a built-in sample
+and signatures removed). **Check model** under Global settings sends a built-in sample
 mail, none of yours.
 
 - With a **hosted** endpoint (e.g. OpenRouter), this data goes to that provider and to
@@ -77,7 +77,7 @@ Sortroom sends mail through that server to the one recipient you enter there:
   waiting to be reviewed (with the model's suggestion) and of the mails starred in the
   last day, sender and subject of offers that expire today or tomorrow, and the errors
   of the last day's runs;
-- **a test mail** when you press **Save & send a test mail**.
+- **a test mail** when you press **Send test mail**.
 
 With the address of the admin UI filled in, these mails contain links to it. Your SMTP
 provider and the recipient's provider handle these mails like any other mail.
