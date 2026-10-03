@@ -103,20 +103,63 @@
     btn.addEventListener('click', () => set(!side.classList.contains('open')));
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && side.classList.contains('open')) { set(false); btn.focus(); } });
   })();
-  // help tips (?): a tap or click opens and closes them. They often sit inside a <label>, where the click
-  // would otherwise tick the checkbox or jump into the field.
+  // help tips (?): shown on hover and keyboard focus, and a tap or click opens and closes them (.open). The
+  // text goes into one element fixed to the window, placed by the "?" - a scrolling table or panel would cut
+  // off a tip inside it. A "?" often sits inside a <label>, where the click would tick the checkbox.
   (() => {
+    const tip = document.createElement('div');
+    tip.className = 'tip';
+    tip.hidden = true;
+    tip.setAttribute('aria-hidden', 'true');  // screen readers have the text as the "?"'s label
+    document.body.append(tip);
+    const touch = matchMedia('(hover: none)');
+    let shown = null;
+    const show = h => {
+      shown = h;
+      tip.textContent = h.dataset.tip;
+      tip.hidden = false;
+      if (touch.matches) return;  // a panel along the bottom, see app.css
+      const r = h.getBoundingClientRect(), w = tip.offsetWidth, ht = tip.offsetHeight;
+      tip.style.left = `${Math.max(8, Math.min(r.left + r.width / 2 - w / 2, innerWidth - w - 8))}px`;
+      tip.style.top = `${r.top - ht - 8 >= 8 ? r.top - ht - 8 : r.bottom + 8}px`;  // above, else below
+    };
+    const hide = () => { shown = null; tip.hidden = true; };
+    const helpOf = e => e.target.closest && e.target.closest('.help');
     const close = except => document.querySelectorAll('.help.open').forEach(h => { if (h !== except) h.classList.remove('open'); });
+    document.addEventListener('mouseover', e => { const h = helpOf(e); if (h && h !== shown && !touch.matches) show(h); });
+    document.addEventListener('mouseout', e => {
+      const h = helpOf(e);
+      if (h && h === shown && !h.classList.contains('open') && h !== document.activeElement) hide();
+    });
+    document.addEventListener('focusin', e => { const h = helpOf(e); if (h && !touch.matches) show(h); });
+    document.addEventListener('focusout', e => {
+      const h = helpOf(e);
+      if (h) { h.classList.remove('open'); if (h === shown) hide(); }
+    });
     document.addEventListener('click', e => {
-      const help = e.target.closest('.help');
-      if (help) { e.preventDefault(); close(help); help.classList.toggle('open'); } else close();
+      const h = helpOf(e);
+      if (h) {
+        e.preventDefault();
+        close(h);
+        h.classList.toggle('open');
+        h.classList.contains('open') ? show(h) : hide();
+      } else {
+        close();
+        if (shown && !shown.matches(':hover')) hide();
+      }
     });
     document.addEventListener('keydown', e => {
-      const help = e.target.closest && e.target.closest('.help');
-      if (help && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); help.classList.toggle('open'); }
-      if (e.key === 'Escape') close();
+      const h = helpOf(e);
+      if (h && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault();
+        h.classList.toggle('open');
+        h.classList.contains('open') ? show(h) : hide();
+      }
+      if (e.key === 'Escape') { close(); hide(); }
     });
-    document.addEventListener('focusout', e => { if (e.target.closest && e.target.closest('.help')) e.target.classList.remove('open'); });
+    // keep it by its "?" while something scrolls (a page, a table, the mail panel) or the window changes
+    addEventListener('scroll', () => { if (shown) show(shown); }, true);
+    addEventListener('resize', () => { if (shown) show(shown); });
   })();
   // success messages disappear after 3 s; warnings and errors stay
   document.querySelectorAll('[data-autohide]').forEach(el => setTimeout(() => {

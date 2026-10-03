@@ -381,24 +381,20 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
 
 .expired { color: var(--muted); text-decoration: line-through; }
 
-/* help tooltips: hover, keyboard focus, or a tap/click (base.html toggles .open) */
-.help { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
+/* help tips: a "?" whose text is in data-tip. base.html shows it in one .tip element fixed to the window,
+   above the "?" or below it when there is no room - so a scrolling table or panel can't cut it off */
+.help { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
   margin-left: 4px; border-radius: 9px; border: 1px solid var(--line-strong); color: var(--muted); font-size: 11px;
   font-weight: 600; cursor: help; vertical-align: middle; }
-.help:hover, .help:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
-.help::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%);
-  width: max-content; max-width: min(300px, 80vw); padding: 8px 10px; border-radius: 8px; background: var(--tip-bg); color: var(--tip-ink);
-  font-size: 12px; font-weight: 400; line-height: 1.45; text-align: left; white-space: normal; z-index: 20;
-  pointer-events: none; display: none; }
-/* display, not opacity: a hidden but laid-out tip would widen the page */
-.help:hover::after, .help:focus-visible::after, .help.open::after { display: block; }
-/* touch screens: no hover, and a tip beside a "?" near the edge would run off the screen - show it as a
-   panel along the bottom of the window instead */
+.help:hover, .help:focus-visible, .help.open { color: var(--accent); border-color: var(--accent); outline: none; }
+.tip { position: fixed; z-index: 60; max-width: min(300px, calc(100vw - 16px)); padding: 8px 10px; border-radius: 8px;
+  background: var(--tip-bg); color: var(--tip-ink); font-size: 12px; font-weight: 400; line-height: 1.45;
+  pointer-events: none; box-shadow: 0 4px 16px var(--shadow); }
+.tip[hidden] { display: none; }
+/* touch screens: no hover - the tip of a tapped "?" shows as a panel along the bottom of the window */
 @media (hover: none) {
-  .help:hover::after { display: none; }
-  .help.open::after { display: block; position: fixed; left: 16px; right: 16px; bottom: 16px; top: auto;
-    transform: none; width: auto; max-width: none; padding: 12px 14px; font-size: 14px;
-    box-shadow: 0 6px 24px var(--shadow); }
+  .tip { left: 16px !important; right: 16px; top: auto !important; bottom: 16px; max-width: none;
+    padding: 12px 14px; font-size: 14px; box-shadow: 0 6px 24px var(--shadow); }
 }
 
 @media (max-width: 1100px) {
