@@ -88,7 +88,7 @@
     </form>
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/cleanup">{{ hidden() }}
       <div class="about"><h3>{{ _('Apply the deletion rules') }}</h3>
-        <p>{{ _('Moves mail older than its rule allows into the trash of the mailbox (Settings → Deletion rules). The dry run lists what would go.') }}</p>
+        <p>{{ _('Moves mail older than its rule allows into the trash of the mailbox (Rules → Deletion rules). The dry run lists what would go.') }}</p>
         <p class="muted">{% if box.cfg.delete_rules %}{{ ngettext('%(num)s rule · runs by itself once a day.', '%(num)s rules · run by themselves once a day.', box.cfg.delete_rules|length) }}{% else %}{{ _('No deletion rules yet.') }} <a href="/ui/m/{{ box.id }}/settings#loeschregeln">{{ _('Set them up') }}</a>{% endif %}</p></div>
       <div class="fields"></div>
       {{ go(disabled=not box.cfg.delete_rules, why=_('No deletion rules yet')) }}

@@ -242,8 +242,8 @@ def _box(request: Request, box_id: str) -> tuple[dict[str, Mailbox], Mailbox]:
 def _sidebar(request: Request, boxes: dict[str, Mailbox], current: Mailbox | None, active: str) -> dict:
     busy = request.app.state.is_busy
     # switching to another mailbox keeps the page: from A's mails to B's mails
-    page = {"mails": "/mails", "senders": "/senders", "categories": "/categories", "maintenance": "/maintenance",
-            "settings": "/settings"}.get(active, "")
+    page = {"mails": "/mails", "senders": "/senders", "categories": "/categories", "rules": "/rules",
+            "maintenance": "/maintenance", "settings": "/settings"}.get(active, "")
     items = []
     for b in boxes.values():
         db = queries.connect(b.workspace)

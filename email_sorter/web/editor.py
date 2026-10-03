@@ -29,8 +29,8 @@ from ..i18n import _
 from ..removal import MailboxBusy, delete_mailbox
 from ..trial import OTHER_SAMPLE, OWN_SAMPLE, run_trial
 from . import _box, _sidebar, queries, require_login, router, templates
-from .editing import (EditError, connection_from_form, delete_category, save_category, save_delete_rules,
-                      save_sender_rules, save_settings, secrets_writable, writable)
+from .editing import (EditError, connection_from_form, delete_category, save_category, save_rules, save_settings,
+                      secrets_writable, writable)
 
 log = logging.getLogger(__name__)
 
@@ -242,6 +242,21 @@ def auth_methods() -> dict[str, str]:
     return {"password": _("Password"), "google": _("Google (OAuth)"), "microsoft": _("Microsoft (OAuth)")}
 
 
+def _known_folders(box: Mailbox) -> list[str]:
+    """Folders to suggest in folder fields: the inbox, the categories' folders and those mail was sorted into."""
+    cfg = box.cfg
+    db = queries.connect(box.workspace)
+    try:
+        known = set(queries.folders(db))
+    finally:
+        if db:
+            db.close()
+    known |= {c.folder for c in cfg.categories.values() if c.folder}
+    known |= {f for f in (cfg.source_folder, cfg.expired_folder, *(c.expired_folder for c in cfg.categories.values()))
+              if f}
+    return sorted(known)
+
+
 # the fields of the mailbox settings that show their own error (settings.html); an error about another one
 # – or from the rule tables – shows on top
 SETTINGS_FIELDS = {"name", "box_id", "imap_host", "imap_port", "source_folder", "imap_auth", "imap_user",
@@ -252,8 +267,7 @@ SETTINGS_FIELDS = {"name", "box_id", "imap_host", "imap_port", "source_folder", 
 
 
 def _settings_page(request: Request, box_id: str, form: dict | None = None, error: EditError | str | None = None,
-                   rules: list[tuple[str, str]] | None = None, status: int = 200, retype: bool = False,
-                   retype_secret: bool = False, delete_rules: list[dict] | None = None,
+                   status: int = 200, retype: bool = False, retype_secret: bool = False,
                    tested: tuple[str, str, str, str] | None = None):
     boxes, box = _box(request, box_id)
     cfg = box.cfg
@@ -269,26 +283,12 @@ def _settings_page(request: Request, box_id: str, form: dict | None = None, erro
                 "lookback_days": cfg.lookback_days, "max_per_run": cfg.max_per_run,
                 "expired_folder": cfg.expired_folder or "", "imap_user": login["stored_user"],
                 "imap_auth": cfg.imap_auth, "oauth_client_id": cfg.oauth_client_id, "oauth_tenant": cfg.oauth_tenant}
-    if rules is None:
-        rules = [(r.match, r.action) for r in cfg.sender_rules]
-    if delete_rules is None:
-        delete_rules = [{"folder": r.folder, "days": r.days, "only_read": r.only_read, "starred": r.starred}
-                        for r in cfg.delete_rules]
-    db = queries.connect(box.workspace)
-    try:  # folder suggestions for the deletion rules: the categories' and those mail was sorted into
-        known = set(queries.folders(db))
-    finally:
-        if db:
-            db.close()
-    known |= {c.folder for c in cfg.categories.values() if c.folder}
-    known |= {f for f in (cfg.source_folder, cfg.expired_folder, *(c.expired_folder for c in cfg.categories.values()))
-              if f}
     return _page(request, "settings.html", {
         **_sidebar(request, boxes, box, "settings"), "box": box, "cfg": cfg, "form": form,
         "error": str(error) if error else None,
         "error_field": error.field if isinstance(error, EditError) and error.field in SETTINGS_FIELDS else None,
         "schedule": request.app.state.scheduler.status(box),
-        "rules": rules, "delete_rules": delete_rules, "folders": sorted(known), "editable": writable(box),
+        "folders": _known_folders(box), "editable": writable(box),
         "login": login, "login_error": login_error, "login_writable": secrets_writable(box.secrets_path),
         "secrets_file": SECRETS_FILE, "retype": retype, "retype_secret": retype_secret,
         "auth_methods": auth_methods(), "oauth_hint": oauth.provider_for_host(cfg.imap_host),
@@ -348,39 +348,47 @@ async def settings_test(request: Request, box_id: str):
                           tested=("connection", tone, text, details))
 
 
-@router.post("/ui/m/{box_id}/settings/sender-rules", response_class=HTMLResponse,
-             dependencies=[Depends(require_login)])
-async def sender_rules_save(request: Request, box_id: str):
+# ---------------------------------------------------------------- the Rules page: sender rules, deletion rules
+
+def _rules_page(request: Request, box_id: str, sender_rules: list[tuple[str, str]] | None = None,
+                delete_rules: list[dict] | None = None, error: str | None = None, status: int = 200):
+    boxes, box = _box(request, box_id)
+    cfg = box.cfg
+    if sender_rules is None:
+        sender_rules = [(r.match, r.action) for r in cfg.sender_rules]
+    if delete_rules is None:
+        delete_rules = [{"folder": r.folder, "days": r.days, "only_read": r.only_read, "starred": r.starred}
+                        for r in cfg.delete_rules]
+    return _page(request, "rules.html", {
+        **_sidebar(request, boxes, box, "rules"), "box": box, "cfg": cfg, "rules": sender_rules,
+        "delete_rules": delete_rules, "folders": _known_folders(box), "editable": writable(box), "error": error,
+        "config_name": box.config_file.name if box.config_file else "–"}, status)
+
+
+@router.get("/ui/m/{box_id}/rules", response_class=HTMLResponse, dependencies=[Depends(require_login)])
+def rules_page(request: Request, box_id: str):
+    return _rules_page(request, box_id)
+
+
+@router.post("/ui/m/{box_id}/rules", response_class=HTMLResponse, dependencies=[Depends(require_login)])
+async def rules_save(request: Request, box_id: str):
+    """Save both lists at once; a row removed in the page leaves a gap in the numbers, which is skipped."""
     form = await _form(request)
     _all_boxes, box = _box(request, box_id)
-    rules = []
-    for i in range(int(form.get("rows") or 0)):  # removed rows leave gaps: empty, skipped when saving
-        rules.append((str(form.get(f"match_{i}") or ""), str(form.get(f"action_{i}") or INBOX_ACTION)))
+    sender_rules = [(str(form.get(f"match_{i}") or ""), str(form.get(f"action_{i}") or INBOX_ACTION))
+                    for i in range(int(form.get("rows") or 0))]
+    delete_rules: list[dict] = [
+        {"folder": str(form.get(f"dfolder_{i}") or ""), "days": str(form.get(f"ddays_{i}") or ""),
+         "only_read": bool(form.get(f"dread_{i}")), "starred": bool(form.get(f"dstar_{i}"))}
+        for i in range(int(form.get("drows") or 0))]
     try:
-        save_sender_rules(box, _shared_path(request), rules)
+        save_rules(box, _shared_path(request), sender_rules, delete_rules)
     except EditError as e:
-        return _settings_page(request, box_id, error=str(e), rules=[r for r in rules if r[0].strip()], status=422)
-    _flash(request, _("Sender rules saved. They apply from the next run."))
-    return RedirectResponse(f"/ui/m/{box.id}/settings#regeln", status_code=303)
-
-
-
-@router.post("/ui/m/{box_id}/settings/delete-rules", response_class=HTMLResponse,
-             dependencies=[Depends(require_login)])
-async def delete_rules_save(request: Request, box_id: str):
-    form = await _form(request)
-    _all_boxes, box = _box(request, box_id)
-    rules: list[dict] = []
-    for i in range(int(form.get("rows") or 0)):  # removed rows leave gaps: empty, skipped when saving
-        rules.append({"folder": str(form.get(f"dfolder_{i}") or ""), "days": str(form.get(f"ddays_{i}") or ""),
-                      "only_read": bool(form.get(f"dread_{i}")), "starred": bool(form.get(f"dstar_{i}"))})
-    try:
-        save_delete_rules(box, _shared_path(request), rules)
-    except EditError as e:
-        return _settings_page(request, box_id, error=str(e), status=422,
-                              delete_rules=[r for r in rules if r["folder"].strip()])
-    _flash(request, _("Deletion rules saved."))
-    return RedirectResponse(f"/ui/m/{box.id}/settings#loeschregeln", status_code=303)
+        return _rules_page(request, box_id, error=str(e), status=422,
+                           sender_rules=[r for r in sender_rules if r[0].strip()],
+                           delete_rules=[r for r in delete_rules if r["folder"].strip()])
+    _flash(request, _("Rules saved. They apply from the next run."))
+    return RedirectResponse(f"/ui/m/{box.id}/rules", status_code=303)
 
 
 def _busy(request: Request, box: Mailbox) -> bool:

@@ -370,9 +370,23 @@ def _move_mailbox(box: Mailbox, new_id: str, text: str, busy: bool) -> None:
 
 
 @_one_at_a_time
+def save_rules(box: Mailbox, shared_path: Path, sender_rules: list[tuple[str, str]], delete_rules: list[dict]) -> None:
+    """The Rules page: replace the sender rules and the deletion rules, both or neither."""
+    doc = _doc(box)
+    if _set_sender_rules(doc, sender_rules) | _set_delete_rules(doc, delete_rules):
+        _save(box, doc, shared_path)
+
+
+@_one_at_a_time
 def save_sender_rules(box: Mailbox, shared_path: Path, rules: list[tuple[str, str]]) -> None:
     """Replace all sender rules (order kept)."""
     doc = _doc(box)
+    if _set_sender_rules(doc, rules):
+        _save(box, doc, shared_path)
+
+
+def _set_sender_rules(doc: tomlkit.TOMLDocument, rules: list[tuple[str, str]]) -> bool:
+    """Put the sender rules into the document; False when they were the same already."""
     categories = doc.get("categories") or {}
     clean: list[tuple[str, str]] = []
     for match, action in rules:
@@ -384,8 +398,7 @@ def save_sender_rules(box: Mailbox, shared_path: Path, rules: list[tuple[str, st
         if action != INBOX_ACTION and action not in categories:
             raise EditError(_("Unknown target \"%(target)s\" for %(match)s.", target=action, match=match))
         clean.append((match, action))
-    if _replace_tables(doc, "sender_rules", [{"match": m, "action": a} for m, a in clean]):
-        _save(box, doc, shared_path)
+    return _replace_tables(doc, "sender_rules", [{"match": m, "action": a} for m, a in clean])
 
 
 def _replace_tables(doc: tomlkit.TOMLDocument, key: str, rows: list[dict]) -> bool:
@@ -425,6 +438,12 @@ def _replace_tables(doc: tomlkit.TOMLDocument, key: str, rows: list[dict]) -> bo
 def save_delete_rules(box: Mailbox, shared_path: Path, rules: list[dict]) -> None:
     """Replace all deletion rules: dicts with folder, days, only_read, starred. Empty folders are skipped."""
     doc = _doc(box)
+    if _set_delete_rules(doc, rules):
+        _save(box, doc, shared_path)
+
+
+def _set_delete_rules(doc: tomlkit.TOMLDocument, rules: list[dict]) -> bool:
+    """Put the deletion rules into the document; False when they were the same already."""
     source = str((doc.get("imap") or {}).get("source_folder", "INBOX")).strip("/")
     clean: list[dict] = []
     for r in rules:
@@ -448,8 +467,7 @@ def save_delete_rules(box: Mailbox, shared_path: Path, rules: list[dict]) -> Non
         if r.get("starred"):
             row["starred"] = True
         clean.append(row)
-    if _replace_tables(doc, "delete_rules", clean):
-        _save(box, doc, shared_path)
+    return _replace_tables(doc, "delete_rules", clean)
 
 
 def _detach_trailing(table: Table) -> list:

@@ -61,7 +61,7 @@ def run_cleanup(cfg: Config, creds: Credentials, base_dir: Path, live: bool, tod
     """Apply the mailbox's deletion rules. Changes nothing without `live`."""
     if not cfg.delete_rules:
         return {"ok": True, "live": live, "exit_code": 0, "moved": 0,
-                "summary": _("This mailbox has no deletion rules (Settings).")}
+                "summary": _("This mailbox has no deletion rules (Rules).")}
     today = today or date.today()
     store = Store(base_dir / "data" / "state.db")
     started = datetime.now()
