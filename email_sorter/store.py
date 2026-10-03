@@ -84,6 +84,9 @@ CREATE TABLE IF NOT EXISTS meta (
 MIGRATIONS: tuple[str, ...] = (
     _SCHEMA,
     "UPDATE processed SET source = 'classifier' WHERE source = 'jev';",
+    # step 3: suggestions you dismissed (web/suggestions.py), so they don't come back
+    "CREATE TABLE IF NOT EXISTS dismissed (kind TEXT NOT NULL, subject TEXT NOT NULL, target TEXT NOT NULL, "
+    "at TEXT NOT NULL, PRIMARY KEY (kind, subject, target));",
 )
 
 
@@ -378,6 +381,12 @@ class Store:
                 f"INSERT OR {'IGNORE' if how == 'reconcile' else 'REPLACE'} INTO corrections "
                 "(message_key, category, corrected_to, at, how) VALUES (?, ?, ?, ?, ?)",
                 (key, category, corrected_to, datetime.now().isoformat(timespec="seconds"), how))
+        self.db.commit()
+
+    def dismiss(self, kind: str, subject: str, target: str) -> None:
+        """Remember a dismissed suggestion: kind "rule" (subject: the match) or "category" (subject: its key)."""
+        self.db.execute("INSERT OR REPLACE INTO dismissed (kind, subject, target, at) VALUES (?, ?, ?, ?)",
+                        (kind, subject, target, datetime.now().isoformat(timespec="seconds")))
         self.db.commit()
 
     def model_decisions(self, min_confidence: float) -> list[tuple[str, str, str | None]]:

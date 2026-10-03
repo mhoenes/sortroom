@@ -302,6 +302,8 @@ async def mail_action(request: Request, box_id: str):
 
     try:
         _flash(request, await run_in_threadpool(locked))
+        if action == "move":  # corrected by hand: offer a rule, so the sender's next mails go there too
+            back += f"&rule={quote(category, safe='')}"
     except (EditError, ManualError, ConfigError) as e:
         _flash(request, str(e), "err")
     except Exception as e:

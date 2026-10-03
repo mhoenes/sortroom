@@ -2,7 +2,8 @@
 
 Read-only: mails are fetched without marking them seen, nothing is moved and nothing is written to
 the log. The sample is the category's most recent mails plus recent mails of other categories, so
-the result shows both what the category keeps and what it would newly pull in.
+the result shows both what the category keeps and what it would newly pull in - and first the mails
+corrected by hand into or away from it, with the category they were corrected to as the right answer.
 """
 from __future__ import annotations
 
@@ -24,6 +25,7 @@ log = logging.getLogger(__name__)
 
 OWN_SAMPLE = 10
 OTHER_SAMPLE = 15
+CORRECTED_SAMPLE = 10
 
 
 @dataclass
@@ -35,10 +37,13 @@ class TrialRow:
     after: str | None = None
     confidence: float | None = None
     error: str | None = None
+    corrected: bool = False   # corrected by hand: `before` is where you put it, the right answer
 
 
-def sample(db_path: Path, category: str, own: int = OWN_SAMPLE, other: int = OTHER_SAMPLE) -> list[tuple]:
-    """(key, moved_to, received, sender, subject, category) of mails decided by the model, newest first."""
+def sample(db_path: Path, category: str, own: int = OWN_SAMPLE, other: int = OTHER_SAMPLE,
+           corrected: int = CORRECTED_SAMPLE) -> list[tuple]:
+    """(key, moved_to, received, sender, subject, category, corrected by hand?): first the mails corrected
+    into or away from the category (category: where you put them), then mails decided by the model, newest first."""
     if not db_path.exists():
         return []
     db = sqlite3.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
@@ -47,8 +52,17 @@ def sample(db_path: Path, category: str, own: int = OWN_SAMPLE, other: int = OTH
         classified_only = "AND source NOT IN ('rule', 'manual')" if "source" in cols else ""
         sql = ("SELECT message_key, moved_to, received, sender, subject, category FROM processed "
                f"WHERE category {{}} ? {classified_only} ORDER BY processed_at DESC LIMIT ?")
-        return (db.execute(sql.format("="), (category, own)).fetchall()
-                + db.execute(sql.format("!="), (category, other)).fetchall())
+        fixed = []
+        if db.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'corrections'").fetchone():
+            fixed = db.execute(
+                "SELECT p.message_key, p.moved_to, p.received, p.sender, p.subject, c.corrected_to "
+                "FROM corrections c JOIN processed p ON p.message_key = c.message_key "
+                "WHERE (c.category = ? OR c.corrected_to = ?) AND p.gone = 0 ORDER BY c.at DESC LIMIT ?",
+                (category, category, corrected)).fetchall()
+        taken = {r[0] for r in fixed}
+        rest = [r for r in (db.execute(sql.format("="), (category, own)).fetchall()
+                            + db.execute(sql.format("!="), (category, other)).fetchall()) if r[0] not in taken]
+        return [(*r, True) for r in fixed] + [(*r, False) for r in rest]
     finally:
         db.close()
 
@@ -65,8 +79,8 @@ def run_trial(cfg: Config, creds: Credentials, db_path: Path, key: str, descript
               progress=None) -> tuple[list[TrialRow], float]:
     """Classify the sample with the draft description. Returns (rows, cost in USD)."""
     picked = sample(db_path, key)
-    rows = {k: TrialRow(received, sender or "", subject or "", category)
-            for k, _, received, sender, subject, category in picked}
+    rows = {k: TrialRow(received, sender or "", subject or "", category, corrected=fixed)
+            for k, _, received, sender, subject, category, fixed in picked}
     if not rows:
         return [], 0.0
     descriptions = with_category(cfg, key, description)

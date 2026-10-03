@@ -64,6 +64,39 @@
 </section>
 {% endif %}
 
+{% if rule_tips or hints %}
+<section class="card stack tight" aria-label="{{ _('Suggestions') }}">
+  <div class="row"><h2 class="grow">{{ _('Suggestions') }}</h2><span class="muted" style="font-size:13px">{{ _('from your corrections') }}</span></div>
+  <div class="review tips">
+    {% for s in rule_tips %}
+    {% set target = label('' if s.target == 'inbox' else s.target) %}
+    <div class="tip">
+      <span class="what"><b>{% if s.match.startswith('@') %}{{ _('%(num)s mails from %(senders)s senders of %(domain)s were put into %(target)s by hand', num=s.count, senders=s.senders|length, domain=s.match, target=target) }}{% else %}{{ _('%(num)s mails from %(sender)s were put into %(target)s by hand', num=s.count, sender=s.match, target=target) }}{% endif %}</b>
+        <span class="muted">{{ _('A sender rule would put them there right away, without the model.') }}</span></span>
+      <form method="post" action="/ui/m/{{ box.id }}/suggestions" class="tip-actions">
+        <input type="hidden" name="csrf" value="{{ csrf_token(request) }}"><input type="hidden" name="kind" value="rule">
+        <input type="hidden" name="subject" value="{{ s.match }}"><input type="hidden" name="target" value="{{ s.target }}">
+        <button class="btn small primary" type="submit" name="action" value="rule">{{ _('Create the rule') }}</button>
+        <button class="btn small" type="submit" name="action" value="dismiss">{{ _('Dismiss') }}</button>
+      </form>
+    </div>
+    {% endfor %}
+    {% for h in hints %}
+    <div class="tip">
+      <span class="what"><b>{{ _('The description of %(category)s may be too vague', category=label(h.category)) }}</b>
+        <span class="muted">{% if h.away %}{{ _('%(away)s of %(filed)s mails the model filed here were put elsewhere by hand', away=h.away, filed=h.filed) }}{% endif %}{% if h.away and h.into %} · {% endif %}{% if h.into %}{{ ngettext('%(num)s mail was put here from another category', '%(num)s mails were put here from other categories', h.into) }}{% endif %} ({{ _('30 days') }})</span></span>
+      <form method="post" action="/ui/m/{{ box.id }}/suggestions" class="tip-actions">
+        <input type="hidden" name="csrf" value="{{ csrf_token(request) }}"><input type="hidden" name="kind" value="category">
+        <input type="hidden" name="subject" value="{{ h.category }}"><input type="hidden" name="target" value="">
+        <a class="btn small primary" href="/ui/m/{{ box.id }}/categories?cat={{ h.category }}">{{ _('Check the description') }}</a>
+        <button class="btn small" type="submit" name="action" value="dismiss">{{ _('Dismiss') }}</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
 <div class="grid split">
   <section class="card" style="display:flex;flex-direction:column;gap:16px">
     <div class="row"><h2 class="grow">{{ _('Received, last 7 days') }}</h2><span class="muted" style="font-size:13px">{{ ngettext('%(num)s mail', '%(num)s mails', total_7d, num=total_7d|num) }}</span></div>

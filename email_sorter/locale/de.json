@@ -4,6 +4,7 @@
  "\"Test with the model\" files the last %(own)s mails of this category and %(other)s others again with the description from the field – without moving or saving anything (about %(cost)s).": "„Mit dem Modell testen“ ordnet die letzten %(own)s Mails dieser Kategorie und %(other)s andere mit der Beschreibung aus dem Feld neu ein – ohne etwas zu verschieben oder zu speichern (ca. %(cost)s).",
  "\"Unsubscribe\" sends the one-click request of the sender (RFC 8058) from this server. For the other senders open the link or write the mail yourself, then mark them. Unsubscribe links are read when mails are sorted and when the log is reconciled.": "„Abmelden“ schickt die One-Click-Abmeldung des Absenders (RFC 8058) von diesem Server aus. Bei den anderen Absendern öffnest du den Link oder schreibst die Mail selbst und markierst sie danach. Abmelde-Links werden beim Sortieren und beim Abgleich des Logs gelesen.",
  "\"inbox\" is reserved: sender rules use it for leaving mail in the inbox. Please choose another key.": "„inbox“ ist reserviert: Absenderregeln verwenden es für „im Posteingang lassen“. Bitte einen anderen Schlüssel wählen.",
+ "%(away)s of %(filed)s mails the model filed here were put elsewhere by hand": "%(away)s von %(filed)s Mails, die das Modell hier einsortiert hat, kamen von Hand woandershin",
  "%(corrected)s of %(filed)s corrected": "%(corrected)s von %(filed)s korrigiert",
  "%(failed)s could not be changed, see the log": "%(failed)s konnten nicht geändert werden, siehe Log",
  "%(failed)s could not be moved, see the log": "%(failed)s ließen sich nicht verschieben, siehe Protokoll",
@@ -68,10 +69,16 @@
   "%(num)s Mail zur Prüfung",
   "%(num)s Mails zur Prüfung"
  ],
+ "%(num)s mail was put here from another category": [
+  "%(num)s Mail kam von Hand aus einer anderen Kategorie hierher",
+  "%(num)s Mails kamen von Hand aus anderen Kategorien hierher"
+ ],
  "%(num)s mailbox with errors today": [
   "%(num)s Postfach mit Fehlern heute",
   "%(num)s Postfächer mit Fehlern heute"
  ],
+ "%(num)s mails from %(sender)s were put into %(target)s by hand": "%(num)s Mails von %(sender)s kamen von Hand nach „%(target)s“",
+ "%(num)s mails from %(senders)s senders of %(domain)s were put into %(target)s by hand": "%(num)s Mails von %(senders)s Absendern von %(domain)s kamen von Hand nach „%(target)s“",
  "%(num)s rule · runs by itself once a day.": [
   "%(num)s Regel · läuft einmal am Tag von selbst.",
   "%(num)s Regeln · laufen einmal am Tag von selbst."
@@ -81,6 +88,7 @@
   "%(num)s Läufe mit Fehlern heute."
  ],
  "%(pct)s corrected by hand in 30 days": "%(pct)s in 30 Tagen von Hand korrigiert",
+ "%(right)s of %(total)s mails corrected by hand would now be filed the way you corrected them.": "%(right)s von %(total)s von Hand korrigierten Mails würden jetzt so einsortiert, wie du sie korrigiert hast.",
  "%(sender)s marked as unsubscribed.": "%(sender)s als abgemeldet markiert.",
  "%(sender)s no longer marked as unsubscribed.": "%(sender)s nicht mehr als abgemeldet markiert.",
  "%(sender)s offers no one-click unsubscribe.": "%(sender)s bietet keine One-Click-Abmeldung an.",
@@ -103,6 +111,7 @@
  "A run is in progress": "Lauf läuft gerade",
  "A run is in progress for this mailbox. New jobs wait until it is done.": "Für dieses Postfach läuft gerade ein Lauf. Neue Jobs warten, bis er fertig ist.",
  "A run is in progress for this mailbox. Please try again in a moment.": "Für dieses Postfach läuft gerade ein Lauf. Bitte gleich noch einmal versuchen.",
+ "A sender rule would put them there right away, without the model.": "Eine Absender-Regel würde sie gleich dorthin bringen, ohne das Modell.",
  "A star only when the model thinks you need to do something (threshold in the settings). Usually off for promotions and updates.": "Stern nur, wenn das Modell meint, dass du etwas tun musst (Schwelle in den Einstellungen). Für Werbung und Benachrichtigungen meist aus.",
  "A test is already running for this mailbox.": "Es läuft schon ein Test für dieses Postfach.",
  "API key": "API-Schlüssel",
@@ -122,6 +131,7 @@
  "All good.": "Alles in Ordnung.",
  "All mailboxes": "Alle Postfächer",
  "Always": "Immer",
+ "Always for this sender?": "Immer für diesen Absender?",
  "Always star": "Immer mit Stern",
  "Any service that offers the <a href=\"https://docs.typesafe.ai/api\" target=\"_blank\" rel=\"noopener\">TypeSafe API</a>.": "Jeder Dienst, der die <a href=\"https://docs.typesafe.ai/api\" target=\"_blank\" rel=\"noopener\">TypeSafe-API</a> anbietet.",
  "Appearance": "Darstellung",
@@ -145,6 +155,7 @@
  "Changes the internal key in the settings, the sender rules and the log. The display name stays; folders do not change.": "Ändert den internen Schlüssel in den Einstellungen, in den Absender-Regeln und im Protokoll. Der Anzeigename bleibt; Ordner ändern sich nicht.",
  "Check connection": "Verbindung prüfen",
  "Check expiry dates": "Ablaufdaten nachprüfen",
+ "Check the description": "Beschreibung prüfen",
  "Choose Google or Microsoft as the sign-in method and enter the client ID first.": "Wähle zuerst Google oder Microsoft als Anmeldung und trage die Client-ID ein.",
  "Choose all that can be undone": "Alle auswählen, die sich rückgängig machen lassen",
  "Client ID": "Client-ID",
@@ -168,6 +179,7 @@
  "Create": "Anlegen",
  "Create a sender rule": "Absender-Regel anlegen",
  "Create mailbox": "Postfach anlegen",
+ "Create the rule": "Regel anlegen",
  "Creates its own folder with settings, log and reports": "Legt einen eigenen Ordner mit Einstellungen, Protokoll und Berichten an",
  "Dark": "Dunkel",
  "Decided by": "Entschieden von",
@@ -183,6 +195,7 @@
  "Deletion rules saved.": "Lösch-Regeln gespeichert.",
  "Description for the model": "Beschreibung für das Modell",
  "Details": "Details",
+ "Dismiss": "Verwerfen",
  "Display name": "Anzeigename",
  "Does not run by itself (Settings → Schedule).": "Läuft nicht von selbst (Einstellungen → Zeitplan).",
  "Dry run": "Probelauf",
@@ -509,6 +522,7 @@
  "Stored in <span class=\"mono\">mailboxes/…/%(file)s</span>, readable only by Sortroom. You can change it later under Settings.": "Gespeichert in <span class=\"mono\">mailboxes/…/%(file)s</span>, nur für Sortroom lesbar. Später unter Einstellungen änderbar.",
  "Subject": "Betreff",
  "Suggestion": "Vorschlag",
+ "Suggestions": "Vorschläge",
  "Target": "Ziel",
  "Target folder": "Zielordner",
  "Target folder for expired mail": "Zielordner für Abgelaufenes",
@@ -528,6 +542,7 @@
  "The category \"%(key)s\" already exists.": "Die Kategorie „%(key)s“ gibt es schon.",
  "The category \"%(key)s\" does not exist.": "Die Kategorie „%(key)s“ gibt es nicht.",
  "The description must not be empty – the model files mails by it alone.": "Die Beschreibung darf nicht leer sein – das Modell ordnet nur nach ihr ein.",
+ "The description of %(category)s may be too vague": "Die Beschreibung von %(category)s ist vielleicht zu ungenau",
  "The display name must not be empty.": "Der Anzeigename darf nicht leer sein.",
  "The endpoint rejects the API key: %(e)s": "Der Endpunkt lehnt den API-Schlüssel ab: %(e)s",
  "The file has no categories.": "Die Datei hat keine Kategorien.",
@@ -646,6 +661,7 @@
  "for real": "echt",
  "from %(category)s to another one": "aus %(category)s in eine andere",
  "from other categories": "aus anderen Kategorien",
+ "from your corrections": "aus deinen Korrekturen",
  "imap.gmail.com · sign-in with Google": "imap.gmail.com · Anmeldung mit Google",
  "just now": "gerade eben",
  "last %(when)s": "zuletzt %(when)s",

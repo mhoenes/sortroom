@@ -244,6 +244,11 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 .review .what .muted { font-size: 13px; }
 .review .guess { width: 170px; flex-shrink: 0; font-size: 13px; }
 .review .guess .muted { font-size: 12px; font-weight: 400; }
+/* overview: suggestions learned from corrections, each with its buttons */
+.tips .tip { display: flex; align-items: center; gap: 14px; padding: 10px 14px; }
+.tips .tip + .tip { border-top: 1px solid var(--line-soft); }
+.tips .what > * { white-space: normal; }
+.tips .tip-actions { display: flex; gap: 8px; flex-shrink: 0; }
 
 /* maintenance: task rows grouped by what they cost and touch */
 .group-head { display: flex; flex-direction: column; gap: 4px; }
@@ -450,6 +455,7 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
   .review a { flex-direction: column; align-items: stretch; gap: 6px; }
   .review .what, .review .guess { width: auto; }
   .review .guess { flex-direction: row; gap: 6px; }
+  .tips .tip { flex-direction: column; align-items: stretch; gap: 8px; }
 }
 .senders .addr { max-width: 320px; }
 .unsub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
