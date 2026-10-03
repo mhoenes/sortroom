@@ -5,8 +5,9 @@ servers of its own and receives no data from your installation – no telemetry,
 analytics, no update checks.
 
 This page describes what an installation does with your mail. "You" is whoever runs
-it; for the OAuth apps you create for Google or Microsoft, you are also the app's
-developer and its only user.
+it. For a Google sign-in you create your own OAuth app, so you are also that app's
+developer and its only user. For Microsoft, Sortroom brings its own app registration
+(below), unless you enter the client ID of your own; then the same holds for it.
 
 ## What Sortroom reads and changes
 
