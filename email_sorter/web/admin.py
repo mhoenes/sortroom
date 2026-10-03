@@ -27,6 +27,7 @@ from ..reconcile import run_reconcile
 from ..resort import run_resort
 from ..runtime import single_instance
 from ..sorter import RunResult, expired_target, run, run_backfill, run_recheck_expiry
+from ..cleanup import run_cleanup
 from ..undo import changed_since, run_undo
 from ..store import Store
 from . import _box, _boxes, _sidebar, queries, require_login, router
@@ -39,7 +40,7 @@ log = logging.getLogger(__name__)
 EXAMPLE = "_example_"  # template choice prefix: the built-in standard categories of a language
 
 TASKS = {"run", "backfill", "recheck", "resort", "relocate", "rename_folder", "rename_category", "reconcile", "check",
-         "undo"}
+         "undo", "cleanup"}
 RISKY_TASKS = {"rename_folder", "rename_category"}  # change the server and the settings
 
 
@@ -131,6 +132,11 @@ def _job_for(request: Request, box: Mailbox, task: str, form: dict):
             label += " · " + i18n.ngettext("%(num)s mail", "%(num)s mails", len(keys))
         return (label + mode,
                 lambda: run_undo(cfg, creds, ws, stamp, live=live, sort_again=sort_again, keys=keys), True)
+    if task == "cleanup":  # only the mailbox, no model
+        if not cfg.delete_rules:
+            raise EditError(_("This mailbox has no deletion rules (Settings)."))
+        creds = imap_credentials(box)
+        return _("Apply the deletion rules") + mode, lambda: run_cleanup(cfg, creds, ws, live=live), True
     creds = load_credentials(box)
     shared = _shared_path(request)
     if task == "run":

@@ -150,7 +150,7 @@ def test_maintenance_page_and_run_job(client, monkeypatch):
     assert "Lauf (Probelauf)" in client.get("/ui/m/privat/maintenance").text  # listed as recent job
     # "Ausführen" is the second submit button of each task; it posts live=1
     page = client.get("/ui/m/privat/maintenance").text
-    assert page.count('>Probelauf</button>') == page.count('name="live" value="1"') == 8  # undo: on the run's page
+    assert page.count('>Probelauf</button>') == page.count('name="live" value="1"') == 9  # undo: on the run's page; the deletion rules have one
     r = client.post("/ui/m/privat/maintenance/run", data={"csrf": _csrf(page), "live": "1"}, follow_redirects=False)
     _wait(r.headers["location"].rsplit("/", 1)[1])
     assert calls[-1] == (True, None)

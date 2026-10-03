@@ -194,7 +194,7 @@ templates.env.globals["source_url"] = os.environ.get("SOURCE_URL", "https://gith
 
 def run_kind(kind: str) -> str:
     return {"run": _("Run"), "backfill": _("Backfill"), "resort": _("Re-sort"),
-            "recheck": _("Expiry check"), "undo": _("Undo")}.get(kind, kind)
+            "recheck": _("Expiry check"), "undo": _("Undo"), "cleanup": _("Deletion rules")}.get(kind, kind)
 
 
 def run_status(run: dict) -> tuple[str, str]:

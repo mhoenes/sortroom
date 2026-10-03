@@ -1,5 +1,6 @@
 """Built-in schedule: every mailbox with [schedule] enabled gets a normal run every N minutes, and
 with reconcile_enabled its log is reconciled with the mailbox every reconcile_hours (independent of `enabled`).
+A mailbox with deletion rules has them applied once a day (CLEANUP_HOURS), also independent of `enabled`.
 
 Runs in a background thread of the API/UI process. Each run takes the mailbox's lock like any
 other run, so a run started by hand (or from outside via the API) is never doubled: the
@@ -18,12 +19,13 @@ from collections.abc import Callable
 from .config import ConfigError, Mailbox, imap_credentials, load_credentials
 from .runtime import single_instance
 from .sorter import run
-from .store import last_reconcile
+from .store import last_cleanup, last_reconcile
 
 log = logging.getLogger(__name__)
 
 TICK_SECONDS = 20
 FIRST_RUN_DELAY = timedelta(minutes=1)  # give the container a moment after (re)start
+CLEANUP_HOURS = 24
 
 
 def enabled_by_env() -> bool:
@@ -35,12 +37,17 @@ class Scheduler:
     def __init__(self, load_boxes: Callable[[], dict[str, Mailbox]],
                  run_box: Callable[[Mailbox], None] | None = None,
                  reconcile_box: Callable[[Mailbox], bool] | None = None,
-                 last_reconciled: Callable[[Mailbox], datetime | None] | None = None):
+                 last_reconciled: Callable[[Mailbox], datetime | None] | None = None,
+                 cleanup_box: Callable[[Mailbox], bool] | None = None,
+                 last_cleaned: Callable[[Mailbox], datetime | None] | None = None):
         self._load_boxes = load_boxes
         self._run_box = run_box or run_scheduled
         self._reconcile_box = reconcile_box or reconcile_scheduled
         self._last_reconciled = last_reconciled or (lambda box: last_reconcile(box.workspace))
         self.reconciled: dict[str, datetime | None] = {}  # mailbox id -> last reconcile, as last read
+        self._cleanup_box = cleanup_box or cleanup_scheduled
+        self._last_cleaned = last_cleaned or (lambda box: last_cleanup(box.workspace))
+        self.cleaned: dict[str, datetime | None] = {}     # mailbox id -> deletion rules last applied
         self._first_seen: dict[str, datetime] = {}
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -99,6 +106,8 @@ class Scheduler:
                 if not box.cfg.schedule_enabled:
                     if self._reconcile_due(box, now):
                         started.append(self._start_reconcile(box, now))
+                    elif self._cleanup_due(box, now):
+                        started.append(self._start_cleanup(box, now))
                     continue
                 interval = timedelta(minutes=box.cfg.schedule_minutes)
                 due = self.next_run.get(box.id)
@@ -106,9 +115,11 @@ class Scheduler:
                     due = self.next_run[box.id] = now + min(FIRST_RUN_DELAY, interval)
                 elif due > now + interval:  # interval shortened in the UI
                     due = self.next_run[box.id] = now + interval
-                if due > now:
-                    if self._reconcile_due(box, now):  # a normal run comes first
+                if due > now:  # a normal run comes first, then the reconcile, then the deletion rules
+                    if self._reconcile_due(box, now):
                         started.append(self._start_reconcile(box, now))
+                    elif self._cleanup_due(box, now):
+                        started.append(self._start_cleanup(box, now))
                     continue
                 self.next_run[box.id] = now + interval
                 self.running.add(box.id)
@@ -155,6 +166,37 @@ class Scheduler:
                     self.reconciled.pop(box.id, None)
                 self.running.discard(box.id)
 
+    def _cleanup_due(self, box: Mailbox, now: datetime) -> bool:
+        if not box.cfg.delete_rules:
+            return False
+        every = timedelta(hours=CLEANUP_HOURS)
+        first = self._first_seen.setdefault(box.id, now)
+        last = self.cleaned.get(box.id)
+        if last is not None and now < last + every:
+            return False
+        last = self.cleaned[box.id] = self._last_cleaned(box)  # also counts a run by hand
+        if last is None:
+            return now >= first + FIRST_RUN_DELAY
+        return now >= last + every
+
+    def _start_cleanup(self, box: Mailbox, now: datetime) -> str:
+        self.cleaned[box.id] = now
+        self.running.add(box.id)
+        threading.Thread(target=self._cleanup, args=(box,), name=f"cleanup-{box.id}", daemon=True).start()
+        return f"{box.id}:cleanup"
+
+    def _cleanup(self, box: Mailbox) -> None:
+        done = True
+        try:
+            done = self._cleanup_box(box)
+        except Exception:
+            log.exception("[%s] scheduled deletion rules failed", box.id)
+        finally:
+            with self._lock:
+                if not done:  # the mailbox was busy: try again at the next tick
+                    self.cleaned.pop(box.id, None)
+                self.running.discard(box.id)
+
     def _run(self, box: Mailbox) -> None:
         try:
             self._run_box(box)
@@ -189,6 +231,25 @@ def run_scheduled(box: Mailbox) -> None:
             return
         log.info("[%s] starting scheduled run", box.id)
         run(box.cfg, creds, box.workspace, live=True, limit=None)
+
+
+def cleanup_scheduled(box: Mailbox) -> bool:
+    """Apply the deletion rules for real. False when the mailbox was busy, so it is tried again soon."""
+    from .cleanup import run_cleanup
+
+    try:
+        creds = imap_credentials(box)
+    except ConfigError as e:
+        log.error("[%s] scheduled deletion rules skipped: %s", box.id, e)
+        return True
+    with single_instance(box.lock_path) as acquired:
+        if not acquired:
+            log.info("[%s] scheduled deletion rules postponed, another run is active", box.id)
+            return False
+        log.info("[%s] applying the deletion rules", box.id)
+        result = run_cleanup(box.cfg, creds, box.workspace, live=True)
+        log.info("[%s] deletion rules: %s", box.id, result["summary"])
+    return True
 
 
 def reconcile_scheduled(box: Mailbox) -> bool:
