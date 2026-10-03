@@ -598,17 +598,9 @@ def save_shared(base_dir: Path, shared_path: Path, form: dict) -> None:
     if not shared_writable(shared_path):
         raise EditError(_("%(file)s is read-only.", file=shared_path.name))
     doc = tomlkit.parse(shared_path.read_text(encoding="utf-8"))
-    classifier = doc["classifier"]
-    for field, label in (("endpoint", _("Endpoint")), ("model", _("Model"))):
-        value = _text(form, field, 300)
-        if not value or " " in value:
-            raise EditError(_("%(label)s: please fill in.", label=label))
-        classifier[field] = value
-    if not _text(form, "endpoint", 300).startswith("https://"):
-        raise EditError(_("Endpoint: please enter an https address."))
-    classifier["max_body_chars"] = _number(form, "max_body_chars", _("Mail text length"), 200, 20000, integer=True)
-    classifier["timeout_seconds"] = _number(form, "timeout_seconds", _("Timeout in seconds"), 1, 300)
-    classifier["min_interval_seconds"] = _number(form, "min_interval_seconds", _("Minimum interval in seconds"), 0, 60)
+    values, key = classifier_from_form(form)
+    for name, value in values.items():
+        doc["classifier"][name] = value
     language = _text(form, "language", 10) or DEFAULT_LANGUAGE
     if language not in LANGUAGES:
         raise EditError(_("Unknown language."))
@@ -619,7 +611,6 @@ def save_shared(base_dir: Path, shared_path: Path, form: dict) -> None:
     if theme not in THEMES:
         raise EditError(_("Unknown appearance."))
     doc["ui"]["theme"] = theme
-    key = _secret_text(form, "api_key", _("API key"), strip=True)  # write-only: empty keeps the stored one
     secrets = shared_path.with_name(SECRETS_FILE)
     if key and not secrets_writable(secrets):
         raise EditError(_("%(file)s is not writable, so the API key cannot be stored.", file=SECRETS_FILE))
@@ -645,11 +636,39 @@ def save_shared(base_dir: Path, shared_path: Path, form: dict) -> None:
         write_secrets(secrets, "smtp", {"password": smtp_password})
 
 
+def classifier_from_form(form: dict) -> tuple[dict, str]:
+    """[classifier] from the Global settings form, checked, and the API key typed in – write-only: empty
+    keeps the stored one. For saving, and for "Check model", which tries them without saving."""
+    values: dict = {}
+    for field, label in (("endpoint", _("Endpoint")), ("model", _("Model"))):
+        value = _text(form, field, 300)
+        if not value or " " in value:
+            raise EditError(_("%(label)s: please fill in.", label=label))
+        values[field] = value
+    if not values["endpoint"].startswith("https://"):
+        raise EditError(_("Endpoint: please enter an https address."))
+    values["max_body_chars"] = _number(form, "max_body_chars", _("Mail text length"), 200, 20000, integer=True)
+    values["timeout_seconds"] = _number(form, "timeout_seconds", _("Timeout in seconds"), 1, 300)
+    values["min_interval_seconds"] = _number(form, "min_interval_seconds", _("Minimum interval in seconds"), 0, 60)
+    return values, _secret_text(form, "api_key", _("API key"), strip=True)
+
+
 _TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
 def _mail_settings(doc: tomlkit.TOMLDocument, form: dict) -> str:
-    """[mail] from the form (notifications and the daily summary); returns the new SMTP password, if any."""
+    """[mail] from the form into the document; returns the new SMTP password, if any."""
+    values, password = mail_from_form(form)
+    if values["host"] or "mail" in doc:
+        mail = doc.setdefault("mail", tomlkit.table())
+        for name, item in values.items():
+            mail[name] = item
+    return password
+
+
+def mail_from_form(form: dict) -> tuple[dict, str]:
+    """[mail] from the Global settings form (notifications and the daily summary), checked, and the SMTP
+    password typed in ("" keeps the stored one). For saving, and for "Send test mail"."""
     from email.utils import parseaddr
 
     from ..mail import SECURITY
@@ -672,15 +691,10 @@ def _mail_settings(doc: tomlkit.TOMLDocument, form: dict) -> str:
     if not _TIME_RE.match(digest_time):
         raise EditError(_("Daily summary: please enter a time such as 07:00."))
     port = _number(form, "smtp_port", _("Port"), 1, 65535, integer=True) if _text(form, "smtp_port", 6) else 587
-    if host or "mail" in doc:
-        mail = doc.setdefault("mail", tomlkit.table())
-        values: dict[str, object] = {
-            "host": host, "port": port, "security": security, "user": _text(form, "smtp_user", 200),
-            "sender": sender, "recipient": recipient, "ui_url": ui_url, "notify_failures": notify,
-            "digest": digest, "digest_time": digest_time}
-        for name, item in values.items():
-            mail[name] = item
-    return _secret_text(form, "smtp_password", _("Password"))
+    values = {"host": host, "port": port, "security": security, "user": _text(form, "smtp_user", 200),
+              "sender": sender, "recipient": recipient, "ui_url": ui_url, "notify_failures": notify,
+              "digest": digest, "digest_time": digest_time}
+    return values, _secret_text(form, "smtp_password", _("Password"))
 
 
 def _flag(form: dict, name: str) -> bool:

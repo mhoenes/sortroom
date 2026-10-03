@@ -1,8 +1,13 @@
 {% extends "base.html" %}
 {% block title %}{{ _('Global settings') }}{% endblock %}
 {% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text|forceescape }}" data-tip="{{ text|forceescape }}">?</span>{% endmacro %}
-{# the result of the test in this card, after "Save & check" or "Save & send a test mail" #}
-{% macro tested_in(card) %}{% if tested and tested[0] == card %}<div class="banner {{ tested[1] }}" role="{{ 'alert' if tested[1] == 'err' else 'status' }}">{{ tested[2] }}</div>{% endif %}{% endmacro %}
+{# a test of the values in the form, saving nothing: a button that tries them (settings-test.js asks the server
+   and puts the answer into .test-result; without JavaScript the page comes back with it) #}
+{% macro test_row(card, label, icon, hint) %}<div class="test-row">
+  <button class="btn tonal" type="submit" formaction="/ui/settings/test/{{ card }}" data-test="{{ card }}">{{ icon|safe }}<span>{{ label }}</span></button>
+  <span class="muted hint">{{ hint }}</span>
+  <div class="test-result" data-result="{{ card }}" aria-live="polite">{% if tested and tested[0] == card %}<div class="banner {{ tested[1] }}">{{ tested[2] }}</div>{% endif %}</div>
+</div>{% endmacro %}
 {% from "_secret.html" import source with context %}
 {% block content %}
 <div class="head">
@@ -49,10 +54,9 @@
           <input type="number" name="timeout_seconds" min="1" max="300" step="any" value="{{ form.timeout_seconds }}" required></label>
         <label class="f"><span class="lt">{{ _('Minimum interval in seconds') }} {{ help(_('Pause between two requests, for providers that limit the requests per minute. Usually 0.')) }}</span>
           <input type="number" name="min_interval_seconds" min="0" max="60" step="any" value="{{ form.min_interval_seconds }}" required></label>
-        {% if editable %}<div class="f"><span class="lt">{{ _('Test') }} {{ help(_('Saves the settings, then sends the model one sample mail with the standard categories – a fraction of a cent.')) }}</span>
-          <div class="login-actions"><button class="btn" type="submit" name="then" value="check">{{ _('Save & check') }}</button></div></div>{% endif %}
       </div>
-      {{ tested_in('model') }}
+      {% if editable %}{{ test_row('model', _('Check model'), '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.8 2.8L16 9.8"/></svg>',
+        _('Sends the model one sample mail with the values above – a fraction of a cent. Saves nothing.')) }}{% endif %}
     </section>
     <section class="card stack" id="mail">
       <div><h2>{{ _('Mail') }}</h2>
@@ -86,9 +90,8 @@
         <input type="time" name="digest_time" value="{{ form.digest_time }}" aria-label="{{ _('Time of the daily summary') }}" class="digest-time">
         {{ help(_('One mail for all mailboxes: what waits under To review, the starred mail of the last day, offers that expire today or tomorrow, and runs with errors. Not sent on days with nothing to report.')) }}
       </div>
-      {% if editable %}<div class="f"><span class="lt">{{ _('Test') }} {{ help(_('Saves the settings, then sends a test mail to the recipient.')) }}</span>
-        <div class="login-actions"><button class="btn" type="submit" name="then" value="testmail">{{ _('Save & send a test mail') }}</button></div></div>{% endif %}
-      {{ tested_in('mail') }}
+      {% if editable %}{{ test_row('mail', _('Send test mail'), '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg>',
+        _('Sends a mail to the recipient with the values above. Saves nothing.')) }}{% endif %}
     </section>
     {# stays in view while the cards above scroll past; the test buttons in them save too #}
     {% if editable %}<div class="actions savebar"><button class="btn primary" type="submit">{{ _('Save settings') }}</button>
@@ -103,4 +106,6 @@
   <div class="actions"><button class="btn danger" type="submit" {% if not key_writable %}disabled title="{{ _('%(file)s is read-only.', file=secrets_file) }}"{% endif %}
     onclick='return confirm({{ _("Log out every browser, this one too?")|tojson }})'>{{ _('Log out everywhere') }}</button></div>
 </form>
+<script src="{{ asset('settings-test.js') }}" data-busy="{{ _('Please wait …') }}"
+  data-failed="{{ _('The test could not be run. Please reload the page and try again.') }}"></script>
 {% endblock %}
