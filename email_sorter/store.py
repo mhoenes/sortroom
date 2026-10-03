@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS corrections (
     how             TEXT NOT NULL                -- 'ui' (Mails page) or 'reconcile' (moved by hand, seen by reconcile)
 );
 CREATE TABLE IF NOT EXISTS meta (
-    key             TEXT PRIMARY KEY,            -- last_reconcile / last_cleanup: when that last ran for real
+    key             TEXT PRIMARY KEY,            -- last_reconcile: when the log was last reconciled for real
     value           TEXT NOT NULL
 );
 """
