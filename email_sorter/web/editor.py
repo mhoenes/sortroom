@@ -22,15 +22,16 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from .. import jobs, oauth
 from ..check import check_imap
-from ..config import (INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, load_credentials, stored_credentials,
-                      write_secrets)
+from ..cleanup import run_cleanup
+from ..config import (INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, imap_credentials, load_credentials,
+                      stored_credentials, write_secrets)
 from ..classifier import ClassifierAuthError
 from ..i18n import _
 from ..removal import MailboxBusy, delete_mailbox
 from ..trial import OTHER_SAMPLE, OWN_SAMPLE, run_trial
 from . import _box, _sidebar, queries, require_login, router, templates
-from .editing import (EditError, connection_from_form, delete_category, save_category, save_rules, save_settings,
-                      secrets_writable, writable)
+from .editing import (EditError, config_with_delete_rules, connection_from_form, delete_category, save_category,
+                      save_rules, save_settings, secrets_writable, writable)
 
 log = logging.getLogger(__name__)
 
@@ -351,7 +352,8 @@ async def settings_test(request: Request, box_id: str):
 # ---------------------------------------------------------------- the Rules page: sender rules, deletion rules
 
 def _rules_page(request: Request, box_id: str, sender_rules: list[tuple[str, str]] | None = None,
-                delete_rules: list[dict] | None = None, error: str | None = None, status: int = 200):
+                delete_rules: list[dict] | None = None, error: str | None = None, status: int = 200,
+                tested: tuple[str, str, str, str] | None = None):
     boxes, box = _box(request, box_id)
     cfg = box.cfg
     if sender_rules is None:
@@ -362,7 +364,19 @@ def _rules_page(request: Request, box_id: str, sender_rules: list[tuple[str, str
     return _page(request, "rules.html", {
         **_sidebar(request, boxes, box, "rules"), "box": box, "cfg": cfg, "rules": sender_rules,
         "delete_rules": delete_rules, "folders": _known_folders(box), "editable": writable(box), "error": error,
-        "config_name": box.config_file.name if box.config_file else "–"}, status)
+        "config_name": box.config_file.name if box.config_file else "–", "tested": tested}, status)
+
+
+def _rules_from(form: dict) -> tuple[list[tuple[str, str]], list[dict]]:
+    """The sender rules and the deletion rules of the Rules page; a row removed in the page leaves a gap in
+    the numbers, which comes back empty and is skipped."""
+    sender_rules = [(str(form.get(f"match_{i}") or ""), str(form.get(f"action_{i}") or INBOX_ACTION))
+                    for i in range(int(form.get("rows") or 0))]
+    delete_rules: list[dict] = [
+        {"folder": str(form.get(f"dfolder_{i}") or ""), "days": str(form.get(f"ddays_{i}") or ""),
+         "only_read": bool(form.get(f"dread_{i}")), "starred": bool(form.get(f"dstar_{i}"))}
+        for i in range(int(form.get("drows") or 0))]
+    return sender_rules, delete_rules
 
 
 @router.get("/ui/m/{box_id}/rules", response_class=HTMLResponse, dependencies=[Depends(require_login)])
@@ -372,15 +386,10 @@ def rules_page(request: Request, box_id: str):
 
 @router.post("/ui/m/{box_id}/rules", response_class=HTMLResponse, dependencies=[Depends(require_login)])
 async def rules_save(request: Request, box_id: str):
-    """Save both lists at once; a row removed in the page leaves a gap in the numbers, which is skipped."""
+    """Save both lists at once."""
     form = await _form(request)
     _all_boxes, box = _box(request, box_id)
-    sender_rules = [(str(form.get(f"match_{i}") or ""), str(form.get(f"action_{i}") or INBOX_ACTION))
-                    for i in range(int(form.get("rows") or 0))]
-    delete_rules: list[dict] = [
-        {"folder": str(form.get(f"dfolder_{i}") or ""), "days": str(form.get(f"ddays_{i}") or ""),
-         "only_read": bool(form.get(f"dread_{i}")), "starred": bool(form.get(f"dstar_{i}"))}
-        for i in range(int(form.get("drows") or 0))]
+    sender_rules, delete_rules = _rules_from(form)
     try:
         save_rules(box, _shared_path(request), sender_rules, delete_rules)
     except EditError as e:
@@ -389,6 +398,59 @@ async def rules_save(request: Request, box_id: str):
                            delete_rules=[r for r in delete_rules if r["folder"].strip()])
     _flash(request, _("Rules saved. They apply from the next run."))
     return RedirectResponse(f"/ui/m/{box.id}/rules", status_code=303)
+
+
+class _Lines(logging.Handler):
+    """The log lines one thread writes, e.g. what a dry run found, to show them in the page."""
+
+    def __init__(self) -> None:
+        super().__init__(logging.INFO)
+        self.thread = threading.get_ident()
+        self.lines: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if record.thread == self.thread:
+            self.lines.append(record.getMessage())
+
+
+def _dry_run(cfg, creds, workspace) -> tuple[dict, list[str]]:
+    cleanup_log = logging.getLogger("email_sorter.cleanup")
+    if cleanup_log.getEffectiveLevel() > logging.INFO:  # its INFO lines are what the page shows
+        cleanup_log.setLevel(logging.INFO)
+    lines = _Lines()
+    cleanup_log.addHandler(lines)
+    try:
+        return run_cleanup(cfg, creds, workspace, live=False), lines.lines
+    finally:
+        cleanup_log.removeHandler(lines)
+
+
+@router.post("/ui/m/{box_id}/rules/dry-run", response_class=HTMLResponse, dependencies=[Depends(require_login)])
+async def rules_dry_run(request: Request, box_id: str):
+    """Dry run of the deletion rules as they are in the page, saved or not: what they would move to the trash,
+    per rule with a few of the mails. Moves nothing. The page's script asks for JSON and shows the result below
+    the button; without JavaScript the page comes back."""
+    form = await _form(request)
+    _all_boxes, box = _box(request, box_id)
+    sender_rules, delete_rules = _rules_from(form)
+    details = ""
+    try:
+        cfg = config_with_delete_rules(box, _shared_path(request), delete_rules)
+        if not cfg.delete_rules:
+            raise EditError(_("There is no deletion rule to try yet."))
+        result, lines = await run_in_threadpool(_dry_run, cfg, imap_credentials(box), box.workspace)
+        tone, text, details = ("ok" if result["exit_code"] == 0 else "err"), result["summary"], "\n".join(lines)
+    except ConfigError:
+        tone, text = "err", _("The login of this mailbox is not set yet.")
+    except EditError as e:
+        tone, text = "err", str(e)
+    except Exception as e:  # the server is not reachable, the login fails …
+        tone, text = "err", _("The dry run failed: %(e)s", e=e)
+    if "application/json" in request.headers.get("accept", ""):
+        return JSONResponse({"tone": tone, "text": text, "field": None, "details": details})
+    return _rules_page(request, box_id, sender_rules=[r for r in sender_rules if r[0].strip()],
+                       delete_rules=[r for r in delete_rules if r["folder"].strip()],
+                       tested=("dry-run", tone, text, details))
 
 
 def _busy(request: Request, box: Mailbox) -> bool:

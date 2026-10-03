@@ -377,6 +377,18 @@ def save_rules(box: Mailbox, shared_path: Path, sender_rules: list[tuple[str, st
         _save(box, doc, shared_path)
 
 
+def config_with_delete_rules(box: Mailbox, shared_path: Path, rules: list[dict]) -> Config:
+    """The mailbox's settings with the deletion rules as the Rules page has them, checked like for saving –
+    for a dry run of rules that are not saved yet."""
+    doc = _doc(box)
+    _set_delete_rules(doc, rules)
+    try:
+        raw = {**tomllib.loads(tomlkit.dumps(doc)), "classifier": _read_toml(shared_path)["classifier"]}
+        return config_from_raw(raw, _config_file(box).name)
+    except (ConfigError, tomllib.TOMLDecodeError, KeyError) as e:
+        raise EditError(str(e)) from None
+
+
 @_one_at_a_time
 def save_sender_rules(box: Mailbox, shared_path: Path, rules: list[tuple[str, str]]) -> None:
     """Replace all sender rules (order kept)."""

@@ -245,6 +245,42 @@ def test_category_error_is_shown(client):
     assert r.status_code == 422 and "gibt es schon" in r.text
 
 
+def test_dry_run_of_the_deletion_rules_in_the_page(client, setup, monkeypatch):
+    import logging
+    from email_sorter.web import editor
+    seen = []
+
+    def fake_cleanup(cfg, creds, workspace, live):
+        seen.append(([(r.folder, r.days, r.only_read) for r in cfg.delete_rules], live))
+        logging.getLogger("email_sorter.cleanup").info("INBOX/Werbung: 2 mail(s) older than 30 day(s)")
+        return {"exit_code": 0, "summary": "2 Mail(s) würden in den Papierkorb gehen – Probelauf, nichts geändert"}
+
+    monkeypatch.setattr(editor, "run_cleanup", fake_cleanup)
+    html = client.get("/ui/m/privat/rules").text
+    assert 'formaction="/ui/m/privat/rules/dry-run"' in html
+    mailbox_toml = (setup / "mailboxes" / "privat" / "mailbox.toml").read_text(encoding="utf-8")
+    form = {"csrf": _csrf(html), "rows": "0", "drows": "1", "dfolder_0": "INBOX/Werbung", "ddays_0": "30",
+            "dread_0": "1"}
+    json = {"Accept": "application/json"}  # as the page's script asks
+    r = client.post("/ui/m/privat/rules/dry-run", data=form, headers=json)
+    assert r.json()["tone"] == "err" and seen == []                          # no login stored yet
+    from email_sorter.web.editing import write_secrets
+    write_secrets(setup / "mailboxes" / "privat" / "secrets.toml", "imap", {"user": "u", "password": "p"})
+    r = client.post("/ui/m/privat/rules/dry-run", data=form, headers=json)
+    assert seen == [([("INBOX/Werbung", 30, True)], False)]               # the rules in the page, not live
+    assert r.json() == {"tone": "ok", "text": "2 Mail(s) würden in den Papierkorb gehen – Probelauf, nichts geändert",
+                        "field": None, "details": "INBOX/Werbung: 2 mail(s) older than 30 day(s)"}
+    assert (setup / "mailboxes" / "privat" / "mailbox.toml").read_text(encoding="utf-8") == mailbox_toml  # unsaved
+
+    r = client.post("/ui/m/privat/rules/dry-run", data={**form, "dfolder_0": "INBOX"}, headers=json)
+    assert r.json()["tone"] == "err" and "Posteingang" in r.json()["text"] and len(seen) == 1
+    r = client.post("/ui/m/privat/rules/dry-run", data={**form, "drows": "0"}, headers=json)
+    assert "keine Lösch-Regel" in r.json()["text"] and len(seen) == 1
+    # without JavaScript the page comes back with the result and the rules as they were in the page
+    r = client.post("/ui/m/privat/rules/dry-run", data=form)
+    assert "nichts geändert" in r.text and 'name="dfolder_0" value="INBOX/Werbung"' in r.text
+
+
 def test_rules_page(client, setup):
     html = client.get("/ui/m/privat/rules").text
     assert 'href="/ui/m/privat/rules" aria-current="page"' in html

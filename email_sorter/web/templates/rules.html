@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ _('Rules') }} · {{ box.name }}{% endblock %}
+{% from "_test.html" import test_row, test_script, eye_icon with context %}
 {% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text|forceescape }}" data-tip="{{ text|forceescape }}">?</span>{% endmacro %}
 {% macro remove_button() %}{% if editable %}<button class="icon-btn rule-remove" type="button" aria-label="{{ _('Remove rule') }}" title="{{ _('Remove rule') }}">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>{% endif %}{% endmacro %}
@@ -60,7 +61,7 @@
       <input type="hidden" name="drows" value="{{ delete_rules|length }}" data-rows>
       <div>
         <h2>{{ _('Deletion rules') }} {{ help(_('Empty folders such as Promotions automatically: mail that arrived on the server more than the given number of days ago is moved to the trash of the mailbox, where it can still be taken back. The inbox, trash, spam, sent and drafts can\'t have a rule.')) }}</h2>
-        <p class="muted hint">{{ _('Applied once a day, and under Maintenance by hand – try a dry run there first. Starred mail stays unless "Starred too" is ticked.') }}</p>
+        <p class="muted hint">{{ _('Applied once a day, and under Maintenance by hand. Starred mail stays unless "Starred too" is ticked.') }}</p>
       </div>
       <p class="muted no-rules">{{ _('No deletion rules – nothing is moved to the trash.') }}</p>
       <div class="scroll-x"><table class="rules deleterules">
@@ -75,12 +76,15 @@
       {% if editable %}
       <template id="delete-row">{{ delete_row('__i__', {'folder': '', 'days': 30, 'only_read': false, 'starred': false}) }}</template>
       <div class="actions"><button class="btn rule-add" type="button">{{ _('+ Add rule') }}</button></div>
+      {{ test_row('dry-run', '/ui/m/' ~ box.id ~ '/rules/dry-run', _('Dry run'), eye_icon,
+        _('Shows what the rules above would move to the trash, with a few of the mails. Moves nothing, saves nothing.')) }}
       {% endif %}
     </section>
     {% if editable %}<div class="actions savebar"><button class="btn primary" type="submit">{{ _('Save rules') }}</button>
       <span class="hint unsaved" hidden>{{ _('Not saved yet') }}</span></div>{% endif %}
   </fieldset>
 </form>
+{{ test_script() }}
 <script>
   // add and remove rule rows in place, in each list; nothing is saved until "Save rules"
   document.querySelectorAll('[data-row-template]').forEach(list => {
