@@ -245,40 +245,39 @@ def test_category_error_is_shown(client):
     assert r.status_code == 422 and "gibt es schon" in r.text
 
 
-def test_settings_page_and_rules(client, setup):
-    html = client.get("/ui/m/privat/settings").text
-    assert "imap.example.de" in html and "scanner@brother.com" in html and 'name="imap_password"' in html
-    assert html.count('name="match_') == 2  # the one rule plus the row template, no blank rows
-    assert '<template id="rule-row">' in html and 'name="match___i__"' in html
-    token = _csrf(html)
-    r = client.post("/ui/m/privat/settings/sender-rules", data={  # row 0 removed in the page, row 2 added
-        "csrf": token, "rows": "3", "match_1": "@shop.de", "action_1": "werbung",
-        "match_2": "", "action_2": "inbox"}, follow_redirects=False)
-    assert r.status_code == 303
-    assert [(x.match, x.action) for x in _box(setup).cfg.sender_rules] == [("@shop.de", "werbung")]
+def test_rules_page(client, setup):
+    html = client.get("/ui/m/privat/rules").text
+    assert 'href="/ui/m/privat/rules" aria-current="page"' in html
+    assert "scanner@brother.com" in html and html.count('name="match_') == 2  # the rule and the row template
+    assert '<template id="rule-row">' in html and '<template id="delete-row">' in html and 'name="match___i__"' in html
+    assert "Keine Lösch-Regeln" in html and '<option value="INBOX/Werbung">' in html  # folders are suggested
+    settings = client.get("/ui/m/privat/settings").text
+    assert 'name="match_' not in settings and 'name="dfolder_' not in settings  # no longer on the settings page
 
-
-def test_deletion_rules_in_the_settings(client, setup):
-    html = client.get("/ui/m/privat/settings").text
-    assert "Keine Lösch-Regeln" in html and '<template id="delete-row">' in html
-    assert '<option value="INBOX/Werbung">' in html  # the categories' folders are suggested
-    form = {"csrf": _csrf(html), "rows": "3", "dfolder_0": "INBOX/Werbung", "ddays_0": "30", "dread_0": "1",
+    # both lists in one form: row 0 of the sender rules removed in the page, an empty row added
+    form = {"csrf": _csrf(html), "rows": "3", "match_1": "@shop.de", "action_1": "werbung", "match_2": "",
+            "action_2": "inbox", "drows": "3", "dfolder_0": "INBOX/Werbung", "ddays_0": "30", "dread_0": "1",
             "dfolder_1": "", "ddays_1": "7", "dfolder_2": "INBOX/Werbung/Abgelaufen", "ddays_2": "7", "dstar_2": "1"}
-    r = client.post("/ui/m/privat/settings/delete-rules", data=form, follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"].endswith("#loeschregeln")
-    rules = _box(setup).cfg.delete_rules
-    assert [(x.folder, x.days, x.only_read, x.starred) for x in rules] == [
+    r = client.post("/ui/m/privat/rules", data=form, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/ui/m/privat/rules"
+    cfg = _box(setup).cfg
+    assert [(x.match, x.action) for x in cfg.sender_rules] == [("@shop.de", "werbung")]
+    assert [(x.folder, x.days, x.only_read, x.starred) for x in cfg.delete_rules] == [
         ("INBOX/Werbung", 30, True, False), ("INBOX/Werbung/Abgelaufen", 7, False, True)]
     text = (setup / "mailboxes" / "privat" / "mailbox.toml").read_text(encoding="utf-8")
     assert '[[delete_rules]]\nfolder = "INBOX/Werbung"\ndays = 30\nonly_read = true' in text
-    html = client.get("/ui/m/privat/settings").text
+    html = client.get("/ui/m/privat/rules").text
     assert 'name="dfolder_1" value="INBOX/Werbung/Abgelaufen"' in html
+
+    # an error saves neither list, and the page keeps what was entered
     for bad, message in (({"dfolder_0": "INBOX", "ddays_0": "3"}, "Posteingang"),
                          ({"dfolder_0": "X", "ddays_0": "0"}, "ganze Zahl")):
-        r = client.post("/ui/m/privat/settings/delete-rules", data={"csrf": _csrf(html), "rows": "1", **bad})
-        assert r.status_code == 422 and message in r.text
-    client.post("/ui/m/privat/settings/delete-rules", data={"csrf": _csrf(html), "rows": "0"})
-    assert _box(setup).cfg.delete_rules == ()
+        r = client.post("/ui/m/privat/rules", data={"csrf": _csrf(html), "rows": "1", "match_0": "@neu.de",
+                                                    "action_0": "inbox", "drows": "1", **bad})
+        assert r.status_code == 422 and message in r.text and 'value="@neu.de"' in r.text
+        assert [(x.match, x.action) for x in _box(setup).cfg.sender_rules] == [("@shop.de", "werbung")]
+    client.post("/ui/m/privat/rules", data={"csrf": _csrf(html), "rows": "0", "drows": "0"})
+    assert _box(setup).cfg.sender_rules == () and _box(setup).cfg.delete_rules == ()
     assert "delete_rules" not in (setup / "mailboxes" / "privat" / "mailbox.toml").read_text(encoding="utf-8")
 
 

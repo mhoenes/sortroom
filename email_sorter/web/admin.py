@@ -136,7 +136,7 @@ def _job_for(request: Request, box: Mailbox, task: str, form: dict):
                 lambda: run_undo(cfg, creds, ws, stamp, live=live, sort_again=sort_again, keys=keys), True)
     if task == "cleanup":  # only the mailbox, no model
         if not cfg.delete_rules:
-            raise EditError(_("This mailbox has no deletion rules (Settings)."))
+            raise EditError(_("This mailbox has no deletion rules (Rules)."))
         creds = imap_credentials(box)
         return _("Apply the deletion rules") + mode, lambda: run_cleanup(cfg, creds, ws, live=live), True
     creds = load_credentials(box)
