@@ -1,0 +1,72 @@
+<!doctype html>
+{#- The daily summary as HTML mail (digest.compose). Mail programs know little CSS: tables for the layout,
+    styles inline, colours of app.css. The <style> only adds the dark palette, for the programs that use it. -#}
+{% set font = "font-family:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;" %}
+<html lang="{{ lang() }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>{{ subject }}</title>
+<style>
+  @media (prefers-color-scheme: dark) {
+    .ground { background: #161513 !important; }
+    .card { background: #1F1E1B !important; border-color: #34322D !important; }
+    .row { border-color: #2A2925 !important; }
+    .ink { color: #ECEAE4 !important; }
+    .muted { color: #ABA69A !important; }
+    .link { color: #74D0C6 !important; }
+    .count { background: #173431 !important; color: #74D0C6 !important; }
+    .pill { background: #2E2C28 !important; color: #ECEAE4 !important; }
+    .pill-warn { background: #3A2A12 !important; color: #F2B866 !important; }
+    .err { color: #F29B8E !important; }
+  }
+  @media (max-width: 480px) { .pad { padding-left: 16px !important; padding-right: 16px !important; } }
+</style>
+</head>
+<body class="ground" style="margin:0;padding:0;background:#F4F3EF;">
+<table role="presentation" class="ground" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F4F3EF;">
+<tr><td align="center" style="padding:24px 12px;">
+  <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;{{ font }}">
+    <tr><td class="pad" style="padding:0 24px 16px;">
+      {% if home %}<a class="link" href="{{ home }}" style="color:#0E766E;text-decoration:none;font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;">Sortroom</a>
+      {%- else %}<span class="link" style="color:#0E766E;font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;">Sortroom</span>{% endif %}
+      <div class="ink" style="color:#1B1A17;font-size:22px;font-weight:600;line-height:1.3;margin-top:4px;">{{ _('Daily summary') }}</div>
+      <div class="muted" style="color:#5F5B52;font-size:14px;margin-top:2px;">{{ day }}</div>
+    </td></tr>
+    {% for name, groups in sections %}
+    <tr><td style="padding-bottom:16px;">
+      <table role="presentation" class="card" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#FFFFFF;border:1px solid #E2DFD7;border-radius:12px;">
+        <tr><td class="pad ink" style="padding:20px 24px 4px;color:#1B1A17;font-size:18px;font-weight:600;">{{ name }}</td></tr>
+        {% for g in groups %}
+        <tr><td class="pad" style="padding:16px 24px 6px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+            <td class="ink" style="color:#1B1A17;font-size:14px;font-weight:600;">{{ g.heading }}
+              <span class="count" style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:10px;background:#E2F1EF;color:#0A5A54;font-size:12px;font-weight:600;">{{ g.total|num }}</span></td>
+            {% if g.url %}<td align="right" style="white-space:nowrap;font-size:13px;"><a class="link" href="{{ g.url }}" style="color:#0E766E;text-decoration:none;font-weight:600;">{{ _('Show') }} &rarr;</a></td>{% endif %}
+          </tr></table>
+        </td></tr>
+        <tr><td class="pad" style="padding:0 24px;">
+          {% for i in g.items %}
+          <div class="row" style="padding:10px 0;border-top:1px solid #F0EEE8;">
+            <div style="font-size:15px;line-height:1.4;">{% if i.url %}<a class="link" href="{{ i.url }}" style="color:#0A5A54;text-decoration:none;font-weight:500;">{{ i.title }}</a>
+              {%- else %}<span class="ink" style="color:#1B1A17;font-weight:500;">{{ i.title }}</span>{% endif %}</div>
+            <div class="muted" style="color:#5F5B52;font-size:13px;line-height:1.5;margin-top:2px;">{{ i.meta }}
+              {%- if i.note and i.tone != 'err' %}&nbsp; <span class="{{ 'pill-warn' if i.tone == 'warn' else 'pill' }}" style="display:inline-block;padding:0 7px;border-radius:9px;font-size:12px;{{ 'background:#FBEEDC;color:#6E3503;' if i.tone == 'warn' else 'background:#EFEDE7;color:#5F5B52;' }}">{{ i.note }}</span>{% endif %}</div>
+            {% if i.note and i.tone == 'err' %}<div class="err" style="color:#95251A;font-size:13px;line-height:1.5;margin-top:2px;">{{ i.note }}</div>{% endif %}
+          </div>
+          {% endfor %}
+          {% if g.more %}<div class="row muted" style="padding:8px 0 2px;border-top:1px solid #F0EEE8;color:#5F5B52;font-size:13px;">{{ _('… and %(n)s more', n=g.more) }}</div>{% endif %}
+        </td></tr>
+        {% endfor %}
+        <tr><td style="padding-bottom:14px;font-size:0;line-height:0;">&nbsp;</td></tr>
+      </table>
+    </td></tr>
+    {% endfor %}
+    <tr><td class="pad muted" style="padding:4px 24px 0;color:#5F5B52;font-size:12px;line-height:1.5;">{{ footer }}</td></tr>
+  </table>
+</td></tr>
+</table>
+</body>
+</html>

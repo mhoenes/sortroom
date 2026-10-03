@@ -8,8 +8,10 @@ from __future__ import annotations
 import logging
 import sqlite3
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from pathlib import Path
+from urllib.parse import quote
 
 from . import i18n
 from .config import Mailbox
@@ -46,15 +48,29 @@ def due(config_path: Path, mailboxes_dir: Path, now: datetime | None = None) -> 
     return last_sent(mailboxes_dir) != now.date().isoformat()
 
 
-def _names(rows: list[str], total: int) -> list[str]:
-    out = [f"  • {r}" for r in rows[:LIST_MAX]]
-    if total > len(out):
-        out.append("  " + _("… and %(n)s more", n=total - len(out)))
-    return out
+@dataclass
+class Item:
+    title: str           # the subject, or the kind of run
+    meta: str            # sender and time
+    note: str = ""       # the model's suggestion, the expiry or the error
+    tone: str = ""       # of the note: "", "warn" or "err"
+    url: str = ""        # the mail in the admin UI
 
 
-def section(box: Mailbox, db: sqlite3.Connection, settings: MailSettings, now: datetime) -> list[str]:
-    """The lines about one mailbox; empty when there is nothing to report."""
+@dataclass
+class Group:
+    heading: str
+    total: int
+    items: list[Item]
+    url: str = ""        # the list in the admin UI
+
+    @property
+    def more(self) -> int:
+        return self.total - len(self.items)
+
+
+def section(box: Mailbox, db: sqlite3.Connection, settings: MailSettings, now: datetime) -> list[Group]:
+    """What to report about one mailbox; empty when there is nothing."""
     from .web import queries, run_kind
 
     cfg = box.cfg
@@ -62,79 +78,102 @@ def section(box: Mailbox, db: sqlite3.Connection, settings: MailSettings, now: d
     def label(key: str) -> str:
         return cfg.categories[key].label if key in cfg.categories else key
 
+    def subject(m: dict) -> str:
+        return m["subject"] or _("(no subject)")
+
+    def open_mail(list_query: str, m: dict) -> str:  # the list with the mail open beside it
+        return settings.link(f"/ui/m/{box.id}/mails?{list_query}&key={quote(m['message_key'], safe='')}")
+
     day_ago = (now - timedelta(days=1)).isoformat(timespec="seconds")
     today, tomorrow = now.date().isoformat(), (now.date() + timedelta(days=1)).isoformat()
-    lines: list[str] = []
+    groups: list[Group] = []
 
     review_total = queries.stats(db, cfg.min_confidence, now).uncertain
     if review_total:
         review = queries.uncertain_mails(db, cfg.min_confidence, LIST_MAX, days=30, now=now)
-        lines.append(_("To review: %(n)s", n=review_total)
-                     + _link(settings, f"/ui/m/{box.id}/mails?uncertain=1&period=30d"))
-        lines += _names([f"{m['subject'] or _('(no subject)')} · {m['sender']} – "
-                         + _("suggestion: %(category)s", category=label(m["category"])) for m in review], review_total)
+        groups.append(Group(_("To review"), review_total, [
+            Item(subject(m), f"{m['sender']} · {i18n.dt(m['received'])}",
+                 _("suggestion: %(category)s", category=label(m["category"])),
+                 url=open_mail("uncertain=1&period=30d", m)) for m in review],
+            settings.link(f"/ui/m/{box.id}/mails?uncertain=1&period=30d")))
 
     starred = [dict(r) for r in db.execute(
-        "SELECT received, sender, subject FROM processed WHERE flagged = 1 AND gone = 0 AND processed_at >= ? "
-        "ORDER BY processed_at DESC", (day_ago,))]
+        "SELECT message_key, received, sender, subject FROM processed WHERE flagged = 1 AND gone = 0 "
+        "AND processed_at >= ? ORDER BY processed_at DESC", (day_ago,))]
     if starred:
-        lines.append(_("Starred in the last 24 hours: %(n)s", n=len(starred))
-                     + _link(settings, f"/ui/m/{box.id}/mails?flagged=1&period=7d"))
-        lines += _names([f"{i18n.dt(m['received']) if m['received'] else '–'} · {m['sender']} · "
-                         f"{m['subject'] or _('(no subject)')}" for m in starred], len(starred))
+        groups.append(Group(_("Starred in the last 24 hours"), len(starred), [
+            Item(subject(m), f"{m['sender']} · {i18n.dt(m['received'])}", url=open_mail("flagged=1&period=7d", m))
+            for m in starred[:LIST_MAX]], settings.link(f"/ui/m/{box.id}/mails?flagged=1&period=7d")))
 
     expiring = [dict(r) for r in db.execute(
-        "SELECT expires, sender, subject FROM processed WHERE expires IN (?, ?) AND expired_tagged = 0 AND gone = 0 "
-        "ORDER BY expires, received", (today, tomorrow))]
+        "SELECT message_key, expires, sender, subject FROM processed WHERE expires IN (?, ?) "
+        "AND expired_tagged = 0 AND gone = 0 ORDER BY expires, received", (today, tomorrow))]
     if expiring:
-        lines.append(_("Offers that expire today or tomorrow: %(n)s", n=len(expiring)))
-        lines += _names([_("valid until %(date)s", date=i18n.date(m["expires"])) + f" · {m['sender']} · "
-                         f"{m['subject'] or _('(no subject)')}" for m in expiring], len(expiring))
+        groups.append(Group(_("Offers that expire today or tomorrow"), len(expiring), [
+            Item(subject(m), m["sender"], _("expires today") if m["expires"] == today else _("expires tomorrow"),
+                 "warn" if m["expires"] == today else "", open_mail("period=30d", m))
+            for m in expiring[:LIST_MAX]]))
 
     failed = [dict(r) for r in db.execute(
         "SELECT started, kind, exit_code, failed, error FROM runs WHERE started >= ? AND live = 1 "
         "AND (exit_code != 0 OR error IS NOT NULL) ORDER BY started DESC", (day_ago,))]
     if failed:
-        lines.append(_("Runs with errors in the last 24 hours: %(n)s", n=len(failed))
-                     + _link(settings, f"/ui/m/{box.id}"))
-        lines += _names([f"{i18n.dt(r['started'])} · {run_kind(r['kind'])}: "
-                         + (r["error"] or i18n.ngettext("%(num)s error", "%(num)s errors", r["failed"] or 1))
-                         for r in failed], len(failed))
-    return lines
+        groups.append(Group(_("Runs with errors in the last 24 hours"), len(failed), [
+            Item(run_kind(r["kind"]), i18n.dt(r["started"]),
+                 r["error"] or i18n.ngettext("%(num)s error", "%(num)s errors", r["failed"] or 1), "err")
+            for r in failed[:LIST_MAX]], settings.link(f"/ui/m/{box.id}")))
+    return groups
 
 
-def _link(settings: MailSettings, path: str) -> str:
-    url = settings.link(path)
-    return f" – {url}" if url else ""
+def text(sections: list[tuple[str, list[Group]]]) -> str:
+    """The plain-text part, for mail programs that don't show HTML."""
+    out: list[str] = []
+    for name, groups in sections:
+        out += [name, "=" * len(name)]
+        for g in groups:
+            out += ["", f"{g.heading}: {g.total}" + (f" – {g.url}" if g.url else "")]
+            for item in g.items:
+                out += [f"  • {item.title}", "    " + " · ".join(x for x in (item.meta, item.note) if x)]
+            if g.more:
+                out.append("  " + _("… and %(n)s more", n=g.more))
+        out.append("")
+    return "\n".join(out) + "\n-- \n" + footer() + "\n"
 
 
-def compose(config_path: Path, boxes: dict[str, Mailbox], now: datetime | None = None) -> tuple[str, str] | None:
-    """(subject, body), or None when no mailbox has anything to report."""
-    from .web import queries
+def footer() -> str:
+    return _("The daily summary of Sortroom. Switch it off under Global settings → Mail.")
+
+
+def compose(config_path: Path, boxes: dict[str, Mailbox],
+            now: datetime | None = None) -> tuple[str, str, str] | None:
+    """(subject, text, html), or None when no mailbox has anything to report."""
+    from .web import queries, templates
 
     now = now or datetime.now()
     settings = mail_settings(config_path)
-    parts: list[str] = []
+    sections: list[tuple[str, list[Group]]] = []
     review = starred = 0
     for box in boxes.values():
         db = queries.connect(box.workspace)
         if db is None:
             continue
         try:
-            lines = section(box, db, settings, now)
+            groups = section(box, db, settings, now)
             review += queries.stats(db, box.cfg.min_confidence, now).uncertain
             starred += db.execute("SELECT COUNT(*) FROM processed WHERE flagged = 1 AND gone = 0 "
                                   "AND processed_at >= ?",
                                   ((now - timedelta(days=1)).isoformat(timespec="seconds"),)).fetchone()[0]
         finally:
             db.close()
-        if lines:
-            parts.append("\n".join([box.name, "=" * len(box.name), *lines]))
-    if not parts:
+        if groups:
+            sections.append((box.name, groups))
+    if not sections:
         return None
     subject = _("Sortroom: %(review)s to review, %(starred)s starred", review=review, starred=starred)
-    footer = _("The daily summary of Sortroom. Switch it off under Global settings → Mail.")
-    return subject, "\n\n".join(parts) + "\n\n-- \n" + footer + "\n"
+    html = templates.get_template("mail_digest.html").render(
+        subject=subject, day=i18n.date(now.date().isoformat()), sections=sections, footer=footer(),
+        home=settings.link("/ui"))
+    return subject, text(sections), html
 
 
 def send_digest(config_path: Path, load_boxes: Callable[[], dict[str, Mailbox]], mailboxes_dir: Path,
@@ -154,4 +193,5 @@ def send_digest(config_path: Path, load_boxes: Callable[[], dict[str, Mailbox]],
     if composed is None:
         log.info("daily summary: nothing to report today")
         return True
-    return send_configured(config_path, *composed)
+    subject, body, html = composed
+    return send_configured(config_path, subject, body, html)

@@ -73,9 +73,10 @@ Sortroom sends mail through that server to the one recipient you enter there:
 - **a notice when a scheduled task fails** – the mailbox's name, the task, when it
   failed and the error message (e.g. from the mail server or the model), and later a
   notice that it works again;
-- **a daily summary** – per mailbox the sender and subject of the mails waiting to be
-  reviewed (with the model's suggestion), of the mails starred in the last day and of
-  offers that expire today or tomorrow, and the errors of the last day's runs;
+- **a daily summary** – per mailbox the sender, subject and arrival time of the mails
+  waiting to be reviewed (with the model's suggestion) and of the mails starred in the
+  last day, sender and subject of offers that expire today or tomorrow, and the errors
+  of the last day's runs;
 - **a test mail** when you press **Save & send a test mail**.
 
 With the address of the admin UI filled in, these mails contain links to it. Your SMTP

@@ -125,14 +125,21 @@ def test_the_daily_summary(configured, smtp):
     store = Store(box.workspace / "data" / "state.db")
     now = datetime.now()
     _record(store, "unsure", now - timedelta(hours=3), conf=0.3)
+    _record(store, "<b>x</b>", now - timedelta(hours=4), conf=0.3)            # a subject is text, never markup
     _record(store, "bill", now - timedelta(hours=2), flag=True)
     _record(store, "offer", now - timedelta(days=3), expires=date.today() + timedelta(days=1))
     store.record_run("run", None, now - timedelta(hours=1), now, RunResult(exit_code=2, live=True, error="login failed"))
     store.close()
-    subject, body = digest.compose(configured, {"privat": box})
-    assert subject == "Sortroom: 1 zu prüfen, 1 mit Stern"
-    assert "Zu prüfen: 1 – http://nas:8765/ui/m/privat/mails?uncertain=1&period=30d" in body
-    assert "unsure · s@shop.example" in body and "bill" in body and "offer" in body and "login failed" in body
+    subject, body, html = digest.compose(configured, {"privat": box})
+    assert subject == "Sortroom: 2 zu prüfen, 1 mit Stern"
+    assert "Zur Prüfung: 2 – http://nas:8765/ui/m/privat/mails?uncertain=1&period=30d" in body
+    assert "  • unsure\n    s@shop.example · " in body and "Vorschlag: " in body
+    assert "bill" in body and "  • offer\n    s@shop.example · läuft morgen ab" in body and "login failed" in body
+    # the HTML part: the same, and each subject opens its mail in the admin UI
+    assert ('<a class="link" href="http://nas:8765/ui/m/privat/mails?uncertain=1&amp;period=30d&amp;key=unsure"'
+            in html)
+    assert "läuft morgen ab" in html and "login failed" in html and "Tägliche Zusammenfassung" in html
+    assert "<b>x</b>" not in html and "&lt;b&gt;x&lt;/b&gt;" in html and "key=%3Cb%3Ex%3C%2Fb%3E" in html
 
     sent_dir = configured.parent / "mailboxes"
     morning = datetime.combine(date.today(), datetime.min.time()).replace(hour=6, minute=59)
@@ -140,6 +147,10 @@ def test_the_daily_summary(configured, smtp):
     assert digest.due(configured, sent_dir, morning + timedelta(minutes=1))
     assert digest.send_digest(configured, lambda: {"privat": box}, sent_dir, morning + timedelta(minutes=1))
     assert len(smtp) == 1 and not digest.due(configured, sent_dir, morning + timedelta(hours=2))  # once a day
+    msg = smtp[0][1]
+    assert msg.get_content_type() == "multipart/alternative"
+    assert "Zur Prüfung: 2" in msg.get_body(("plain",)).get_content()
+    assert "Zur Prüfung" in msg.get_body(("html",)).get_content()
 
 
 def test_no_summary_on_a_quiet_day(configured, smtp):
