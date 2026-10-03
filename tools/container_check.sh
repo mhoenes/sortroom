@@ -47,6 +47,29 @@ start puid -e PUID=1002 -e PGID=1003 && expect puid 1002:1003; stop puid
 # docker run --user: no root at all; the folders must belong to that user already and stay so
 OWNER=1004:1004 start user --user 1004:1004 && expect user 1004:1004; stop user
 
+# the docker run command of the wiki page Installation, with .env made from .env.example: the UI answers
+# on the host's port and the folders end up with 1000
+dir=$(mktemp -d)
+mkdir -p "$dir/config" "$dir/mailboxes" "$dir/logs"
+cp config/config.toml "$dir/config/"
+sed 's/^ADMIN_PASSWORD=$/ADMIN_PASSWORD=ci-password-1/' .env.example > "$dir/.env"
+(cd "$dir" && docker run -d --name sortroom --restart unless-stopped \
+  -p 8765:8765 \
+  --env-file .env -e TZ=Europe/Berlin \
+  -v "$PWD/config:/app/config" \
+  -v "$PWD/mailboxes:/app/mailboxes" \
+  -v "$PWD/logs:/app/logs" \
+  "$image" >/dev/null)
+for _ in $(seq 30); do curl -fsS -o /dev/null http://127.0.0.1:8765/health && break; sleep 1; done
+if curl -fsS http://127.0.0.1:8765/login | grep -q 'name="password"'; then
+  echo "ok   docker run from the docs: the login page answers on port 8765"
+  rm -f "$dir/.env"  # only the mounted folders count below
+  expect sortroom 1000:1000
+else
+  echo "FAIL docker run from the docs: no login page on port 8765"; docker logs sortroom; fails=$((fails + 1))
+fi
+stop sortroom
+
 # root is refused
 if out=$(docker run --rm -e PUID=0 "$image" 2>&1); then
   echo "FAIL PUID=0 started"; fails=$((fails + 1))

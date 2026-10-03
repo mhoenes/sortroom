@@ -63,12 +63,15 @@ mkdir -p sortroom/config sortroom/logs sortroom/mailboxes && cd sortroom
 curl -fsSLO https://raw.githubusercontent.com/mhoenes/sortroom/main/docker-compose.yml
 curl -fsSL -o .env https://raw.githubusercontent.com/mhoenes/sortroom/main/.env.example
 curl -fsSL -o config/config.toml https://raw.githubusercontent.com/mhoenes/sortroom/main/config/config.toml
-sudo chown -R 1000:1000 config logs mailboxes
 ```
 
 1. In `.env` set `ADMIN_PASSWORD` (at least 8 characters); in `docker-compose.yml` set `TZ`
-   to your time zone.
-2. `docker compose up -d`, open `http://<docker-host>:8765` and log in.
+   to your time zone. Sortroom runs as user and group 1000 and takes over the three folders
+   when it starts; to run it as another user (e.g. the owner of a NAS share) set `PUID` and
+   `PGID` in `.env`.
+2. `docker compose up -d`, open `http://<docker-host>:8765` and log in. Without Compose, the
+   same works with `docker run`: see
+   [Installation](https://github.com/mhoenes/sortroom/wiki/Installation#with-docker-run-instead-of-compose).
 3. Under **Global settings** enter the API key and press **Save & check**.
 4. Under **Add mailbox** choose Gmail, Outlook.com / Microsoft 365 or another IMAP server,
    enter the login and pick the standard categories.
