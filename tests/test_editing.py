@@ -190,6 +190,12 @@ def test_trial_descriptions_and_sample(tmp_path):
     store.close()
     rows = trial.sample(tmp_path / "state.db", "werbung", own=2, other=5)
     assert [r[5] for r in rows] == ["werbung", "werbung", "finanzen"]
+    store = Store(tmp_path / "state.db")
+    store.set_correction("<2@x>", "finanzen", "werbung", "reconcile")  # filed as finance, moved to promotions
+    store.close()
+    rows = trial.sample(tmp_path / "state.db", "werbung", own=2, other=5)
+    assert (rows[0][0], rows[0][5], rows[0][6]) == ("<2@x>", "werbung", True)  # first, with where it belongs
+    assert [r[0] for r in rows].count("<2@x>") == 1 and all(not r[6] for r in rows[1:])
 
 
 # ---------------------------------------------------------------- pages

@@ -21,7 +21,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from .. import __version__, i18n
-from ..config import SECRETS_FILE, ConfigError, Mailbox, default_label, read_secrets
+from ..config import INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, default_label, read_secrets
 from ..i18n import _
 from ..sorter import expired_target
 from . import queries
@@ -322,6 +322,8 @@ def all_mailboxes(request: Request):
 
 @router.get("/ui/m/{box_id}", response_class=HTMLResponse, dependencies=[Depends(require_login)])
 def overview(request: Request, box_id: str):
+    from .suggestions import category_hints, rule_suggestions  # imports this module
+
     boxes, box = _box(request, box_id)
     cfg = box.cfg
     db = queries.connect(box.workspace)
@@ -332,6 +334,8 @@ def overview(request: Request, box_id: str):
         review = queries.uncertain_mails(db, cfg.min_confidence, 5, days=30)  # as stats().uncertain
         filed, corrected = map(sum, zip(*queries.corrections(db, cfg.min_confidence).values() or [(0, 0)], strict=True))
         expired = queries.expired_moved(db, 7)
+        rule_tips = rule_suggestions(db, cfg)
+        hints = category_hints(db, cfg, explained=rule_tips)
     finally:
         if db:
             db.close()
@@ -342,13 +346,13 @@ def overview(request: Request, box_id: str):
     return templates.TemplateResponse(request, "overview.html", {
         **_sidebar(request, boxes, box, "overview"), "box": box, "stats": st, "bars": bars,
         "total_7d": total_7d, "runs": runs, "review": review, "expired_7d": expired,
-        "filed_30d": filed, "corrected_30d": corrected,
+        "filed_30d": filed, "corrected_30d": corrected, "rule_tips": rule_tips, "hints": hints,
         "schedule": request.app.state.scheduler.status(box), "label": lambda k: _label(box, k)})
 
 
 @router.get("/ui/m/{box_id}/mails", response_class=HTMLResponse, dependencies=[Depends(require_login)])
 def mails(request: Request, box_id: str, q: str = "", category: str = "", folder: str = "", period: str = "7d",
-          uncertain: str = "", flagged: str = "", gone: str = "", page: int = 1, key: str = ""):
+          uncertain: str = "", flagged: str = "", gone: str = "", page: int = 1, key: str = "", rule: str = ""):
     boxes, box = _box(request, box_id)
     f = queries.MailFilter(q=q.strip()[:200], category=category, folder=folder,
                            period=period if period in queries.PERIODS else "7d",
@@ -371,8 +375,9 @@ def mails(request: Request, box_id: str, q: str = "", category: str = "", folder
         "selected": selected, "folders": folder_list, "pages": pages, "periods": queries.PERIODS,
         "query": urlencode(params), "label": lambda k: _label(box, k),
         "link_key": lambda k: quote(k, safe=""), "min_conf": box.cfg.min_confidence,
-        "today": datetime.now().date().isoformat(),
+        "today": datetime.now().date().isoformat(), "offer_rule": rule if rule in box.cfg.categories
+        or rule == INBOX_ACTION else "",
         "expired_to": lambda cat: expired_target(box.cfg, cat)})
 
 
-from . import admin, editor, senders  # noqa: E402,F401  (register their pages on router)
+from . import admin, editor, senders, suggestions  # noqa: E402,F401  (register their pages on router)

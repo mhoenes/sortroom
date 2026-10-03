@@ -442,3 +442,31 @@ def test_a_long_job_log_is_cut_with_a_note(setup):
 
     job = _wait(jobs.start(box, "run", "Lauf", chatty, needs_lock=False)["id"])
     assert len(job["log"]) == jobs.MAX_LOG_LINES + 1 and job["log"][-1] == "… (more lines in logs/sortroom.log)"
+
+
+def test_suggestions_on_the_overview_and_after_a_correction(client, setup, monkeypatch):
+    monkeypatch.setattr(admin, "move_mail", lambda cfg, creds, ws, key, cat: "INBOX/Werbung")
+    html = client.get("/ui/m/privat/mails?period=all&key=%3Cm1%40x%3E").text
+    r = client.post("/ui/m/privat/mails/action", follow_redirects=False, data={
+        "csrf": _csrf(html), "key": "<m1@x>", "action": "move", "category": "werbung",
+        "back": "period=all&key=%3Cm1%40x%3E"})
+    assert r.headers["location"].endswith("&rule=werbung")       # corrected by hand: a rule is offered
+    html = client.get(r.headers["location"]).text
+    assert '<details class="more act" open>' in html and "Immer für diesen Absender?" in html
+    assert '<option value="werbung" selected>nach Werbung</option>' in html
+
+    store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
+    for i in range(3):
+        store.record(SimpleNamespace(key=f"<n{i}@x>", received=datetime.now().astimezone().isoformat(timespec="minutes"),
+                                     sender="news@shop.example", subject="Angebot", source="classifier",
+                                     decision=Decision("finanzen", 0.9, {}, 0.1, 0.0), folder="INBOX/Finanzen",
+                                     flag=False, expires=None))
+        store.set_correction(f"<n{i}@x>", "finanzen", "werbung", "ui")
+    store.close()
+    html = client.get("/ui/m/privat").text
+    assert "Vorschläge" in html and "3 Mails von news@shop.example kamen von Hand nach „Werbung“" in html
+    assert "vielleicht zu ungenau" not in html  # the suggested rule explains these corrections
+    r = client.post("/ui/m/privat/suggestions", data={"csrf": _csrf(html), "kind": "rule", "action": "rule",
+                                                      "subject": "news@shop.example", "target": "werbung"})
+    assert "Absender-Regel für news@shop.example gespeichert" in r.text and "Vorschläge" not in r.text
+    assert ("news@shop.example", "werbung") in [(x.match, x.action) for x in _box(setup).cfg.sender_rules]

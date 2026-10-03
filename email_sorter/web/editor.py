@@ -224,13 +224,15 @@ def categories_test_result(request: Request, box_id: str, job_id: str):
         "moved_elsewhere": [r for r in tested if r.before != key and r.after not in (key, r.before)],
         "own": len(own),
         "errors": sum(1 for r in rows if r.error),
+        "corrected": sum(1 for r in tested if r.corrected),
+        "corrected_right": sum(1 for r in tested if r.corrected and r.after == r.before),
     }
     cat = box.cfg.categories.get(key)
     return _page(request, "trial.html", {
         **_sidebar(request, boxes, box, "categories"), "box": box, "job": job, "rows": rows, "s": summary,
         "cat_label": cat.label if cat else key,
         "label": lambda k: box.cfg.categories[k].label if k in box.cfg.categories else (
-            k if k != key else _("%(key)s (new)", key=k))})
+            _("Inbox") if k == INBOX_ACTION else k if k != key else _("%(key)s (new)", key=k))})
 
 
 # ---------------------------------------------------------------- settings

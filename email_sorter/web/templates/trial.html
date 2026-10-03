@@ -28,6 +28,7 @@
   <div class="card kpi"><span class="k">{{ _('Would join') }}</span><span class="v">{{ s.gained|length }}</span><span class="d">{{ _('from other categories') }}</span></div>
 </div>
 
+{% if s.corrected %}<div class="banner {{ 'ok' if s.corrected_right == s.corrected else '' }}" role="status">{{ _('%(right)s of %(total)s mails corrected by hand would now be filed the way you corrected them.', right=s.corrected_right, total=s.corrected) }}</div>{% endif %}
 <section class="card" style="padding:6px 12px">
   <div class="scroll-x"><table>
     <thead><tr><th scope="col">{{ _('Received') }}</th><th scope="col">{{ _('Sender') }}</th><th scope="col">{{ _('Subject') }}</th><th scope="col">{{ _('So far') }}</th><th scope="col">{{ _('With draft') }}</th><th scope="col" class="num">{{ _('Confidence') }}</th></tr></thead>
@@ -37,7 +38,7 @@
         <td style="white-space:nowrap">{{ r.received|dt }}</td>
         <td class="clip" style="width:20%">{{ r.sender }}</td>
         <td class="clip" style="width:34%">{{ r.subject or _('(no subject)') }}</td>
-        <td><span class="pill">{{ label(r.before) }}</span></td>
+        <td><span class="pill">{{ label(r.before) }}</span>{% if r.corrected %} <span class="muted" style="font-size:12px">{{ _('by hand') }}</span>{% endif %}</td>
         <td>{% if r.error %}<span class="muted">{{ r.error }}</span>
             {% elif r.after == r.before %}<span class="muted">{{ _('unchanged') }}</span>
             {% else %}<span class="pill {{ 'ok' if r.after == job.key else 'warn' }}">{{ label(r.after) }}</span>{% endif %}</td>

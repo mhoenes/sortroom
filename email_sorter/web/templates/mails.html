@@ -128,8 +128,8 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>{% endif %}</span></div>
       </form>
       {% endif %}
-      <details class="more act">
-        <summary>{{ _('Create a sender rule') }}</summary>
+      <details class="more act" {% if offer_rule %}open{% endif %}>
+        <summary>{{ _('Always for this sender?') if offer_rule else _('Create a sender rule') }}</summary>
         <form method="post" action="/ui/m/{{ box.id }}/mails/action" class="stack tight">
           {{ hidden }}<input type="hidden" name="action" value="rule">
           {% set addr = (m.sender or '')|lower %}
@@ -140,10 +140,10 @@
             </select></label>
           <label class="f">{{ _('Always') }}
             <select name="category">
-              <option value="inbox">{{ _('leave in the inbox') }}</option>
-              {% for key, c in box.cfg.categories.items() %}<option value="{{ key }}" {% if key == m.category %}selected{% endif %}>{{ _('to %(category)s', category=c.label) }}</option>{% endfor %}
+              <option value="inbox" {% if offer_rule == 'inbox' %}selected{% endif %}>{{ _('leave in the inbox') }}</option>
+              {% for key, c in box.cfg.categories.items() %}<option value="{{ key }}" {% if key == (offer_rule or m.category) %}selected{% endif %}>{{ _('to %(category)s', category=c.label) }}</option>{% endfor %}
             </select></label>
-          <label class="check small"><input type="checkbox" name="apply" value="1" checked>{{ _('Move this mail right away') }}</label>
+          {% if not offer_rule %}<label class="check small"><input type="checkbox" name="apply" value="1" checked>{{ _('Move this mail right away') }}</label>{% endif %}
           <div class="actions"><button class="btn" type="submit">{{ _('Save rule') }}</button></div>
         </form>
       </details>
