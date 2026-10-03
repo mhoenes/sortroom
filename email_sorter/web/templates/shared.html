@@ -1,13 +1,16 @@
 {% extends "base.html" %}
 {% block title %}{{ _('Global settings') }}{% endblock %}
 {% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text|forceescape }}" data-tip="{{ text|forceescape }}">?</span>{% endmacro %}
-{# a test of the values in the form, saving nothing: a button that tries them (settings-test.js asks the server
+{# a test of the values in the form, saving nothing: a button that tries them (global-settings.js asks the server
    and puts the answer into .test-result; without JavaScript the page comes back with it) #}
 {% macro test_row(card, label, icon, hint) %}<div class="test-row">
   <button class="btn tonal" type="submit" formaction="/ui/settings/test/{{ card }}" data-test="{{ card }}">{{ icon|safe }}<span>{{ label }}</span></button>
   <span class="muted hint">{{ hint }}</span>
   <div class="test-result" data-result="{{ card }}" aria-live="polite">{% if tested and tested[0] == card %}<div class="banner {{ tested[1] }}">{{ tested[2] }}</div>{% endif %}</div>
 </div>{% endmacro %}
+{# an error about one field: the field is marked and gets the focus (the page scrolls to it), the message below it #}
+{% macro invalid(name) %}{% if error_field == name %} aria-invalid="true" aria-describedby="error-{{ name }}" autofocus{% endif %}{% endmacro %}
+{% macro field_error(name) %}{% if error_field == name %}<span class="hint field-error" id="error-{{ name }}">{{ error }}</span>{% endif %}{% endmacro %}
 {% from "_secret.html" import source with context %}
 {% block content %}
 <div class="head">
@@ -18,10 +21,10 @@
 </div>
 
 {% if not editable %}<div class="banner" role="status">{{ _('Read only: %(file)s is mounted read-only. Please make changes in the file.', file=config_name) }}</div>{% endif %}
-{% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
+{% if error and not error_field %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
 {% if key_error %}<div class="banner err" role="alert">{{ key_error }}</div>{% endif %}
 
-<form method="post" action="/ui/settings" data-guard="{{ _('Interface, Model and Mail') }}">
+<form method="post" action="/ui/settings" data-guard="{{ _('Interface, AI service and Mail') }}">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   {# Enter in a field only saves: the first submit button is the default one #}
   {% if editable %}<button type="submit" class="sr-only" tabindex="-1" aria-hidden="true">{{ _('Save settings') }}</button>{% endif %}
@@ -36,24 +39,28 @@
       </div>
     </section>
     <section class="card stack" id="model">
-      <div><h2>{{ _('Model') }}</h2>
+      <div><h2>{{ _('AI service') }}</h2>
         <p class="muted hint">{{ _('Any service that offers the <a href="https://docs.typesafe.ai/api" target="_blank" rel="noopener">TypeSafe API</a>.') }}</p></div>
       <div class="grid cols-3">
         <label class="f span-2"><span class="lt">{{ _('Endpoint') }} {{ help(_('Address every mail is sent to for filing, e.g. https://openrouter.ai/api/alpha/decisions')) }}</span>
-          <input type="text" name="endpoint" value="{{ form.endpoint }}" required class="mono"></label>
+          <input type="text" name="endpoint" value="{{ form.endpoint }}" required class="mono"{{ invalid('endpoint') }}>{{ field_error('endpoint') }}</label>
         <label class="f"><span class="lt">{{ _('Model') }} {{ help(_('Name of the model as the provider of the endpoint expects it.')) }}</span>
-          <input type="text" name="model" value="{{ form.model }}" required class="mono"></label>
+          <input type="text" name="model" value="{{ form.model }}" required class="mono"{{ invalid('model') }}>{{ field_error('model') }}</label>
         <label class="f span-2"><span class="lt">{{ _('API key') }} {{ help(_('Stored in %(file)s next to %(config)s, readable only by Sortroom, and never shown again. Leave empty to keep the current one.', file=secrets_file, config=config_name)) }}</span>
           <input type="password" name="api_key" autocomplete="new-password" spellcheck="false" {% if not key_writable %}disabled{% endif %}
-            {% if key_set %}placeholder="{{ _('unchanged') }}"{% endif %}>
+            {% if key_set %}placeholder="{{ _('unchanged') }}"{% endif %}{{ invalid('api_key') }}>{{ field_error('api_key') }}
           <span class="hint">{% if retype %}<span class="pill warn">{{ _('Please enter it again') }}</span>{% else %}{{ source(key_set) }}{% endif %}</span>
         </label>
+      </div>
+      {# set once and rarely touched: apart from what decides where the mails go #}
+      <h3 class="subhead">{{ _('Fine-tuning') }} <span>{{ _('usually left as they are') }}</span></h3>
+      <div class="grid cols-3">
         <label class="f"><span class="lt">{{ _('Mail text length') }} {{ help(_('This many characters of the mail text are sent to the model. More text can be more accurate but costs a bit more.')) }}</span>
-          <input type="number" name="max_body_chars" min="200" max="20000" step="1" value="{{ form.max_body_chars }}" required></label>
+          <input type="number" name="max_body_chars" min="200" max="20000" step="1" value="{{ form.max_body_chars }}" required{{ invalid('max_body_chars') }}>{{ field_error('max_body_chars') }}</label>
         <label class="f"><span class="lt">{{ _('Timeout in seconds') }} {{ help(_('How long to wait for an answer from the endpoint.')) }}</span>
-          <input type="number" name="timeout_seconds" min="1" max="300" step="any" value="{{ form.timeout_seconds }}" required></label>
+          <input type="number" name="timeout_seconds" min="1" max="300" step="any" value="{{ form.timeout_seconds }}" required{{ invalid('timeout_seconds') }}>{{ field_error('timeout_seconds') }}</label>
         <label class="f"><span class="lt">{{ _('Minimum interval in seconds') }} {{ help(_('Pause between two requests, for providers that limit the requests per minute. Usually 0.')) }}</span>
-          <input type="number" name="min_interval_seconds" min="0" max="60" step="any" value="{{ form.min_interval_seconds }}" required></label>
+          <input type="number" name="min_interval_seconds" min="0" max="60" step="any" value="{{ form.min_interval_seconds }}" required{{ invalid('min_interval_seconds') }}>{{ field_error('min_interval_seconds') }}</label>
       </div>
       {% if editable %}{{ test_row('model', _('Check model'), '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.8 2.8L16 9.8"/></svg>',
         _('Sends the model one sample mail with the values above – a fraction of a cent. Saves nothing.')) }}{% endif %}
@@ -61,39 +68,48 @@
     <section class="card stack" id="mail">
       <div><h2>{{ _('Mail') }}</h2>
         <p class="muted hint">{{ _('Optional: an SMTP account Sortroom sends its own mail with – a note when a scheduled task fails, and a daily summary. For all mailboxes, to one recipient.') }}</p></div>
+      <h3 class="subhead">{{ _('Server') }}</h3>
       <div class="grid cols-3">
         <label class="f"><span class="lt">{{ _('SMTP server') }} {{ help(_('The outgoing mail server of your provider, e.g. smtp.example.com. Empty: Sortroom sends no mail.')) }}</span>
-          <input type="text" name="smtp_host" value="{{ form.smtp_host }}" spellcheck="false" autocomplete="off"></label>
-        <label class="f"><span class="lt">{{ _('Port') }}</span>
-          <input type="number" name="smtp_port" min="1" max="65535" step="1" value="{{ form.smtp_port }}"></label>
+          <input type="text" name="smtp_host" value="{{ form.smtp_host }}" spellcheck="false" autocomplete="off"{{ invalid('smtp_host') }}>{{ field_error('smtp_host') }}</label>
         <label class="f"><span class="lt">{{ _('Encryption') }} {{ help(_('STARTTLS on port 587 is the usual choice; SSL/TLS on port 465 the other one. None only for a mail server in your own network.')) }}</span>
-          <select name="smtp_security">{% for value, name in [('starttls', 'STARTTLS'), ('ssl', 'SSL/TLS'), ('none', _('None'))] %}<option value="{{ value }}" {% if form.smtp_security == value %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+          <select name="smtp_security"{{ invalid('smtp_security') }}>{% for value, name in [('starttls', 'STARTTLS'), ('ssl', 'SSL/TLS'), ('none', _('None'))] %}<option value="{{ value }}" {% if form.smtp_security == value %}selected{% endif %}>{{ name }}</option>{% endfor %}</select>{{ field_error('smtp_security') }}</label>
+        <label class="f"><span class="lt">{{ _('Port') }} {{ help(_('Follows the encryption: 587 for STARTTLS, 465 for SSL/TLS. Change it only if your provider names another one.')) }}</span>
+          <input type="number" name="smtp_port" min="1" max="65535" step="1" value="{{ form.smtp_port }}"{{ invalid('smtp_port') }}>{{ field_error('smtp_port') }}</label>
         <label class="f"><span class="lt">{{ _('User') }} {{ help(_('Usually the full e-mail address. Empty: no login.')) }}</span>
-          <input type="text" name="smtp_user" value="{{ form.smtp_user }}" spellcheck="false" autocomplete="off"></label>
+          <input type="text" name="smtp_user" value="{{ form.smtp_user }}" spellcheck="false" autocomplete="off"{{ invalid('smtp_user') }}>{{ field_error('smtp_user') }}</label>
         <label class="f"><span class="lt">{{ _('Password') }} {{ help(_('Stored in %(file)s next to %(config)s, like the API key, and never shown again. Leave empty to keep the current one.', file=secrets_file, config=config_name)) }}</span>
           <input type="password" name="smtp_password" autocomplete="new-password" spellcheck="false" {% if not key_writable %}disabled{% endif %}
-            {% if smtp_password_set %}placeholder="{{ _('unchanged') }}"{% endif %}>
+            {% if smtp_password_set %}placeholder="{{ _('unchanged') }}"{% endif %}{{ invalid('smtp_password') }}>{{ field_error('smtp_password') }}
           <span class="hint">{% if retype_smtp %}<span class="pill warn">{{ _('Please enter it again') }}</span>{% elif smtp_password_set %}{{ source(true) }}{% endif %}</span></label>
       </div>
+      <h3 class="subhead">{{ _('What Sortroom sends') }}</h3>
       <div class="grid cols-3">
         <label class="f"><span class="lt">{{ _('From') }} {{ help(_('The sender of the mails, e.g. "Sortroom <me@example.com>". Many providers only accept your own address.')) }}</span>
-          <input type="text" name="mail_sender" value="{{ form.mail_sender }}" spellcheck="false" autocomplete="off"></label>
+          <input type="text" name="mail_sender" value="{{ form.mail_sender }}" spellcheck="false" autocomplete="off"{{ invalid('mail_sender') }}>{{ field_error('mail_sender') }}</label>
         <label class="f"><span class="lt">{{ _('To') }}</span>
-          <input type="text" name="mail_recipient" value="{{ form.mail_recipient }}" spellcheck="false" autocomplete="off"></label>
+          <input type="text" name="mail_recipient" value="{{ form.mail_recipient }}" spellcheck="false" autocomplete="off"{{ invalid('mail_recipient') }}>{{ field_error('mail_recipient') }}</label>
         <label class="f"><span class="lt">{{ _('Address of this interface') }} {{ help(_('E.g. http://nas:8765 – then the mails link to the pages they are about. Empty: no links.')) }}</span>
-          <input type="text" name="ui_url" value="{{ form.ui_url }}" placeholder="http://…:8765" spellcheck="false" autocomplete="off"></label>
+          <input type="text" name="ui_url" value="{{ form.ui_url }}" placeholder="http://…:8765" spellcheck="false" autocomplete="off"{{ invalid('ui_url') }}>{{ field_error('ui_url') }}
+          {# global-settings.js shows it while the field is empty #}
+          <span class="hint" data-use-url hidden><button class="text-btn" type="button" data-value="{{ here }}">{{ _('Use %(url)s', url=here) }}</button></span></label>
       </div>
-      <div class="toggles">
-        <label class="check"><input type="checkbox" name="notify_failures" value="1" {% if form.notify_failures %}checked{% endif %}>{{ _('Mail when a scheduled task fails') }}
-          {{ help(_('When a scheduled run, reconcile or the deletion rules of a mailbox fail – e.g. the login or the model key – one mail, and another one when it works again. Single mails that fail are retried and don\'t count.')) }}</label>
-        <label class="check"><input type="checkbox" name="digest" value="1" {% if form.digest %}checked{% endif %}>{{ _('Daily summary at') }}</label>
-        <input type="time" name="digest_time" value="{{ form.digest_time }}" aria-label="{{ _('Time of the daily summary') }}" class="digest-time">
-        {{ help(_('One mail for all mailboxes: what waits under To review, the starred mail of the last day, offers that expire today or tomorrow, and runs with errors. Not sent on days with nothing to report.')) }}
+      <div class="grid cols-2 options">
+        <div class="option">
+          <label class="check"><input type="checkbox" name="notify_failures" value="1" {% if form.notify_failures %}checked{% endif %}>{{ _('Mail when a scheduled task fails') }}</label>
+          <p class="muted hint">{{ _('When a scheduled run, reconcile or the deletion rules of a mailbox fail – e.g. the login or the model key – one mail, and another one when it works again. Single mails that fail are retried and don\'t count.') }}</p>
+        </div>
+        <div class="option">
+          <div class="option-line"><label class="check"><input type="checkbox" name="digest" value="1" {% if form.digest %}checked{% endif %}>{{ _('Daily summary at') }}</label>
+            <input type="time" name="digest_time" value="{{ form.digest_time }}" aria-label="{{ _('Time of the daily summary') }}" class="digest-time"{{ invalid('digest_time') }}></div>
+          {{ field_error('digest_time') }}
+          <p class="muted hint">{{ _('One mail for all mailboxes: what waits under To review, the starred mail of the last day, offers that expire today or tomorrow, and runs with errors. Not sent on days with nothing to report.') }}</p>
+        </div>
       </div>
       {% if editable %}{{ test_row('mail', _('Send test mail'), '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg>',
         _('Sends a mail to the recipient with the values above. Saves nothing.')) }}{% endif %}
     </section>
-    {# stays in view while the cards above scroll past; the test buttons in them save too #}
+    {# stays in view while the cards above scroll past; the tests in them save nothing #}
     {% if editable %}<div class="actions savebar"><button class="btn primary" type="submit">{{ _('Save settings') }}</button>
       <span class="hint unsaved" hidden>{{ _('Not saved yet') }}</span></div>{% endif %}
   </fieldset>
@@ -106,6 +122,6 @@
   <div class="actions"><button class="btn danger" type="submit" {% if not key_writable %}disabled title="{{ _('%(file)s is read-only.', file=secrets_file) }}"{% endif %}
     onclick='return confirm({{ _("Log out every browser, this one too?")|tojson }})'>{{ _('Log out everywhere') }}</button></div>
 </form>
-<script src="{{ asset('settings-test.js') }}" data-busy="{{ _('Please wait …') }}"
+<script src="{{ asset('global-settings.js') }}" data-busy="{{ _('Please wait …') }}"
   data-failed="{{ _('The test could not be run. Please reload the page and try again.') }}"></script>
 {% endblock %}
