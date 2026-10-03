@@ -396,6 +396,14 @@ class Store:
             "SELECT message_key, category, moved_to FROM processed WHERE source = 'classifier' "
             "AND confidence >= ? AND gone = 0 AND expired_tagged != ?", (min_confidence, MOVED)).fetchall()
 
+    def meta(self, key: str) -> str | None:
+        row = self.db.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+        return row[0] if row else None
+
+    def del_meta(self, key: str) -> None:
+        self.db.execute("DELETE FROM meta WHERE key = ?", (key,))
+        self.db.commit()
+
     def set_meta(self, key: str, value: str) -> None:
         self.db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, value))
         self.db.commit()

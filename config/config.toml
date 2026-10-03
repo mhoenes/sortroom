@@ -16,3 +16,17 @@ min_interval_seconds = 0    # pause between requests, for providers that limit r
 # [ui]
 # language = "de"
 # theme = "dark"
+
+# Mail Sortroom sends itself (also under Global settings → Mail): a note when a scheduled task fails,
+# and a daily summary. The password goes in secrets.toml ([smtp] password), set in the UI.
+# [mail]
+# host = "smtp.example.com"
+# port = 587
+# security = "starttls"          # starttls, ssl (port 465) or none
+# user = "me@example.com"
+# sender = "Sortroom <me@example.com>"
+# recipient = "me@example.com"
+# ui_url = "http://nas:8765"     # for links in the mails
+# notify_failures = true
+# digest = true
+# digest_time = "07:00"

@@ -1,6 +1,8 @@
 """Built-in schedule: every mailbox with [schedule] enabled gets a normal run every N minutes, and
 with reconcile_enabled its log is reconciled with the mailbox every reconcile_hours (independent of `enabled`).
 A mailbox with deletion rules has them applied once a day (CLEANUP_HOURS), also independent of `enabled`.
+Each scheduled task reports whether it failed (`report`, for the mail of notify.py), and the daily summary
+mail (digest.py) is sent when it is due.
 
 Runs in a background thread of the API/UI process. Each run takes the mailbox's lock like any
 other run, so a run started by hand (or from outside via the API) is never doubled: the
@@ -35,11 +37,14 @@ def enabled_by_env() -> bool:
 
 class Scheduler:
     def __init__(self, load_boxes: Callable[[], dict[str, Mailbox]],
-                 run_box: Callable[[Mailbox], None] | None = None,
-                 reconcile_box: Callable[[Mailbox], bool] | None = None,
+                 run_box: Callable[[Mailbox], object] | None = None,
+                 reconcile_box: Callable[[Mailbox], object] | None = None,
                  last_reconciled: Callable[[Mailbox], datetime | None] | None = None,
-                 cleanup_box: Callable[[Mailbox], bool] | None = None,
-                 last_cleaned: Callable[[Mailbox], datetime | None] | None = None):
+                 cleanup_box: Callable[[Mailbox], object] | None = None,
+                 last_cleaned: Callable[[Mailbox], datetime | None] | None = None,
+                 report: Callable[[Mailbox, str, bool, str], None] | None = None,
+                 digest_due: Callable[[datetime], bool] | None = None,
+                 send_digest: Callable[[], object] | None = None):
         self._load_boxes = load_boxes
         self._run_box = run_box or run_scheduled
         self._reconcile_box = reconcile_box or reconcile_scheduled
@@ -48,6 +53,9 @@ class Scheduler:
         self._cleanup_box = cleanup_box or cleanup_scheduled
         self._last_cleaned = last_cleaned or (lambda box: last_cleanup(box.workspace))
         self.cleaned: dict[str, datetime | None] = {}     # mailbox id -> deletion rules last applied
+        self._report = report
+        self._digest_due, self._send_digest = digest_due, send_digest
+        self.digesting = False
         self._first_seen: dict[str, datetime] = {}
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -125,7 +133,37 @@ class Scheduler:
                 self.running.add(box.id)
                 started.append(box.id)
                 threading.Thread(target=self._run, args=(box,), name=f"scheduled-{box.id}", daemon=True).start()
+            if self._digest_is_due(now):
+                self.digesting = True
+                started.append("digest")
+                threading.Thread(target=self._digest, name="digest", daemon=True).start()
         return started
+
+    def _digest_is_due(self, now: datetime) -> bool:
+        if not (self._digest_due and self._send_digest) or self.digesting:
+            return False
+        try:
+            return self._digest_due(now)
+        except Exception:
+            log.exception("checking the daily summary failed")
+            return False
+
+    def _digest(self) -> None:
+        try:
+            if self._send_digest:
+                self._send_digest()
+        except Exception:
+            log.exception("daily summary failed")
+        finally:
+            self.digesting = False
+
+    def _outcome(self, box: Mailbox, task: str, outcome) -> None:
+        """A task's outcome (failed, why) goes to `report`; None, True or False (busy) report nothing."""
+        if self._report and isinstance(outcome, tuple):
+            try:
+                self._report(box, task, *outcome)
+            except Exception:
+                log.exception("[%s] notification failed", box.id)
 
     def _note_broken(self, broken: dict[str, str]) -> None:
         for box_id, error in broken.items():
@@ -157,9 +195,12 @@ class Scheduler:
     def _reconcile(self, box: Mailbox) -> None:
         done = True
         try:
-            done = self._reconcile_box(box)
-        except Exception:
+            outcome = self._reconcile_box(box)
+            done = outcome is not False
+            self._outcome(box, "reconcile", outcome)
+        except Exception as e:
             log.exception("[%s] scheduled reconcile failed", box.id)
+            self._outcome(box, "reconcile", (True, str(e)))
         finally:
             with self._lock:
                 if not done:  # the mailbox was busy: try again at the next tick
@@ -188,9 +229,12 @@ class Scheduler:
     def _cleanup(self, box: Mailbox) -> None:
         done = True
         try:
-            done = self._cleanup_box(box)
-        except Exception:
+            outcome = self._cleanup_box(box)
+            done = outcome is not False
+            self._outcome(box, "cleanup", outcome)
+        except Exception as e:
             log.exception("[%s] scheduled deletion rules failed", box.id)
+            self._outcome(box, "cleanup", (True, str(e)))
         finally:
             with self._lock:
                 if not done:  # the mailbox was busy: try again at the next tick
@@ -199,9 +243,10 @@ class Scheduler:
 
     def _run(self, box: Mailbox) -> None:
         try:
-            self._run_box(box)
-        except Exception:
+            self._outcome(box, "run", self._run_box(box))
+        except Exception as e:
             log.exception("[%s] scheduled run failed", box.id)
+            self._outcome(box, "run", (True, str(e)))
         finally:
             with self._lock:
                 self.running.discard(box.id)
@@ -218,30 +263,32 @@ class Scheduler:
         return {"reconcile_enabled": box.cfg.reconcile_enabled, "last_reconcile": last, "next_reconcile": due}
 
 
-def run_scheduled(box: Mailbox) -> None:
-    """A normal live run, the same as POST /run, skipped when the mailbox is busy."""
+def run_scheduled(box: Mailbox) -> tuple[bool, str] | None:
+    """A normal live run, the same as POST /run: (failed, why), or None when the mailbox was busy. Failed
+    means the run couldn't work at all (login, model, outage); single mails are retried and don't count."""
     try:
         creds = load_credentials(box)
     except ConfigError as e:
         log.error("[%s] scheduled run skipped: %s", box.id, e)
-        return
+        return True, str(e)
     with single_instance(box.lock_path) as acquired:
         if not acquired:
             log.info("[%s] scheduled run skipped, another run is active", box.id)
-            return
+            return None
         log.info("[%s] starting scheduled run", box.id)
-        run(box.cfg, creds, box.workspace, live=True, limit=None)
+        result = run(box.cfg, creds, box.workspace, live=True, limit=None)
+    return bool(result.error) or result.exit_code >= 2, result.error or ""
 
 
-def cleanup_scheduled(box: Mailbox) -> bool:
-    """Apply the deletion rules for real. False when the mailbox was busy, so it is tried again soon."""
+def cleanup_scheduled(box: Mailbox) -> tuple[bool, str] | bool:
+    """Apply the deletion rules for real: (failed, why), or False when the mailbox was busy (tried again soon)."""
     from .cleanup import run_cleanup
 
     try:
         creds = imap_credentials(box)
     except ConfigError as e:
         log.error("[%s] scheduled deletion rules skipped: %s", box.id, e)
-        return True
+        return True, str(e)
     with single_instance(box.lock_path) as acquired:
         if not acquired:
             log.info("[%s] scheduled deletion rules postponed, another run is active", box.id)
@@ -249,19 +296,19 @@ def cleanup_scheduled(box: Mailbox) -> bool:
         log.info("[%s] applying the deletion rules", box.id)
         result = run_cleanup(box.cfg, creds, box.workspace, live=True)
         log.info("[%s] deletion rules: %s", box.id, result["summary"])
-    return True
+    return result["exit_code"] >= 2, result["summary"]
 
 
-def reconcile_scheduled(box: Mailbox) -> bool:
-    """Reconcile the log with the mailbox for real (it changes only the log). False when the
-    mailbox was busy, so it is tried again soon."""
+def reconcile_scheduled(box: Mailbox) -> tuple[bool, str] | bool:
+    """Reconcile the log with the mailbox for real (it changes only the log): (failed, why), or False when
+    the mailbox was busy, so it is tried again soon."""
     from .reconcile import run_reconcile
 
     try:
         creds = imap_credentials(box)  # only the IMAP login, the model isn't asked
     except ConfigError as e:
         log.error("[%s] scheduled reconcile skipped: %s", box.id, e)
-        return True
+        return True, str(e)
     with single_instance(box.lock_path) as acquired:
         if not acquired:
             log.info("[%s] scheduled reconcile postponed, another run is active", box.id)
@@ -269,4 +316,4 @@ def reconcile_scheduled(box: Mailbox) -> bool:
         log.info("[%s] starting scheduled reconcile", box.id)
         result = run_reconcile(box.cfg, creds, box.workspace, live=True)
         log.info("[%s] reconcile: %s", box.id, result["summary"])
-    return True
+    return not result.get("ok", True), result["summary"]

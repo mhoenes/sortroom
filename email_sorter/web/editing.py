@@ -623,6 +623,9 @@ def save_shared(base_dir: Path, shared_path: Path, form: dict) -> None:
     secrets = shared_path.with_name(SECRETS_FILE)
     if key and not secrets_writable(secrets):
         raise EditError(_("%(file)s is not writable, so the API key cannot be stored.", file=SECRETS_FILE))
+    smtp_password = _mail_settings(doc, form)
+    if smtp_password and not secrets_writable(secrets):
+        raise EditError(_("%(file)s is not writable, so the SMTP password cannot be stored.", file=SECRETS_FILE))
 
     tmp = shared_path.with_name(shared_path.name + ".tmp")
     tmp.write_text(tomlkit.dumps(doc), encoding="utf-8")
@@ -638,6 +641,50 @@ def save_shared(base_dir: Path, shared_path: Path, form: dict) -> None:
     os.replace(tmp, shared_path)
     if key:
         write_secrets(secrets, "classifier", {"api_key": key})
+    if smtp_password:
+        write_secrets(secrets, "smtp", {"password": smtp_password})
+
+
+_TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+def _mail_settings(doc: tomlkit.TOMLDocument, form: dict) -> str:
+    """[mail] from the form (notifications and the daily summary); returns the new SMTP password, if any."""
+    from email.utils import parseaddr
+
+    from ..mail import SECURITY
+
+    host = _text(form, "smtp_host", 200)
+    sender, recipient = _text(form, "mail_sender", 300), _text(form, "mail_recipient", 300)
+    notify, digest = _flag(form, "notify_failures"), _flag(form, "digest")
+    ui_url = _text(form, "ui_url", 300)
+    if (notify or digest) and not (host and sender and recipient):
+        raise EditError(_("Mail: to send notifications or the summary, please fill in the SMTP server, From and To."))
+    for value, label in ((sender, _("From")), (recipient, _("To"))):
+        if value and "@" not in parseaddr(value)[1]:
+            raise EditError(_("%(label)s: please enter an e-mail address.", label=label))
+    if ui_url and not ui_url.startswith(("http://", "https://")):
+        raise EditError(_("Address of this interface: please start with http:// or https://."))
+    security = _text(form, "smtp_security", 10) or "starttls"
+    if security not in SECURITY:
+        raise EditError(_("Unknown encryption."))
+    digest_time = _text(form, "digest_time", 5) or "07:00"
+    if not _TIME_RE.match(digest_time):
+        raise EditError(_("Daily summary: please enter a time such as 07:00."))
+    port = _number(form, "smtp_port", _("Port"), 1, 65535, integer=True) if _text(form, "smtp_port", 6) else 587
+    if host or "mail" in doc:
+        mail = doc.setdefault("mail", tomlkit.table())
+        values: dict[str, object] = {
+            "host": host, "port": port, "security": security, "user": _text(form, "smtp_user", 200),
+            "sender": sender, "recipient": recipient, "ui_url": ui_url, "notify_failures": notify,
+            "digest": digest, "digest_time": digest_time}
+        for name, item in values.items():
+            mail[name] = item
+    return _secret_text(form, "smtp_password", _("Password"))
+
+
+def _flag(form: dict, name: str) -> bool:
+    return form.get(name) in ("1", "on", "true")
 
 
 # ---------------------------------------------------------------- secrets (logins, API key)

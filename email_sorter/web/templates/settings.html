@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ _('Settings') }} · {{ box.name }}{% endblock %}
-{% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text }}" data-tip="{{ text }}">?</span>{% endmacro %}
+{% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text|forceescape }}" data-tip="{{ text|forceescape }}">?</span>{% endmacro %}
 {% from "_secret.html" import source with context %}
 {% block content %}
 <div class="head">

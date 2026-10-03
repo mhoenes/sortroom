@@ -122,7 +122,7 @@
         {{ hidden }}<input type="hidden" name="action" value="expiry">
         {% set tip = _('After this day the next run moves the mail to %(folder)s.', folder=expired_to(m.category)) if expired_to(m.category) else _('No folder for expired mail is set – the date is only shown.') %}
         <div class="f"><span class="lt"><label for="expires">{{ _('Valid until') }}</label>
-          <span class="help" tabindex="0" role="note" data-tip="{{ tip }}" aria-label="{{ tip }}">?</span></span>
+          <span class="help" tabindex="0" role="note" data-tip="{{ tip|forceescape }}" aria-label="{{ tip|forceescape }}">?</span></span>
           <span class="combo"><input type="date" name="expires" id="expires" value="{{ m.expires or '' }}"><button class="btn" type="submit">{{ _('Save') }}</button>
             {% if m.expires %}<button class="btn icon" type="submit" name="clear" value="1" aria-label="{{ _('Remove the date') }}" title="{{ _('Remove the date') }}">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>{% endif %}</span></div>
