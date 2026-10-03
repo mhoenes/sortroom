@@ -252,7 +252,7 @@ def _settings_doc(box: Mailbox, form: dict) -> tuple[tomlkit.TOMLDocument, str, 
     doc = _doc(box)
     name = _text(form, "name", 60)
     if not name:
-        raise EditError(_("The display name must not be empty."))
+        raise EditError(_("The display name must not be empty."), "name")
     doc["name"] = name
     imap = doc.setdefault("imap", tomlkit.table())
     host = _text(form, "imap_host", 200)
@@ -340,9 +340,9 @@ def _new_id(box: Mailbox, form: dict) -> str:
         return new_id
     if not valid_mailbox_id(new_id):
         raise EditError(_("Folder name: lowercase letters, digits, - and _ only, starting with a letter or digit "
-                          "(max. 40)."))
+                          "(max. 40)."), "box_id")
     if box.workspace.with_name(new_id).exists():
-        raise EditError(_("Folder name: mailboxes/%(id)s exists already.", id=new_id))
+        raise EditError(_("Folder name: mailboxes/%(id)s exists already.", id=new_id), "box_id")
     return new_id
 
 

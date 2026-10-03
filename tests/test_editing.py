@@ -388,6 +388,17 @@ def test_a_taken_folder_name_is_refused(client, setup):
     assert r.status_code == 422 and "mailboxes/arbeit gibt es schon" in r.text
 
 
+def test_an_error_shows_at_its_field(client, setup):
+    html = client.get("/ui/m/privat/settings").text
+    # folder fields suggest the folders there are
+    assert '<datalist id="known-folders">' in html and '<option value="INBOX">' in html
+    assert re.search(r'name="expired_folder"[^>]*list="known-folders"', html)
+    for field, value in (("lookback_days", "999"), ("box_id", "-arbeit")):
+        r = client.post("/ui/m/privat/settings", data=_settings_form(html, **{field: value}))
+        assert r.status_code == 422 and f'aria-describedby="error-{field}" autofocus' in r.text
+        assert f'id="error-{field}">' in r.text and 'class="banner err"' not in r.text  # at the field, not on top
+
+
 def test_rename_is_refused_while_the_mailbox_is_busy(client, setup):
     from email_sorter.runtime import single_instance
     with single_instance(_box(setup).lock_path) as held:  # a run of this very process holds the lock

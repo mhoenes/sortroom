@@ -1,0 +1,4 @@
+{# An error about one field (EditError.field): the field is marked and gets the focus, so the page scrolls to it,
+   and the message shows below it instead of in a banner on top. Needs `error` and `error_field`. #}
+{% macro invalid(name) %}{% if error_field == name %} aria-invalid="true" aria-describedby="error-{{ name }}" autofocus{% endif %}{% endmacro %}
+{% macro field_error(name) %}{% if error_field == name %}<span class="hint field-error" id="error-{{ name }}">{{ error }}</span>{% endif %}{% endmacro %}

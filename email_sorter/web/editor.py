@@ -242,7 +242,16 @@ def auth_methods() -> dict[str, str]:
     return {"password": _("Password"), "google": _("Google (OAuth)"), "microsoft": _("Microsoft (OAuth)")}
 
 
-def _settings_page(request: Request, box_id: str, form: dict | None = None, error: str | None = None,
+# the fields of the mailbox settings that show their own error (settings.html); an error about another one
+# – or from the rule tables – shows on top
+SETTINGS_FIELDS = {"name", "box_id", "imap_host", "imap_port", "source_folder", "imap_auth", "imap_user",
+                   "imap_password", "oauth_client_id", "oauth_client_secret", "oauth_tenant", "min_confidence",
+                   "action_flag_threshold",
+                   "expiry_threshold", "min_age_hours", "lookback_days", "max_per_run", "expired_folder",
+                   "schedule_minutes", "reconcile_hours"}
+
+
+def _settings_page(request: Request, box_id: str, form: dict | None = None, error: EditError | str | None = None,
                    rules: list[tuple[str, str]] | None = None, status: int = 200, retype: bool = False,
                    retype_secret: bool = False, delete_rules: list[dict] | None = None,
                    tested: tuple[str, str, str, str] | None = None):
@@ -272,9 +281,12 @@ def _settings_page(request: Request, box_id: str, form: dict | None = None, erro
         if db:
             db.close()
     known |= {c.folder for c in cfg.categories.values() if c.folder}
-    known |= {f for f in (cfg.expired_folder, *(c.expired_folder for c in cfg.categories.values())) if f}
+    known |= {f for f in (cfg.source_folder, cfg.expired_folder, *(c.expired_folder for c in cfg.categories.values()))
+              if f}
     return _page(request, "settings.html", {
-        **_sidebar(request, boxes, box, "settings"), "box": box, "cfg": cfg, "form": form, "error": error,
+        **_sidebar(request, boxes, box, "settings"), "box": box, "cfg": cfg, "form": form,
+        "error": str(error) if error else None,
+        "error_field": error.field if isinstance(error, EditError) and error.field in SETTINGS_FIELDS else None,
         "schedule": request.app.state.scheduler.status(box),
         "rules": rules, "delete_rules": delete_rules, "folders": sorted(known), "editable": writable(box),
         "login": login, "login_error": login_error, "login_writable": secrets_writable(box.secrets_path),
@@ -300,7 +312,7 @@ async def settings_save(request: Request, box_id: str):
     except EditError as e:
         form, retype = without_secrets(form, "imap_password")
         form, retype_secret = without_secrets(form, "oauth_client_secret")
-        return _settings_page(request, box_id, form=form, error=str(e), status=422, retype=retype,
+        return _settings_page(request, box_id, form=form, error=e, status=422, retype=retype,
                               retype_secret=retype_secret)
     if new_id != box.id:
         _flash(request, _("Settings saved. The mailbox folder is now mailboxes/%(id)s.", id=new_id))

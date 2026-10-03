@@ -2,6 +2,7 @@
 {% block title %}{{ _('Settings') }} · {{ box.name }}{% endblock %}
 {% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text|forceescape }}" data-tip="{{ text|forceescape }}">?</span>{% endmacro %}
 {% from "_secret.html" import source with context %}
+{% from "_fields.html" import invalid, field_error with context %}
 {% from "_test.html" import test_row, test_script, check_icon, send_icon, login_icon with context %}
 {% block content %}
 <div class="head">
@@ -15,7 +16,9 @@
 {% if not editable %}
 <div class="banner" role="status">{{ _('Read only: %(file)s is mounted read-only. Please make changes in the file.', file=config_name) }}</div>
 {% endif %}
-{% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
+{% if error and not error_field %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
+{# folders to suggest: the inbox, the categories' folders, the folders mail went to (folder fields, deletion rules) #}
+<datalist id="known-folders">{% for f in folders %}<option value="{{ f }}">{% endfor %}</datalist>
 
 <form method="post" action="/ui/m/{{ box.id }}/settings" data-guard="{{ _('Mailbox, Connection, Sorting and Schedule') }}">
   <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -26,11 +29,11 @@
       <h2>{{ _('Mailbox') }}</h2>
       <div class="grid cols-3">
         <label class="f"><span class="lt">{{ _('Display name') }} {{ help(_("Name of the mailbox in the interface. Changing it doesn't change the folder name.")) }}</span>
-          <input type="text" name="name" value="{{ form.name }}" maxlength="60" required></label>
+          <input type="text" name="name" value="{{ form.name }}" maxlength="60" required{{ invalid('name') }}>{{ field_error('name') }}</label>
         <label class="f"><span class="lt">{{ _('Folder name') }} {{ help(_("Folder of the mailbox under mailboxes/, and its id for the HTTP API, --mailbox and the addresses of this interface. Change it only on purpose: scripts that use the old id need the new one.")) }}</span>
           <input type="text" name="box_id" value="{{ form.box_id or box.id }}" maxlength="40" required class="mono"
             pattern="[a-z0-9][a-z0-9_\-]{0,39}" spellcheck="false" autocomplete="off"
-            data-rename-note="box-id-note" data-current="{{ box.id }}">
+            data-rename-note="box-id-note" data-current="{{ box.id }}"{{ invalid('box_id') }}>{{ field_error('box_id') }}
           <span class="hint rename-note" id="box-id-note" hidden>{{ _('Saving renames the folder. Addresses in this interface and the id for the API and --mailbox change with it.') }}</span>
         </label>
       </div>
@@ -42,13 +45,13 @@
       <h3 class="subhead">{{ _('Server') }}</h3>
       <div class="grid cols-3">
         <label class="f"><span class="lt">{{ _('IMAP server') }} {{ help(_('Host name of the IMAP server, e.g. imap.example.com. The connection is always encrypted (SSL).')) }}</span>
-          <input type="text" name="imap_host" value="{{ form.imap_host }}" required>
+          <input type="text" name="imap_host" value="{{ form.imap_host }}" required{{ invalid('imap_host') }}>{{ field_error('imap_host') }}
         </label>
         <label class="f"><span class="lt">{{ _('Port') }} {{ help(_('Usually 993 for IMAP over SSL.')) }}</span>
-          <input type="number" name="imap_port" min="1" max="65535" step="1" value="{{ form.imap_port }}" required>
+          <input type="number" name="imap_port" min="1" max="65535" step="1" value="{{ form.imap_port }}" required{{ invalid('imap_port') }}>{{ field_error('imap_port') }}
         </label>
         <label class="f"><span class="lt">{{ _('Inbox') }} {{ help(_('Folder that new mails are sorted from. Usually INBOX.')) }}</span>
-          <input type="text" name="source_folder" value="{{ form.source_folder }}">
+          <input type="text" name="source_folder" value="{{ form.source_folder }}" list="known-folders" spellcheck="false"{{ invalid('source_folder') }}>{{ field_error('source_folder') }}
         </label>
       </div>
       <div><h3 class="subhead">{{ _('Login') }}</h3>
@@ -58,29 +61,29 @@
       {% if form.imap_auth == 'password' and oauth_hint == 'microsoft' %}<div class="banner" role="status">{{ _('Microsoft no longer accepts passwords for IMAP. Choose "Microsoft (OAuth)" as the sign-in method.') }}</div>{% endif %}
       <div class="grid cols-3" data-auth-scope>
         <label class="f"><span class="lt">{{ _('Sign-in') }} {{ help(_('Password: the IMAP login of your provider (for Gmail an app password). Google and Microsoft: sign in with your account – Microsoft only accepts this. Google needs your own OAuth app, see the wiki page Gmail; for Microsoft, Sortroom brings its own.')) }}</span>
-          <select name="imap_auth" data-auth-select {% if not login_writable %}disabled{% endif %}>
+          <select name="imap_auth" data-auth-select {% if not login_writable %}disabled{% endif %}{{ invalid('imap_auth') }}>
             {% for key, label in auth_methods.items() %}<option value="{{ key }}" {% if form.imap_auth == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
-          </select>
+          </select>{{ field_error('imap_auth') }}
         </label>
         <label class="f"><span class="lt">{{ _('User') }} {{ help(_('Usually the full e-mail address.')) }}</span>
-          <input type="text" name="imap_user" value="{{ form.imap_user }}" autocomplete="off" spellcheck="false" {% if not login_writable %}disabled{% endif %}>
+          <input type="text" name="imap_user" value="{{ form.imap_user }}" autocomplete="off" spellcheck="false" {% if not login_writable %}disabled{% endif %}{{ invalid('imap_user') }}>{{ field_error('imap_user') }}
           <span class="hint">{{ source(login.imap_user) }}</span>
         </label>
         <label class="f" data-auth="password"><span class="lt">{{ _('Password') }} {{ help(_('For Gmail an app password. Leave empty to keep the current one.')) }}</span>
           <input type="password" name="imap_password" autocomplete="new-password" {% if not login_writable %}disabled{% endif %}
-            {% if login.imap_password %}placeholder="{{ _('unchanged') }}"{% endif %}>
+            {% if login.imap_password %}placeholder="{{ _('unchanged') }}"{% endif %}{{ invalid('imap_password') }}>{{ field_error('imap_password') }}
           <span class="hint">{% if retype %}<span class="pill warn">{{ _('Please enter it again') }}</span>{% else %}{{ source(login.imap_password) }}{% endif %}</span>
         </label>
         <label class="f" data-auth="oauth"><span class="lt">{{ _('Client ID') }} {{ help(_('From your OAuth app: at Google under APIs & Services → Credentials (type "Desktop app"). Microsoft: leave it empty to use Sortroom\'s own app, or enter the "Application (client) ID" of your own app registration.')) }}</span>
-          <input type="text" name="oauth_client_id" value="{{ form.oauth_client_id }}" autocomplete="off" spellcheck="false" class="mono" data-ms-placeholder="{{ _('Sortroom\'s app') }}" {% if not login_writable %}disabled{% endif %}>
+          <input type="text" name="oauth_client_id" value="{{ form.oauth_client_id }}" autocomplete="off" spellcheck="false" class="mono" data-ms-placeholder="{{ _('Sortroom\'s app') }}" {% if not login_writable %}disabled{% endif %}{{ invalid('oauth_client_id') }}>{{ field_error('oauth_client_id') }}
         </label>
         <label class="f" data-auth="google"><span class="lt">{{ _('Client secret') }} {{ help(_('Google gives desktop apps a client secret too. It is stored like a password and never shown again; leave empty to keep the current one.')) }}</span>
           <input type="password" name="oauth_client_secret" autocomplete="new-password" {% if not login_writable %}disabled{% endif %}
-            {% if login.oauth_client_secret %}placeholder="{{ _('unchanged') }}"{% endif %}>
+            {% if login.oauth_client_secret %}placeholder="{{ _('unchanged') }}"{% endif %}{{ invalid('oauth_client_secret') }}>{{ field_error('oauth_client_secret') }}
           <span class="hint">{% if retype_secret %}<span class="pill warn">{{ _('Please enter it again') }}</span>{% else %}{{ source(login.oauth_client_secret) }}{% endif %}</span>
         </label>
         <label class="f" data-auth="microsoft"><span class="lt">{{ _('Tenant') }} {{ help(_('Empty: personal and work accounts. "consumers": only personal accounts (Outlook.com, Hotmail). For a work account also the tenant ID or domain of your organization.')) }}</span>
-          <input type="text" name="oauth_tenant" value="{{ form.oauth_tenant }}" placeholder="common" autocomplete="off" spellcheck="false" class="mono" {% if not login_writable %}disabled{% endif %}>
+          <input type="text" name="oauth_tenant" value="{{ form.oauth_tenant }}" placeholder="common" autocomplete="off" spellcheck="false" class="mono" {% if not login_writable %}disabled{% endif %}{{ invalid('oauth_tenant') }}>{{ field_error('oauth_tenant') }}
         </label>
         {% if editable %}<div class="f" data-auth="oauth"><span class="lt">{{ _('Signed in') }} {{ help(_('Saves the settings, then opens the sign-in with your account. Needed once, and again after changing the method, client ID or tenant.')) }}</span>
           <div class="login-actions">
@@ -96,63 +99,65 @@
 
     <section class="card stack">
       <h2>{{ _('Sorting') }}</h2>
+      <h3 class="subhead">{{ _('Thresholds') }} <span>{{ _('how sure the model has to be, from 0 to 1') }}</span></h3>
       <div class="grid cols-3">
         <label class="f"><span class="lt">{{ _('Minimum confidence') }} {{ help(_('A mail is moved only when the model is at least this sure (0 to 1). Uncertain mails stay in the inbox and show up under "To review".')) }}</span>
-          <input type="number" name="min_confidence" min="0" max="1" step="0.01" value="{{ form.min_confidence }}" required>
+          <input type="number" name="min_confidence" min="0" max="1" step="0.01" value="{{ form.min_confidence }}" required{{ invalid('min_confidence') }}>{{ field_error('min_confidence') }}
         </label>
         <label class="f"><span class="lt">{{ _('Star for needed action from') }} {{ help(_('From this probability for "you need to do something" a mail gets a star – in categories where that is switched on.')) }}</span>
-          <input type="number" name="action_flag_threshold" min="0" max="1" step="0.01" value="{{ form.action_flag_threshold }}" required>
+          <input type="number" name="action_flag_threshold" min="0" max="1" step="0.01" value="{{ form.action_flag_threshold }}" required{{ invalid('action_flag_threshold') }}>{{ field_error('action_flag_threshold') }}
         </label>
         <label class="f"><span class="lt">{{ _('Time-limited offer from') }} {{ help(_('From this probability a mail counts as time-limited and its expiry date is tracked.')) }}</span>
-          <input type="number" name="expiry_threshold" min="0" max="1" step="0.01" value="{{ form.expiry_threshold }}" required>
+          <input type="number" name="expiry_threshold" min="0" max="1" step="0.01" value="{{ form.expiry_threshold }}" required{{ invalid('expiry_threshold') }}>{{ field_error('expiry_threshold') }}
         </label>
-        <label class="f"><span class="lt">{{ _('Waiting time in hours') }} {{ help(_('New mails stay in the inbox this long before they are sorted – so you see them there first. 0 = at once.')) }}</span>
-          <input type="number" name="min_age_hours" min="0" max="336" step="any" value="{{ form.min_age_hours }}" required>
+      </div>
+      <h3 class="subhead">{{ _('Runs') }}</h3>
+      <div class="grid cols-3">
+        <div class="f"><label class="lt" for="min_age_hours">{{ _('Waiting time in hours') }} {{ help(_('New mails stay in the inbox this long before they are sorted – so you see them there first. 0 = at once.')) }}</label>
+          <input type="number" name="min_age_hours" id="min_age_hours" min="0" max="336" step="any" value="{{ form.min_age_hours }}" required{{ invalid('min_age_hours') }}>{{ field_error('min_age_hours') }}
           <label class="check small"><input type="checkbox" name="sort_read_at_once" value="1" {% if form.sort_read_at_once in (true, 'on', '1') %}checked{% endif %}>{{ _('Sort read mails at once') }}
             {{ help(_('Mails you have already read do not wait for the waiting time but are sorted in the next run. Unread ones keep waiting.')) }}</label>
-        </label>
+        </div>
         <label class="f"><span class="lt">{{ _('Look-back in days') }} {{ help(_('A normal run only looks at mails from this many days. A backfill fetches older ones.')) }}</span>
-          <input type="number" name="lookback_days" min="1" max="365" step="1" value="{{ form.lookback_days }}" required>
+          <input type="number" name="lookback_days" min="1" max="365" step="1" value="{{ form.lookback_days }}" required{{ invalid('lookback_days') }}>{{ field_error('lookback_days') }}
         </label>
         <label class="f"><span class="lt">{{ _('Max. mails per run') }} {{ help(_('Upper limit of model requests per run; limits the cost if suddenly very many mails arrive. Sender rules do not count.')) }}</span>
-          <input type="number" name="max_per_run" min="1" max="5000" step="1" value="{{ form.max_per_run }}" required>
+          <input type="number" name="max_per_run" min="1" max="5000" step="1" value="{{ form.max_per_run }}" required{{ invalid('max_per_run') }}>{{ field_error('max_per_run') }}
         </label>
+      </div>
+      <h3 class="subhead">{{ _('Expired offers') }}</h3>
+      <div class="grid cols-3">
         <label class="f span-2"><span class="lt">{{ _('Default folder for expired mail') }} {{ help(_('Time-limited offers go here after their last valid day – unless a category has its own folder. Empty: nothing is moved.')) }}</span>
-          <input type="text" name="expired_folder" value="{{ form.expired_folder }}" placeholder="INBOX/…/{{ _('Expired') }}">
+          <input type="text" name="expired_folder" value="{{ form.expired_folder }}" list="known-folders" placeholder="INBOX/…/{{ _('Expired') }}" spellcheck="false"{{ invalid('expired_folder') }}>{{ field_error('expired_folder') }}
         </label>
       </div>
     </section>
+    {# one line per task, read as a sentence, in columns; the interval fades while its task is off (app.css) #}
+    {% macro sched_status(text) %}<span class="muted sched-status">{{ text }}</span>{% endmacro %}
     <section class="card stack">
       <h2>{{ _('Schedule') }}</h2>
-      <div class="grid cols-3">
-        <div class="f"><span class="lt">{{ _('Sort automatically') }} {{ help(_('Sortroom starts a run for this mailbox every few minutes by itself. Off: runs only by hand under "Maintenance" or via the API.')) }}</span>
-          <label class="check"><input type="checkbox" name="schedule_enabled" value="1" {% if form.schedule_enabled in (true, 'on', '1') %}checked{% endif %}>{{ _('Schedule on') }}</label>
+      <div class="sched">
+        <div class="sched-line">
+          <span class="sched-task"><label class="check"><input type="checkbox" name="schedule_enabled" value="1" {% if form.schedule_enabled in (true, 'on', '1') %}checked{% endif %}>{{ _('Sort automatically') }}</label>
+            {{ help(_('Sortroom starts a run for this mailbox every few minutes by itself. Off: runs only by hand under "Maintenance" or via the API.')) }}</span>
+          <span class="interval">{{ _('every') }} <input type="number" name="schedule_minutes" min="1" max="1440" step="1" value="{{ form.schedule_minutes }}" required aria-label="{{ _('Interval in minutes') }}"{{ invalid('schedule_minutes') }}> {{ _('minutes') }}
+            {{ help(_('Time between two runs. If something is running for the mailbox, the run is skipped and made up at the next slot.')) }}</span>
+          {{ sched_status(_('Schedule switched off in this process (SORTROOM_SCHEDULER)') if not schedule.active
+             else _('off') if not schedule.enabled else _('A run is in progress') if schedule.running
+             else _('next run %(time)s', time=schedule.next.strftime('%H:%M')) if schedule.next else _('starts shortly')) }}
         </div>
-        <label class="f"><span class="lt">{{ _('Interval in minutes') }} {{ help(_('Time between two runs. If something is running for the mailbox, the run is skipped and made up at the next slot.')) }}</span>
-          <input type="number" name="schedule_minutes" min="1" max="1440" step="1" value="{{ form.schedule_minutes }}" required>
-        </label>
-        <div class="f"><span class="lt">{{ _('Status') }}</span>
-          <span class="static">{% if not schedule.active %}{{ _('Schedule switched off in this process (SORTROOM_SCHEDULER)') }}
-            {% elif not schedule.enabled %}{{ _('off') }}
-            {% elif schedule.running %}{{ _('A run is in progress') }}
-            {% elif schedule.next %}{{ _('next run %(time)s', time=schedule.next.strftime('%H:%M')) }}
-            {% else %}{{ _('starts shortly') }}{% endif %}</span>
+        {{ field_error('schedule_minutes') }}
+        <div class="sched-line">
+          <span class="sched-task"><label class="check"><input type="checkbox" name="reconcile_enabled" value="1" {% if form.reconcile_enabled in (true, 'on', '1') %}checked{% endif %}>{{ _('Reconcile automatically') }}</label>
+            {{ help(_('Compares the log with the mailbox, like "Reconcile the log with the mailbox" under Maintenance: deleted mails leave "To review", mails filed by hand get their folder. Free of charge, changes nothing on the server. Independent of "Sort automatically".')) }}</span>
+          <span class="interval">{{ _('every') }} <input type="number" name="reconcile_hours" min="1" max="720" step="1" value="{{ form.reconcile_hours }}" required aria-label="{{ _('Interval in hours') }}"{{ invalid('reconcile_hours') }}> {{ _('hours') }}
+            {{ help(_('Time between two reconciles, counted from the last one – also one started by hand. If something is running for the mailbox, it waits until that is done.')) }}</span>
+          {% if not schedule.active %}{{ sched_status(_('Schedule switched off in this process (SORTROOM_SCHEDULER)')) }}
+          {%- elif not schedule.reconcile_enabled %}{{ sched_status(_('off') ~ (' · ' ~ _('last %(when)s', when=schedule.last_reconcile.isoformat()|ago) if schedule.last_reconcile else '')) }}
+          {%- elif schedule.next_reconcile %}{{ sched_status(_('last %(when)s · next %(time)s', when=schedule.last_reconcile.isoformat()|ago, time=schedule.next_reconcile.isoformat()|dt)) }}
+          {%- else %}{{ sched_status(_('starts shortly')) }}{% endif %}
         </div>
-      </div>
-      {# one grid per task: with two columns its status stays below its switch #}
-      <div class="grid cols-3">
-        <div class="f"><span class="lt">{{ _('Reconcile automatically') }} {{ help(_('Compares the log with the mailbox, like "Reconcile the log with the mailbox" under Maintenance: deleted mails leave "To review", mails filed by hand get their folder. Free of charge, changes nothing on the server. Independent of "Sort automatically".')) }}</span>
-          <label class="check"><input type="checkbox" name="reconcile_enabled" value="1" {% if form.reconcile_enabled in (true, 'on', '1') %}checked{% endif %}>{{ _('Schedule on') }}</label>
-        </div>
-        <label class="f"><span class="lt">{{ _('Interval in hours') }} {{ help(_('Time between two reconciles, counted from the last one – also one started by hand. If something is running for the mailbox, it waits until that is done.')) }}</span>
-          <input type="number" name="reconcile_hours" min="1" max="720" step="1" value="{{ form.reconcile_hours }}" required>
-        </label>
-        <div class="f"><span class="lt">{{ _('Status') }}</span>
-          <span class="static">{% if not schedule.active %}{{ _('Schedule switched off in this process (SORTROOM_SCHEDULER)') }}
-            {% elif not schedule.reconcile_enabled %}{{ _('off') }}{% if schedule.last_reconcile %} · {{ _('last %(when)s', when=schedule.last_reconcile.isoformat()|ago) }}{% endif %}
-            {% elif schedule.next_reconcile %}{{ _('last %(when)s · next %(time)s', when=schedule.last_reconcile.isoformat()|ago, time=schedule.next_reconcile.isoformat()|dt) }}
-            {% else %}{{ _('starts shortly') }}{% endif %}</span>
-        </div>
+        {{ field_error('reconcile_hours') }}
       </div>
     </section>
     {# stays in view while the four cards above scroll past: it saves them, not the sender rules below; the
@@ -213,7 +218,6 @@
 <form method="post" action="/ui/m/{{ box.id }}/settings/delete-rules" id="loeschregeln" data-row-template="delete-row" data-guard="{{ _('Deletion rules') }}">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <input type="hidden" name="rows" value="{{ delete_rules|length }}">
-  <datalist id="known-folders">{% for f in folders %}<option value="{{ f }}">{% endfor %}</datalist>
   <fieldset {% if not editable %}disabled{% endif %} class="stack">
     <section class="card stack rules-box">
       <div>
