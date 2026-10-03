@@ -164,7 +164,7 @@
             <td class="rule-del">{% if editable %}<button class="icon-btn rule-remove" type="button" aria-label="{{ _('Remove rule') }}" title="{{ _('Remove rule') }}">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>{% endif %}</td>
           </tr>{% endmacro %}
-<form method="post" action="/ui/m/{{ box.id }}/settings/sender-rules" id="regeln" data-guard="{{ _('Sender rules') }}">
+<form method="post" action="/ui/m/{{ box.id }}/settings/sender-rules" id="regeln" data-row-template="rule-row" data-guard="{{ _('Sender rules') }}">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   {# row numbers only grow; a removed row simply leaves a gap the server skips #}
   <input type="hidden" name="rows" value="{{ rules|length }}">
@@ -194,6 +194,45 @@
     </section>
   </fieldset>
 </form>
+{% macro delete_row(i, r) %}<tr>
+            <td><input type="text" name="dfolder_{{ i }}" value="{{ r.folder }}" list="known-folders" aria-label="{{ _('Folder') }}" placeholder="INBOX/…" spellcheck="false"></td>
+            <td class="days"><input type="number" name="ddays_{{ i }}" value="{{ r.days }}" min="1" max="3650" step="1" aria-label="{{ _('Older than (days)') }}"></td>
+            <td class="tick"><input type="checkbox" name="dread_{{ i }}" value="1" {% if r.only_read %}checked{% endif %} aria-label="{{ _('Only read mails') }}"></td>
+            <td class="tick"><input type="checkbox" name="dstar_{{ i }}" value="1" {% if r.starred %}checked{% endif %} aria-label="{{ _('Starred mails too') }}"></td>
+            <td class="rule-del">{% if editable %}<button class="icon-btn rule-remove" type="button" aria-label="{{ _('Remove rule') }}" title="{{ _('Remove rule') }}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>{% endif %}</td>
+          </tr>{% endmacro %}
+<form method="post" action="/ui/m/{{ box.id }}/settings/delete-rules" id="loeschregeln" data-row-template="delete-row" data-guard="{{ _('Deletion rules') }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="rows" value="{{ delete_rules|length }}">
+  <datalist id="known-folders">{% for f in folders %}<option value="{{ f }}">{% endfor %}</datalist>
+  <fieldset {% if not editable %}disabled{% endif %} class="stack">
+    <section class="card stack rules-box">
+      <div>
+        <h2>{{ _('Deletion rules') }} {{ help(_('Empty folders such as Promotions automatically: mail that arrived on the server more than the given number of days ago is moved to the trash of the mailbox, where it can still be taken back. The inbox, trash, spam, sent and drafts can\'t have a rule.')) }}</h2>
+        <p class="muted hint">{{ _('Applied once a day, and under Maintenance by hand – try a dry run there first. Starred mail stays unless "Starred too" is ticked.') }}</p>
+      </div>
+      <p class="muted no-rules">{{ _('No deletion rules – nothing is moved to the trash.') }}</p>
+      <div class="scroll-x"><table class="rules deleterules">
+        <thead><tr><th scope="col">{{ _('Folder') }}</th><th scope="col">{{ _('Older than (days)') }}</th>
+          <th scope="col">{{ _('Only read') }}</th><th scope="col">{{ _('Starred too') }}</th><th scope="col"><span class="sr-only">{{ _('Remove') }}</span></th></tr></thead>
+        <tbody>
+        {% for r in delete_rules %}
+          {{ delete_row(loop.index0, r) }}
+        {% endfor %}
+        </tbody>
+      </table></div>
+      {% if editable %}
+      <template id="delete-row">{{ delete_row('__i__', {'folder': '', 'days': 30, 'only_read': false, 'starred': false}) }}</template>
+      <div class="actions">
+        <button class="btn rule-add" type="button">{{ _('+ Add rule') }}</button>
+        <button class="btn primary" type="submit">{{ _('Save deletion rules') }}</button>
+        <span class="hint unsaved" hidden>{{ _('Not saved yet') }}</span>
+      </div>
+      {% endif %}
+    </section>
+  </fieldset>
+</form>
 {% if deletable %}
 <section class="card stack danger-zone">
   <div><h2>{{ _('Delete mailbox') }}</h2>
@@ -212,9 +251,9 @@
 <script src="{{ asset('mailbox-id.js') }}"></script>
 <script src="{{ asset('login-method.js') }}"></script>
 <script>
-  // add and remove rule rows in place; nothing is saved until "Save rules"
-  (() => {
-    const form = document.getElementById('regeln'), tpl = document.getElementById('rule-row');
+  // add and remove rule rows in place (sender rules, deletion rules); nothing is saved until "Save …"
+  document.querySelectorAll('form[data-row-template]').forEach(form => {
+    const tpl = document.getElementById(form.dataset.rowTemplate);
     if (!tpl) return;
     const body = form.querySelector('tbody'), rows = form.querySelector('[name=rows]');
     const unsaved = () => form.dispatchEvent(new Event('change', {bubbles: true}));  // see unsaved.js
@@ -230,6 +269,6 @@
         unsaved();
       }
     });
-  })();
+  });
 </script>
 {% endblock %}

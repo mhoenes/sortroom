@@ -247,6 +247,30 @@ def test_settings_page_and_rules(client, setup):
     assert [(x.match, x.action) for x in _box(setup).cfg.sender_rules] == [("@shop.de", "werbung")]
 
 
+def test_deletion_rules_in_the_settings(client, setup):
+    html = client.get("/ui/m/privat/settings").text
+    assert "Keine Lösch-Regeln" in html and '<template id="delete-row">' in html
+    assert '<option value="INBOX/Werbung">' in html  # the categories' folders are suggested
+    form = {"csrf": _csrf(html), "rows": "3", "dfolder_0": "INBOX/Werbung", "ddays_0": "30", "dread_0": "1",
+            "dfolder_1": "", "ddays_1": "7", "dfolder_2": "INBOX/Werbung/Abgelaufen", "ddays_2": "7", "dstar_2": "1"}
+    r = client.post("/ui/m/privat/settings/delete-rules", data=form, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].endswith("#loeschregeln")
+    rules = _box(setup).cfg.delete_rules
+    assert [(x.folder, x.days, x.only_read, x.starred) for x in rules] == [
+        ("INBOX/Werbung", 30, True, False), ("INBOX/Werbung/Abgelaufen", 7, False, True)]
+    text = (setup / "mailboxes" / "privat" / "mailbox.toml").read_text(encoding="utf-8")
+    assert '[[delete_rules]]\nfolder = "INBOX/Werbung"\ndays = 30\nonly_read = true' in text
+    html = client.get("/ui/m/privat/settings").text
+    assert 'name="dfolder_1" value="INBOX/Werbung/Abgelaufen"' in html
+    for bad, message in (({"dfolder_0": "INBOX", "ddays_0": "3"}, "Posteingang"),
+                         ({"dfolder_0": "X", "ddays_0": "0"}, "ganze Zahl")):
+        r = client.post("/ui/m/privat/settings/delete-rules", data={"csrf": _csrf(html), "rows": "1", **bad})
+        assert r.status_code == 422 and message in r.text
+    client.post("/ui/m/privat/settings/delete-rules", data={"csrf": _csrf(html), "rows": "0"})
+    assert _box(setup).cfg.delete_rules == ()
+    assert "delete_rules" not in (setup / "mailboxes" / "privat" / "mailbox.toml").read_text(encoding="utf-8")
+
+
 def test_read_only_mailbox_page(client, setup):
     path = setup / "mailboxes" / "privat" / "mailbox.toml"
     os.chmod(path, stat.S_IREAD)

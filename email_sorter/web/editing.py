@@ -18,7 +18,7 @@ import tomlkit
 from tomlkit.items import AoT, Table
 
 from .. import jobs
-from ..config import (IMAP_AUTHS, INBOX_ACTION, SECRETS_FILE, Config, ConfigError, Mailbox, _read_toml,
+from ..config import (DELETE_MAX_DAYS, IMAP_AUTHS, INBOX_ACTION, SECRETS_FILE, Config, ConfigError, Mailbox, _read_toml,
                       config_from_raw, default_label, mailbox_id_for, read_secrets, secrets_writable, valid_mailbox_id,
                       write_secrets)
 from ..i18n import DEFAULT_LANGUAGE, LANGUAGES, THEMES, _
@@ -345,35 +345,72 @@ def save_sender_rules(box: Mailbox, shared_path: Path, rules: list[tuple[str, st
         if action != INBOX_ACTION and action not in categories:
             raise EditError(_("Unknown target \"%(target)s\" for %(match)s.", target=action, match=match))
         clean.append((match, action))
-    old = doc.get("sender_rules")
-    if [(t.get("match"), t.get("action")) for t in old or []] == clean:
-        return  # nothing changed; leave the file as it is
-    # A comment block before the next section is parsed as the tail of the last rule; take it
-    # off and put it back after the new last rule, so it stays in front of that section.
+    if _replace_tables(doc, "sender_rules", [{"match": m, "action": a} for m, a in clean]):
+        _save(box, doc, shared_path)
+
+
+def _replace_tables(doc: tomlkit.TOMLDocument, key: str, rows: list[dict]) -> bool:
+    """Make the array of tables `key` hold `rows`, in order; False when it already did (the file then stays
+    as it is). Unchanged entries keep their own comments."""
+    old = doc.get(key)
+    if [dict(t) for t in old or []] == rows:
+        return False
+    # A comment block before the next section is parsed as the tail of the last entry; take it
+    # off and put it back after the new last entry, so it stays in front of that section.
     trailing = _detach_trailing(old[-1]) if old else []
     unused = list(old) if old else []
     aot = AoT([])
-    for match, action in clean:
-        # unchanged rules keep their own comments
-        same = next((t for t in unused if t.get("match") == match and t.get("action") == action), None)
+    for row in rows:
+        same = next((t for t in unused if dict(t) == row), None)
         if same is not None:
             unused.remove(same)
             aot.append(same)
         else:
             t = tomlkit.table()
-            t["match"] = match
-            t["action"] = action
+            for name, value in row.items():
+                t[name] = value
             aot.append(t)
-    if clean:
+    if rows:
         aot[-1].value.body.extend(trailing)
-        doc["sender_rules"] = aot
+        doc[key] = aot
     elif old is not None:
-        idx = next(i for i, (k, _) in enumerate(doc.body) if k and k.key == "sender_rules")
+        idx = next(i for i, (k, _) in enumerate(doc.body) if k and k.key == key)
         before = doc.body[idx - 1][1] if idx else None
-        del doc["sender_rules"]
+        del doc[key]
         if isinstance(before, Table):
             before.value.body.extend(trailing)
-    _save(box, doc, shared_path)
+    return True
+
+
+@_one_at_a_time
+def save_delete_rules(box: Mailbox, shared_path: Path, rules: list[dict]) -> None:
+    """Replace all deletion rules: dicts with folder, days, only_read, starred. Empty folders are skipped."""
+    doc = _doc(box)
+    source = str((doc.get("imap") or {}).get("source_folder", "INBOX")).strip("/")
+    clean: list[dict] = []
+    for r in rules:
+        folder = str(r.get("folder") or "").strip().strip("/")
+        if not folder:
+            continue
+        if len(folder) > 200 or not _FOLDER_RE.match(folder):
+            raise EditError(_("Deletion rule: invalid folder name \"%(folder)s\".", folder=folder[:40]))
+        if folder.lower() == source.lower():
+            raise EditError(_("The inbox can't have a deletion rule."))
+        try:
+            days = int(str(r.get("days") or "").strip())
+        except ValueError:
+            days = 0
+        if not 1 <= days <= DELETE_MAX_DAYS:
+            raise EditError(_("Deletion rule for %(folder)s: the age is a whole number of days from 1 to %(max)s.",
+                              folder=folder, max=DELETE_MAX_DAYS))
+        row: dict = {"folder": folder, "days": days}
+        if r.get("only_read"):
+            row["only_read"] = True
+        if r.get("starred"):
+            row["starred"] = True
+        clean.append(row)
+    if _replace_tables(doc, "delete_rules", clean):
+        _save(box, doc, shared_path)
 
 
 def _detach_trailing(table: Table) -> list:
@@ -413,10 +450,11 @@ def _renamed_path(path: str | None, old: str, new: str) -> str | None:
 
 @_one_at_a_time
 def rename_folder_refs(box: Mailbox, shared_path: Path, old: str, new: str) -> int:
-    """Point category folders and expired folders below `old` to `new`. Returns how many changed."""
+    """Point category folders, expired folders and deletion rules below `old` to `new`. Returns how many changed."""
     doc = _doc(box)
     changed = 0
-    tables = [doc.get("rules") or {}] + list((doc.get("categories") or {}).values())
+    tables = ([doc.get("rules") or {}] + list((doc.get("categories") or {}).values())
+              + list(doc.get("delete_rules") or []))
     for table in tables:
         for key in ("folder", "expired_folder"):
             renamed = _renamed_path(table.get(key), old, new)

@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS corrections (
     how             TEXT NOT NULL                -- 'ui' (Mails page) or 'reconcile' (moved by hand, seen by reconcile)
 );
 CREATE TABLE IF NOT EXISTS meta (
-    key             TEXT PRIMARY KEY,            -- last_reconcile: when the log was last reconciled for real
+    key             TEXT PRIMARY KEY,            -- last_reconcile / last_cleanup: when that last ran for real
     value           TEXT NOT NULL
 );
 """
@@ -401,16 +401,26 @@ def _like_prefix(folder: str) -> str:
     return escaped + "/%"
 
 
-def last_reconcile(workspace: Path) -> datetime | None:
-    """When the mailbox's log was last reconciled for real; None if never. Opens the log read-only."""
+def meta_time(workspace: Path, key: str) -> datetime | None:
+    """A time kept in the mailbox's log (last_reconcile, last_cleanup); None if never. Opens it read-only."""
     path = workspace / "data" / "state.db"
     if not path.exists():
         return None
     db = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
     try:
-        row = db.execute("SELECT value FROM meta WHERE key = 'last_reconcile'").fetchone()
+        row = db.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
     except sqlite3.OperationalError:  # a log from before the meta table
         return None
     finally:
         db.close()
     return datetime.fromisoformat(row[0]) if row else None
+
+
+def last_reconcile(workspace: Path) -> datetime | None:
+    """When the mailbox's log was last reconciled for real."""
+    return meta_time(workspace, "last_reconcile")
+
+
+def last_cleanup(workspace: Path) -> datetime | None:
+    """When the deletion rules last ran for real."""
+    return meta_time(workspace, "last_cleanup")

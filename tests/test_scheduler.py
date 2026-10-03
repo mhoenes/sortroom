@@ -13,7 +13,8 @@ T0 = datetime(2026, 9, 26, 12, 0)
 
 
 def _box(box_id, enabled=True, minutes=10, tmp=None):
-    cfg = SimpleNamespace(schedule_enabled=enabled, schedule_minutes=minutes, reconcile_enabled=False, reconcile_hours=24)
+    cfg = SimpleNamespace(schedule_enabled=enabled, schedule_minutes=minutes, reconcile_enabled=False, reconcile_hours=24,
+                          delete_rules=())
     return SimpleNamespace(id=box_id, cfg=cfg, lock_path=(tmp / box_id / "run.lock") if tmp else None)
 
 
@@ -169,6 +170,28 @@ def test_reconcile_once_a_day_after_the_last_one():
     assert s.tick(T0 + timedelta(hours=44)) == ["privat:reconcile"]
     box.cfg.reconcile_enabled = False                           # switched off
     assert s.tick(T0 + timedelta(days=5)) == []
+
+
+def test_deletion_rules_once_a_day_and_only_with_rules():
+    box = _box("privat", enabled=False)
+    last = {"privat": None}
+    calls, cleanup = _reconciler()
+    s = scheduler.Scheduler(lambda: {"privat": box}, Recorder(), lambda b: True, lambda b: None,
+                            cleanup_box=cleanup, last_cleaned=lambda b: last[b.id])
+    assert s.tick(T0 + timedelta(hours=1)) == []                 # no rules: nothing to do
+    box.cfg.delete_rules = ("a rule",)
+    assert s.tick(T0 + timedelta(hours=2)) == []                 # rules just added: a moment later
+    assert s.tick(T0 + timedelta(hours=2) + scheduler.FIRST_RUN_DELAY) == ["privat:cleanup"]
+    _wait_idle(s)
+    assert calls == ["privat"]
+    last["privat"] = T0 + timedelta(hours=2)
+    assert s.tick(T0 + timedelta(hours=25)) == []
+    assert s.tick(T0 + timedelta(hours=27)) == ["privat:cleanup"]
+    _wait_idle(s)
+    box.cfg.reconcile_enabled = True                              # both due: the reconcile first
+    s.cleaned.clear()
+    last["privat"] = T0
+    assert s.tick(T0 + timedelta(days=3)) == ["privat:reconcile"]
 
 
 def test_a_busy_reconcile_is_retried_and_a_run_goes_first():

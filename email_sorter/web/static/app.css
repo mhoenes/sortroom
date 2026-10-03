@@ -343,6 +343,9 @@ tr.changed td { background: var(--row-changed); }
 table.rules input[type=text], table.rules select { width: 100%; }
 table.rules td { padding: 6px 8px; }
 table.rules td.rule-del { width: 44px; }
+table.deleterules td.days { width: 140px; }
+table.deleterules td.tick { width: 90px; text-align: center; }
+table.deleterules td.tick input { width: 18px; height: 18px; accent-color: var(--accent); }
 .rules-box:has(tbody tr) .no-rules, .rules-box:not(:has(tbody tr)) .scroll-x { display: none; }
 .no-rules { margin: 0; }
 .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px;
