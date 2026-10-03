@@ -33,7 +33,7 @@
 <datalist id="known-folders">{% for f in folders %}<option value="{{ f }}">{% endfor %}</datalist>
 
 {# both lists in one form with one save; row numbers only grow, a removed row leaves a gap the server skips #}
-<form method="post" action="/ui/m/{{ box.id }}/rules" data-guard="{{ _('Rules') }}">
+<form method="post" action="/ui/m/{{ box.id }}/rules" {% if error or tested %}data-dirty{% endif %} data-guard="{{ _('Rules') }}">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <fieldset {% if not editable %}disabled{% endif %} class="stack">
     <section class="card stack rules-box" id="sender-rules" data-row-template="rule-row">

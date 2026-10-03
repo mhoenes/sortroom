@@ -156,6 +156,11 @@ a.card.link:hover { border-color: var(--line-strong); }
 .btn:hover { border-color: var(--faint); color: var(--ink); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
 .btn.primary:hover { background: var(--accent-ink); }
+/* the save bar's button stands out once there is something to save (unsaved.js marks the form .dirty);
+   without JavaScript it always does */
+.js form[data-guard]:not(.dirty) .savebar .btn.primary { background: var(--surface); border-color: var(--line-strong);
+  color: var(--ink); font-weight: 500; }
+.rename-view { gap: 10px; }
 .btn.small { height: 36px; padding: 0 12px; font-size: 13px; }
 /* an action that tries something out (Check model, Send test mail): tinted, so it doesn't pass for a field */
 .btn.tonal { gap: 8px; background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent-ink); font-weight: 600; }

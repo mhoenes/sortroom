@@ -32,5 +32,17 @@
     const show = () => { note.hidden = input.value.trim() === input.dataset.current; };
     input.addEventListener('input', show);
     show();
+    // shown as text with "Rename" until it is to be changed – unless it was changed already or is wrong
+    const view = input.parentElement.querySelector('.rename-view');
+    if (!view || input.value !== input.dataset.current || input.getAttribute('aria-invalid')) return;
+    input.hidden = true;
+    view.hidden = false;
+    const open = view.querySelector('button');
+    if (open) open.addEventListener('click', () => {
+      view.hidden = true;
+      input.hidden = false;
+      input.focus();
+      input.select();
+    });
   });
 })();

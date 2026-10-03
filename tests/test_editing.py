@@ -432,6 +432,8 @@ def test_an_error_shows_at_its_field(client, setup):
         r = client.post("/ui/m/privat/settings", data=_settings_form(html, **{field: value}))
         assert r.status_code == 422 and f'aria-describedby="error-{field}" autofocus' in r.text
         assert f'id="error-{field}">' in r.text and 'class="banner err"' not in r.text  # at the field, not on top
+        assert "data-dirty" in r.text  # what was entered is not saved: unsaved.js says so
+    assert '<span class="static rename-view" hidden>' in html and "data-dirty" not in html  # "Rename" (JS)
 
 
 def test_rename_is_refused_while_the_mailbox_is_busy(client, setup):
