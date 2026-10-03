@@ -427,7 +427,8 @@ def _shared_page(request: Request, form: dict | None = None, error: str | None =
         **_sidebar(request, boxes, None, "shared"), "form": form, "error": error, "editable": shared_writable(path),
         "config_name": path.name, "languages": i18n.LANGUAGES, "secrets_file": SECRETS_FILE, "retype": retype,
         "key_set": key_set, "key_error": key_error, "smtp_password_set": bool(smtp_password(path)),
-        "retype_smtp": retype_smtp, "key_writable": secrets_writable(secrets)}, status)
+        "retype_smtp": retype_smtp, "key_writable": secrets_writable(secrets),
+        "tested": request.session.pop("tested", None)}, status)
 
 
 @router.get("/ui/settings", response_class=HTMLResponse, dependencies=[Depends(require_login)])
@@ -461,14 +462,13 @@ async def shared_settings_save(request: Request):
             form[name] = _flag(form, name)
         return _shared_page(request, form=form, error=str(e), status=422, retype=retype, retype_smtp=retype_smtp)
     _flash(request, _("Saved. Applies to all mailboxes from the next run."))
-    if form.get("then") == "check":  # "Save and check model": test what was just saved
-        tone, text = await run_in_threadpool(_check_model, _shared_path(request))
-        _flash(request, text, tone)
-    elif form.get("then") == "testmail":
-        tone, text = await run_in_threadpool(_test_mail, _shared_path(request))
-        _flash(request, text, tone)
-    return RedirectResponse("/ui/settings#mail" if form.get("then") == "testmail" else "/ui/settings",
-                            status_code=303)
+    tests = {"check": ("model", _check_model), "testmail": ("mail", _test_mail)}
+    if form.get("then") in tests:  # "Save & check" / "Save & send a test mail": test what was just saved
+        card, test = tests[form["then"]]
+        tone, text = await run_in_threadpool(test, _shared_path(request))
+        request.session["tested"] = [card, tone, text]  # shown in that card, by its button
+        return RedirectResponse(f"/ui/settings#{card}", status_code=303)
+    return RedirectResponse("/ui/settings", status_code=303)
 
 
 def _test_mail(shared_path) -> tuple[str, str]:
