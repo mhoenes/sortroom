@@ -121,7 +121,9 @@ def _locked_for(ip: str) -> float:
 @router.get("/login", response_class=HTMLResponse)
 def login_form(request: Request, next: str = "/ui"):
     return templates.TemplateResponse(request, "login.html", {
-        "next": _safe_next(next), "error": None, "configured": len(admin_password()) >= 8})
+        "next": _safe_next(next), "error": None, "configured": len(admin_password()) >= 8,
+        # sent here from a page that needs the login (a session that ended, or a first visit): say why
+        "notice": _("Please log in to continue.") if "next" in request.query_params else None})
 
 
 @router.post("/login", response_class=HTMLResponse)
@@ -132,7 +134,7 @@ def login(request: Request, password: str = Form(""), next: str = Form("/ui")):
     if wait > 0:  # not even the right password gets in now, or guessing would just go on
         minutes = max(1, math.ceil(wait / 60))
         return templates.TemplateResponse(request, "login.html", {
-            "next": _safe_next(next), "configured": configured,
+            "next": _safe_next(next), "configured": configured, "locked": True,
             "error": i18n.ngettext("Too many failed logins. Please try again in %(num)s minute.",
                                    "Too many failed logins. Please try again in %(num)s minutes.", minutes)},
             status_code=429)

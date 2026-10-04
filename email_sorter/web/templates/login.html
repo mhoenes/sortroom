@@ -27,11 +27,14 @@
       {# the one account, named for password managers, which want a user name next to a password to fill and save it #}
       <input class="sr-only" type="text" name="username" value="admin" autocomplete="username" tabindex="-1" aria-hidden="true" readonly>
       <label class="f">{{ _('Password') }}
-        <span class="pw"><input type="password" name="password" autocomplete="current-password" autofocus required></span>
+        <span class="pw"><input type="password" name="password" autocomplete="current-password" required
+          {%- if locked %} disabled{% else %} autofocus{% endif %}
+          {%- if error and not locked %} aria-invalid="true" aria-describedby="login-error"{% endif %}></span>
       </label>
-      {% if error %}<p class="error" role="alert" style="margin:0">{{ error }}</p>{% endif %}
+      {% if notice and not error %}<p class="muted" role="status" style="margin:0;font-size:13px">{{ notice }}</p>{% endif %}
+      {% if error %}<p class="error" id="login-error" role="alert" style="margin:0">{{ error }}</p>{% endif %}
       <input type="hidden" name="next" value="{{ next }}">
-      <button class="btn primary" type="submit">{{ _('Log in') }}</button>
+      <button class="btn primary" type="submit"{% if locked %} disabled{% endif %}>{{ _('Log in') }}</button>
     {% endif %}
   </form>
   <script src="{{ asset('login.js') }}" data-show="{{ _('Show password') }}" data-hide="{{ _('Hide password') }}"></script>
