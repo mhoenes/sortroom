@@ -118,6 +118,7 @@ def _category_page(request: Request, box_id: str, cat: str = "", new: bool = Fal
     if cat and cat not in box.cfg.categories and not new:
         raise HTTPException(404, _("Unknown category"))
     current = box.cfg.categories.get(cat) if not new else None
+    dirty = form is not None  # what was entered, back after an error: not saved
     if form is None:
         form = {"key": cat, "label": current.label if current else "",
                 "description": current.description if current else "",
@@ -126,15 +127,19 @@ def _category_page(request: Request, box_id: str, cat: str = "", new: bool = Fal
                 "flag_on_action": current.flag_on_action if current else True,
                 "track_expiry": current.track_expiry if current else False,
                 "expired_folder": (current.expired_folder or "") if current else ""}
+        # back from a model test: the form as it was sent to the test, every field, not saved yet
         draft = request.query_params.get("draft")
         job = _trials.get(draft or "")
         if job and job["box"] == box.id and job["key"] == (cat or job["key"]):
-            form["description"] = job["description"]
+            form = {**form, **job.get("form", {}), "description": job["description"]}
+            dirty = True
+        elif draft:
+            error = _("The draft from the test is gone (tests are only kept until the next restart).")
     rules_using = {r.action for r in box.cfg.sender_rules}
     return _page(request, "categories.html", {
         **_sidebar(request, boxes, box, "categories"), "box": box, "cat": cat, "new": new, "form": form,
         "counts": counts, "rates": rates, "error": error, "editable": writable(box), "rules_using": rules_using,
-        "sample": (OWN_SAMPLE, OTHER_SAMPLE)}, status)
+        "sample": (OWN_SAMPLE, OTHER_SAMPLE), "dirty": dirty}, status)
 
 
 @router.get("/ui/m/{box_id}/categories", response_class=HTMLResponse, dependencies=[Depends(require_login)])
@@ -170,19 +175,22 @@ async def categories_test(request: Request, box_id: str):
     key = str(form.get("key") or "").strip().lower()
     description = str(form.get("description") or "").strip()
     new = form.get("new") == "1"
+    view = {**form, **{k: form.get(k) == "on" for k in ("flag", "flag_on_action", "track_expiry")}}
     if not key or not description or len(description) > 4000:
-        view = {**form, **{k: form.get(k) == "on" for k in ("flag", "flag_on_action", "track_expiry")}}
         return _category_page(request, box_id, cat=key, new=new, form=view,
                               error=_("The test needs a key and a description."), status=422)
-    if any(j["box"] == box.id and j["status"] == "running" for j in _trials.values()):
-        _flash(request, _("A test is already running for this mailbox."), "warn")
-        return RedirectResponse(f"/ui/m/{box.id}/categories?cat={quote(key)}", status_code=303)
+    if any(j["box"] == box.id and j["status"] == "running" for j in _trials.values()):  # the form stays as it is
+        return _category_page(request, box_id, cat=key, new=new, form=view,
+                              error=_("A test is already running for this mailbox."), status=409)
     try:
         creds = load_credentials(box)
     except ConfigError as e:
         raise HTTPException(500, str(e)) from None
+    # the whole form goes along, so coming back from the test brings every field back, not just the description
+    entered = {**{k: str(form.get(k) or "") for k in ("label", "folder", "expired_folder")},
+               **{k: form.get(k) == "on" for k in ("flag", "flag_on_action", "track_expiry")}, "key": key}
     job: dict[str, Any] = {"id": uuid.uuid4().hex[:12], "box": box.id, "key": key, "new": new,
-                           "description": description,
+                           "description": description, "form": entered,
            "status": "running", "done": 0, "total": 0, "rows": [], "cost": 0.0, "error": None,
            "started": time.time()}
     with _trials_lock:

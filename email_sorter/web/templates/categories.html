@@ -42,7 +42,7 @@
     {% set r = rates.get(cat) if not new else none %}
     {% if r and r[0] %}<p class="muted" style="margin:0">{{ ngettext('In the last 30 days the model filed %(num)s mail here; %(corrected)s of them (%(pct)s) were put elsewhere by hand.', 'In the last 30 days the model filed %(num)s mails here; %(corrected)s of them (%(pct)s) were put elsewhere by hand.', r[0], corrected=r[1]|num, pct=percent(r[1], r[0])) }}</p>{% endif %}
     {% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
-    <form method="post" action="/ui/m/{{ box.id }}/categories" class="stack" data-guard="{{ _('the category %(name)s', name=form.label or form.key) if not new else _('the new category') }}">
+    <form method="post" action="/ui/m/{{ box.id }}/categories" class="stack" {% if dirty %}data-dirty{% endif %} data-guard="{{ _('the category %(name)s', name=form.label or form.key) if not new else _('the new category') }}">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       {% if new %}<input type="hidden" name="new" value="1">{% endif %}
       <fieldset {% if not editable %}disabled{% endif %} class="stack">

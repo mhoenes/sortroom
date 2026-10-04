@@ -243,6 +243,7 @@ def test_category_error_is_shown(client):
     r = client.post("/ui/m/privat/categories", data={"csrf": _csrf(html), "new": "1", "key": "finanzen",
                                                      "description": "x"})
     assert r.status_code == 422 and "gibt es schon" in r.text
+    assert "data-dirty" in r.text  # what was entered came back, not saved
 
 
 def test_dry_run_of_the_deletion_rules_in_the_page(client, setup, monkeypatch):
@@ -337,8 +338,11 @@ def test_trial_job_page(client, setup, monkeypatch):
     monkeypatch.setattr(editor, "run_trial", lambda *a, **k: (rows, 0.0002))
     editor._trials.clear()
     html = client.get("/ui/m/privat/categories?cat=werbung").text
-    r = client.post("/ui/m/privat/categories/test", data={"csrf": _csrf(html), "key": "werbung",
-                                                          "description": "Entwurf"}, follow_redirects=False)
+    assert "data-dirty" not in html
+    # other fields changed but not saved go along with the test
+    form = {"csrf": _csrf(html), "key": "werbung", "description": "Entwurf", "label": "Angebote",
+            "folder": "INBOX/Angebote", "flag": "on", "track_expiry": "on", "expired_folder": "INBOX/Alt"}
+    r = client.post("/ui/m/privat/categories/test", data=form, follow_redirects=False)
     assert r.status_code == 303
     job = r.headers["location"].rsplit("/", 1)[1]
     deadline = time.monotonic() + 5
@@ -346,8 +350,24 @@ def test_trial_job_page(client, setup, monkeypatch):
         pass  # the worker thread finishes at once
     html = client.get(r.headers["location"]).text
     assert "Kämen neu dazu" in html and "Rechnung" in html and "nicht mehr im Ordner" in html
-    html = client.get(f"/ui/m/privat/categories?cat=werbung&draft={job}").text
-    assert ">Entwurf</textarea>" in html
+    back = f"/ui/m/privat/categories?cat=werbung&amp;draft={job}"
+    assert html.count(f'href="{back}"') == 2  # "Back to the form" and "Put the draft into the form"
+    # back in the form: every field as sent to the test, marked as not saved
+    html = client.get(back.replace("&amp;", "&")).text
+    assert ">Entwurf</textarea>" in html and 'value="Angebote"' in html and 'value="INBOX/Angebote"' in html
+    assert 'name="flag" checked' in html and 'name="track_expiry" id="track_expiry" checked' in html
+    assert 'value="INBOX/Alt"' in html and "data-dirty" in html
+    assert 'name="flag_on_action" checked' not in html  # off in the form sent
+    assert _box(setup).cfg.categories["werbung"].label == "Werbung"  # nothing saved
+    html = client.get("/ui/m/privat/categories?cat=werbung&draft=weg").text  # e.g. after a restart
+    assert "Der Entwurf aus dem Test ist nicht mehr da" in html and "data-dirty" not in html
+
+    # a test already running: the form stays as it was entered
+    editor._trials[job]["status"] = "running"
+    r = client.post("/ui/m/privat/categories/test", data={**form, "description": "Noch einer"})
+    assert r.status_code == 409 and "Es läuft schon ein Test" in r.text
+    assert ">Noch einer</textarea>" in r.text and 'value="Angebote"' in r.text and "data-dirty" in r.text
+    editor._trials[job]["status"] = "done"
 
 
 def test_schedule_settings_saved(client, setup):

@@ -8,7 +8,9 @@
     <h1>{{ _('Test: %(category)s', category=cat_label) }}{% if job.new %} {{ _('(new)') }}{% endif %}</h1>
     <div class="sub">{{ _('The model files already sorted mails with the new description · nothing is moved or saved') }}</div>
   </div>
-  <a class="btn" href="/ui/m/{{ box.id }}/categories?{{ 'new=1' if job.new else 'cat=' ~ job.key }}">{{ _('Back') }}</a>
+  {# back to the form as it was sent to the test: every field, not saved yet #}
+  {% set back = '/ui/m/' ~ box.id ~ '/categories?' ~ ('new=1&' if job.new else '') ~ 'cat=' ~ job.key|urlencode ~ '&draft=' ~ job.id %}
+  <a class="btn" href="{{ back }}">{{ _('Back to the form') }}</a>
 </div>
 
 <section class="card stack">
@@ -50,7 +52,7 @@
 </section>
 
 <div class="actions">
-  <a class="btn primary" href="/ui/m/{{ box.id }}/categories?{{ 'new=1&' if job.new }}cat={{ job.key }}&draft={{ job.id }}">{{ _('Put the draft into the form') }}</a>
+  <a class="btn primary" href="{{ back }}">{{ _('Put the draft into the form') }}</a>
   <span class="muted" style="font-size:13px">{{ _('Nothing is saved until "Save" in the form.') }}</span>
 </div>
 {% endif %}
