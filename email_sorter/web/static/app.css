@@ -506,6 +506,14 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
 .runmails .pick input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
 .runmails td.route { color: var(--muted); }
 .runmails .pick-all-label { display: none; }
+.runmails td.route b { font-weight: 500; color: var(--ink); }
+.runmails .unstar { white-space: nowrap; }
+/* choosing the mails of a run by where it put them */
+.pick-by { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pick-by .btn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); }
+.after-choice { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; }
+.after-choice legend { padding: 0; margin-bottom: 2px; }
+.after-choice .warn-note { margin: 4px 0 0 26px; color: var(--warn); font-size: 13px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 .expired { color: var(--muted); text-decoration: line-through; }

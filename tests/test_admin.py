@@ -374,6 +374,31 @@ def test_first_mailbox_from_the_example(client, setup):
     assert box.cfg.sender_rules == ()
 
 
+def test_undo_page_choose_by_target_back_where_and_afterwards(client, setup):
+    started = datetime(2026, 9, 30, 10, 0, 0)
+    store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
+    store.track(started)
+    recent = (datetime.now().astimezone() - timedelta(days=1)).isoformat(timespec="minutes")
+    for key, cat, folder, received, flag in (("<a@x>", "werbung", "INBOX/Werbung", recent, True),
+                                            ("<b@x>", "werbung", "INBOX/Werbung", recent, False),
+                                            ("<c@x>", "finanzen", "INBOX/Finanzen", "2026-01-05T10:00+01:00", False)):
+        store.record(SimpleNamespace(key=key, received=received, sender="a@b.de", subject=key,
+                                     decision=Decision(cat, 0.9, {}, 0.1, 0.0001), folder=folder, flag=flag,
+                                     expires=None))
+    store.record_run("run", None, started, started, RunResult(exit_code=0, live=True, classified=3, moved=3))
+    store.close()
+    html = client.get("/ui/m/privat/undo?run=2026-09-30T10%3A00%3A00").text
+    # what the run did, and choosing just the mails of one target
+    assert "2 nach Werbung, 1 nach Finanzen" in html
+    assert 'data-pick="INBOX/Werbung" aria-pressed="false">Werbung (2)</button>' in html
+    assert 'data-pick="INBOX/Finanzen" aria-pressed="false">Finanzen (1)</button>' in html
+    # where undoing takes them, and the star it removes
+    assert "Zurück: von → nach" in html and "Werbung → <b>Posteingang</b>" in html and "Stern wird entfernt" in html
+    # afterwards: a visible choice; the old mail can't be picked up by the next run
+    assert 'name="sort_again" value="" checked' in html and 'name="sort_again" value="1">' in html
+    assert "1 der Mails ist älter als 7 Tage" in html
+
+
 def test_undo_a_run_from_the_run_log(client, setup, monkeypatch):
     started = datetime(2026, 9, 30, 10, 0, 0)
     store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
@@ -395,7 +420,8 @@ def test_undo_a_run_from_the_run_log(client, setup, monkeypatch):
     html = client.get("/ui/m/privat/maintenance").text  # the run can be picked there too
     assert '<option value="2026-09-30T10:00:00">' in html and 'action="/ui/m/privat/undo"' in html
     html = client.get(link).text                          # its page lists the mails, all chosen
-    assert "Rechnung" in html and "a@b.de" in html and 'name="key" value="&lt;m2@x&gt;" checked' in html
+    assert "Rechnung" in html and "a@b.de" in html
+    assert 'name="key" value="&lt;m2@x&gt;" data-target="INBOX/Werbung" checked' in html
     assert "1 lässt sich noch rückgängig machen" in html
     # for real only after a question with how many (the page's script); "All" for the box on a phone
     assert 'data-confirm-one="{n} Mail jetzt dorthin zurückverschieben, wo sie herkam?' in html

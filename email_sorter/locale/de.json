@@ -88,6 +88,10 @@
  ],
  "%(num)s mails from %(sender)s were put into %(target)s by hand": "%(num)s Mails von %(sender)s kamen von Hand nach „%(target)s“",
  "%(num)s mails from %(senders)s senders of %(domain)s were put into %(target)s by hand": "%(num)s Mails von %(senders)s Absendern von %(domain)s kamen von Hand nach „%(target)s“",
+ "%(num)s of the chosen mails is older than %(days)s days: the next run does not pick it up again – a backfill under Maintenance does.": [
+  "%(num)s der Mails ist älter als %(days)s Tage: Der nächste Lauf holt sie nicht wieder ab – ein Backfill unter Wartung schon.",
+  "%(num)s der Mails sind älter als %(days)s Tage: Der nächste Lauf holt sie nicht wieder ab – ein Backfill unter Wartung schon."
+ ],
  "%(num)s rule · runs by itself once a day.": [
   "%(num)s Regel · läuft einmal am Tag von selbst.",
   "%(num)s Regeln · laufen einmal am Tag von selbst."
@@ -96,6 +100,7 @@
   "%(num)s Lauf mit Fehlern heute.",
   "%(num)s Läufe mit Fehlern heute."
  ],
+ "%(num)s to %(folder)s": "%(num)s nach %(folder)s",
  "%(num)s with errors": [
   "%(num)s mit Fehlern",
   "%(num)s mit Fehlern"
@@ -149,6 +154,7 @@
  "Administration": "Administration",
  "After a changed target folder: moves the already sorted mails of the category into the new folder, according to the log.": "Nach einem geänderten Zielordner: verschiebt die bereits sortierten Mails der Kategorie laut Protokoll in den neuen Ordner.",
  "After this day the next run moves the mail to %(folder)s.": "Nach diesem Tag verschiebt der nächste Lauf die Mail nach %(folder)s.",
+ "Afterwards": "Danach",
  "Afterwards the new tab shows an error page for an address that starts with \"http://localhost\" – that is expected, because this interface runs on another computer. Copy the whole address from the address bar and paste it here.": "Danach zeigt der neue Tab eine Fehlerseite für eine Adresse, die mit „http://localhost“ beginnt – das ist so gewollt, weil diese Oberfläche auf einem anderen Rechner läuft. Kopiere die ganze Adresse aus der Adresszeile und füge sie hier ein.",
  "All": "Alle",
  "All categories": "Alle Kategorien",
@@ -166,6 +172,7 @@
  "Back": "Zurück",
  "Back to the form": "Zurück zum Formular",
  "Back to the inbox": "Zurück in den Posteingang",
+ "Back: from → to": "Zurück: von → nach",
  "Backfill": "Backfill",
  "Backfill since %(date)s": "Backfill seit %(date)s",
  "Backfill: please enter a start date.": "Backfill: bitte ein Startdatum angeben.",
@@ -189,6 +196,8 @@
  "Choose Google or Microsoft as the sign-in method and enter the client ID first.": "Wähle zuerst Google oder Microsoft als Anmeldung und trage die Client-ID ein.",
  "Choose a category …": "Kategorie wählen …",
  "Choose all that can be undone": "Alle auswählen, die sich rückgängig machen lassen",
+ "Choose by where the run put them": "Nach Ziel des Laufs auswählen",
+ "Choose:": "Auswählen:",
  "Client ID": "Client-ID",
  "Client ID: please copy it from your OAuth app.": "Client-ID: bitte aus deiner OAuth-App kopieren.",
  "Client secret": "Client-Secret",
@@ -325,6 +334,7 @@
  "Last run: %(when)s": "Letzter Lauf: %(when)s",
  "Latest runs": "Letzte Läufe",
  "Leave in the inbox": "Im Posteingang lassen",
+ "Leave them in the inbox – they are not sorted again": "Im Posteingang lassen – sie werden nicht wieder einsortiert",
  "Light": "Hell",
  "Light or dark, for everybody who uses this interface. \"Automatic\" follows the setting of each device.": "Hell oder dunkel, für alle, die diese Oberfläche nutzen. „Automatisch“ folgt der Einstellung des jeweiligen Geräts.",
  "Location": "Ort",
@@ -460,7 +470,6 @@
  "Opens the unsubscribe page of the sender": "Öffnet die Abmelde-Seite des Absenders",
  "Optional: an SMTP account Sortroom sends its own mail with – a note when a scheduled task fails, and a daily summary. For all mailboxes, to one recipient.": "Optional: ein SMTP-Konto, über das Sortroom eigene Mails schickt – eine Nachricht, wenn eine geplante Aufgabe fehlschlägt, und eine tägliche Zusammenfassung. Für alle Postfächer, an einen Empfänger.",
  "Other IMAP server": "Anderer IMAP-Server",
- "Otherwise they stay in the inbox and are not sorted again. The next run only picks up mails of the last %(days)s days; older ones need a backfill.": "Sonst bleiben sie im Posteingang und werden nicht erneut sortiert. Der nächste Lauf erfasst nur Mails der letzten %(days)s Tage; ältere brauchen einen Backfill.",
  "Outlook.com / Microsoft 365": "Outlook.com / Microsoft 365",
  "Overview": "Übersicht",
  "Page %(page)s of %(pages)s": "Seite %(page)s von %(pages)s",
@@ -586,9 +595,8 @@
  "Something is running for this mailbox. Please wait until it is done.": "Für dieses Postfach läuft gerade etwas. Bitte warten, bis es fertig ist.",
  "Sort automatically": "Automatisch einsortieren",
  "Sort read mails at once": "Gelesene sofort einsortieren",
- "Sort them again at the next run": "Beim nächsten Lauf neu sortieren",
+ "Sort them again at the next run, e.g. after a better description": "Beim nächsten Lauf neu einsortieren, z. B. nach einer besseren Beschreibung",
  "Sorted again by a later run": "Von einem späteren Lauf neu einsortiert",
- "Sorted from → to": "Einsortiert von → nach",
  "Sorted today": "Heute einsortiert",
  "Sorting": "Einsortieren",
  "Sorting automatically · next run %(time)s, every %(minutes)s min": "Sortiert automatisch · nächster Lauf %(time)s, alle %(minutes)s Min",
@@ -856,6 +864,7 @@
  "rename under Maintenance": "unter Wartung umbenennen",
  "running": "läuft",
  "so far in this category": "bisher in dieser Kategorie",
+ "star removed": "Stern wird entfernt",
  "starred": "mit Stern",
  "starts shortly": "startet in Kürze",
  "stays in the inbox": "bleibt im Posteingang",
