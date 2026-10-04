@@ -217,9 +217,11 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 .mails.has-detail { grid-template-columns: minmax(0, 1fr) 360px; }
 .detail { position: sticky; top: 24px; max-height: calc(100vh - 48px); overflow-y: auto;
   display: flex; flex-direction: column; gap: 16px; }
-.detail a.close { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
-  margin: -6px -8px 0 0; border-radius: 8px; color: var(--muted); }
-.detail a.close:hover { background: var(--neutral-bg); color: var(--ink); }
+.detail a.close, .detail a.navbtn { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; margin-top: -6px; border-radius: 8px; color: var(--muted); }
+.detail a.close { margin-right: -8px; }
+.detail a.close:hover, .detail a.navbtn:hover { background: var(--neutral-bg); color: var(--ink); }
+.detail .notice { padding: 10px 12px; font-size: 13px; overflow-wrap: anywhere; }
 .maillist td { white-space: nowrap; padding-top: 8px; padding-bottom: 8px; }
 .maillist td.mail { width: 100%; }
 .maillist .subj, .maillist .meta { display: block; overflow: hidden; text-overflow: ellipsis; }

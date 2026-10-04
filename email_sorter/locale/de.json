@@ -1,5 +1,6 @@
 {
  "\"%(name)s\" is too long (max. %(n)s characters).": "„%(name)s“ ist zu lang (max. %(n)s Zeichen).",
+ "\"%(subject)s\": %(result)s": "„%(subject)s“: %(result)s",
  "\"Test with the model\" files the last %(own)s mails of this category and %(other)s others again with the description from the field – without moving or saving anything (about %(cost)s).": "„Mit dem Modell testen“ ordnet die letzten %(own)s Mails dieser Kategorie und %(other)s andere mit der Beschreibung aus dem Feld neu ein – ohne etwas zu verschieben oder zu speichern (ca. %(cost)s).",
  "\"Unsubscribe\" sends the one-click request of the sender (RFC 8058) from this server. For the other senders open the link or write the mail yourself, then mark them. Unsubscribe links are read when mails are sorted and when the log is reconciled.": "„Abmelden“ schickt die One-Click-Abmeldung des Absenders (RFC 8058) von diesem Server aus. Bei den anderen Absendern öffnest du den Link oder schreibst die Mail selbst und markierst sie danach. Abmelde-Links werden beim Sortieren und beim Abgleich des Logs gelesen.",
  "\"inbox\" is reserved: sender rules use it for leaving mail in the inbox. Please choose another key.": "„inbox“ ist reserviert: Absenderregeln verwenden es für „im Posteingang lassen“. Bitte einen anderen Schlüssel wählen.",
@@ -350,6 +351,7 @@
  "New mails stay in the inbox this long before they are sorted – so you see them there first. 0 = at once.": "Neue Mails bleiben so lange im Posteingang, bevor sie einsortiert werden – damit du sie zuerst dort siehst. 0 = sofort.",
  "New name": "Neuer Name",
  "Next": "Weiter",
+ "Next mail": "Nächste Mail",
  "Next run %(time)s": "Nächster Lauf %(time)s",
  "Next run %(time)s · every %(minutes)s min": "Nächster Lauf %(time)s · alle %(minutes)s Min",
  "No deletion rules yet": "Noch keine Lösch-Regeln",
@@ -429,6 +431,7 @@
  "Please wait …": "Bitte warten …",
  "Port": "Port",
  "Possible": "Möglich",
+ "Previous mail": "Vorige Mail",
  "Processed": "Verarbeitet",
  "Put the draft into the form": "Entwurf ins Formular übernehmen",
  "Rather use an app password? Choose \"Other IMAP server\" with imap.gmail.com.": "Lieber ein App-Passwort? Dann „Anderer IMAP-Server“ mit imap.gmail.com wählen.",
