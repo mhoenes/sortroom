@@ -123,3 +123,37 @@ def test_percent():
     finally:
         i18n.reset_language(token)
     assert i18n.percent(1, 40) == "2,5 %"
+
+
+def test_star_by_hand(tmp_path, monkeypatch):
+    store = Store(tmp_path / "data" / "state.db")
+    _record(store, "a", "werbung", "INBOX/Werbung")
+    store.close()
+    calls = []
+
+    class FakeMB:
+        folder = SimpleNamespace(exists=lambda name: True, set=lambda name: calls.append(("select", name)))
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def flag(self, uids, flag, value):
+            calls.append(("flag", uids, flag, value))
+
+    monkeypatch.setattr(manual, "connect", lambda cfg, creds: FakeMB())
+    monkeypatch.setattr(manual, "delimiter", lambda mb: ".")
+    monkeypatch.setattr(manual, "find_uids", lambda mb, folder, wanted, fallback_days:
+                        calls.append(("find", folder)) or {"a": "7"})
+    manual.set_star(CFG, CREDS, tmp_path, "a", True)
+    from imap_tools import MailMessageFlags
+    assert ("find", "INBOX.Werbung") in calls and ("flag", ["7"], MailMessageFlags.FLAGGED, True) in calls  # in its folder
+    store = Store(tmp_path / "data" / "state.db")
+    assert store.get("a")["flagged"] == 1
+    store.close()
+    manual.set_star(CFG, CREDS, tmp_path, "a", False)
+    store = Store(tmp_path / "data" / "state.db")
+    assert store.get("a")["flagged"] == 0 and calls[-2][-1] is False
+    store.close()

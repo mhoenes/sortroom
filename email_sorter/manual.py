@@ -1,12 +1,15 @@
-"""Single-mail actions from the web UI: accept the model's suggestion or put a mail into another category.
+"""Single-mail actions from the web UI: accept the model's suggestion, put a mail into another category, or
+set or remove its star.
 
-The mail is found by its message key in the folder the log says it is in, moved on the server and
-the log is updated (source 'manual', confidence 1.0).
+The mail is found by its message key in the folder the log says it is in, changed on the server and
+the log is updated (a move: source 'manual', confidence 1.0).
 """
 from __future__ import annotations
 
 import logging
 from pathlib import Path
+
+from imap_tools import MailMessageFlags
 
 from .config import INBOX_ACTION, Config, Credentials
 from .i18n import _
@@ -42,6 +45,29 @@ def _note_correction(cfg: Config, store: Store, row: dict, category: str) -> Non
         return  # a sender rule, an uncertain suggestion, or a mail you had already set by hand
     stays = category == model or (category == INBOX_ACTION and not target_for(cfg, model))
     store.set_correction(row["message_key"], model, None if stays else category, "ui")
+
+
+def set_star(cfg: Config, creds: Credentials, base_dir: Path, key: str, starred: bool) -> None:
+    """Set or remove the star (\\Flagged) of one logged mail, on the server and in the log."""
+    store = Store(base_dir / "data" / "state.db")
+    try:
+        row = store.get(key)
+        if row is None:
+            raise ManualError(_("This mail is not in the log."))
+        folder = row["moved_to"] or cfg.source_folder
+        with connect(cfg, creds) as mb:
+            where = server_folder(folder, delimiter(mb))
+            if not mb.folder.exists(where):
+                raise ManualError(_("The folder %(folder)s no longer exists.", folder=folder))
+            uids = find_uids(mb, where, {key: row["received"]}, fallback_days=MAX_EXPIRY_AGE_DAYS)
+            if key not in uids:
+                raise ManualError(_("The mail is no longer in %(folder)s – deleted or moved by hand?", folder=folder))
+            mb.flag([uids[key]], MailMessageFlags.FLAGGED, starred)
+            mb.folder.set(cfg.source_folder)
+        store.set_flagged(key, starred)
+        log.info("%s %r by hand", "starred" if starred else "unstarred", row["subject"])
+    finally:
+        store.close()
 
 
 def move_mail(cfg: Config, creds: Credentials, base_dir: Path, key: str, category: str) -> str | None:

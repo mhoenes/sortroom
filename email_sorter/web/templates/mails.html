@@ -98,14 +98,22 @@
           {% if next_key %}<a class="navbtn" data-nav="next" href="{{ list_href }}&amp;key={{ link_key(next_key) }}" aria-label="{{ _('Next mail') }}" title="{{ _('Next mail') }} (j)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></a>{% endif %}
           <a class="close" href="{{ list_href }}" aria-label="{{ _('Close details') }}" title="{{ _('Close') }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></a>
         </div>
-        <div class="muted detail-from">{{ m.sender }}</div>
+        <div class="muted detail-from">{{ m.sender }}{% if m.sender %} · <a href="/ui/m/{{ box.id }}/mails?q={{ m.sender|urlencode }}&amp;period=all">{{ _('all from this sender') }}</a>{% endif %}</div>
         <h2>{{ m.subject or _('(no subject)') }}</h2>
         <div class="detail-status">
           {% if m.gone %}<span class="pill">{{ _('No longer in the mailbox') }}</span>
           {% elif m.moved_to %}<span class="pill ok">{{ _('In %(folder)s', folder=m.moved_to|folder_label) }}</span>
           {% elif m.confidence < min_conf and m.source not in ('rule', 'manual') %}<span class="pill warn">{{ _('Uncertain – left in the inbox') }}</span>
           {% else %}<span class="pill">{{ _('In the inbox') }}</span>{% endif %}
-          {% if m.flagged %}<span class="pill star-pill"><svg class="star inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z"/></svg>{{ _('starred') }}</span>{% endif %}
+          {# the star, on the server too; a deleted mail keeps what it had #}
+          {% if m.gone %}{% if m.flagged %}<span class="pill star-pill"><svg class="star inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z"/></svg>{{ _('starred') }}</span>{% endif %}
+          {% else %}<form method="post" action="/ui/m/{{ box.id }}/mails/action" class="star-form">
+            <input type="hidden" name="csrf" value="{{ csrf_token(request) }}"><input type="hidden" name="key" value="{{ m.message_key }}">
+            <input type="hidden" name="back" value="{{ query ~ ('&' if query else '') ~ 'page=' ~ f.page ~ '&key=' ~ link_key(m.message_key) }}">
+            <input type="hidden" name="action" value="star"><input type="hidden" name="starred" value="{{ '' if m.flagged else '1' }}">
+            <button class="star-toggle" type="submit" aria-pressed="{{ 'true' if m.flagged else 'false' }}"
+              title="{{ _('Remove the star') if m.flagged else _('Set a star') }}"><svg class="star inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z"/></svg>{{ _('starred') if m.flagged else _('Star') }}</button>
+          </form>{% endif %}
         </div>
         <p class="decision">
           {%- if m.source == 'rule' %}{{ _('Sender rule: %(category)s', category=label(m.category)) }}

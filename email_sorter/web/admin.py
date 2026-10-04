@@ -22,7 +22,7 @@ from ..config import (EXAMPLE_MAILBOXES, INBOX_ACTION, SECRETS_FILE, ConfigError
 from ..i18n import _
 from ..maintenance import relocate_category, rename_category, rename_folder
 from ..oauth import PROVIDERS
-from ..manual import ManualError, move_mail
+from ..manual import ManualError, move_mail, set_star
 from ..reconcile import run_reconcile
 from ..resort import run_resort
 from ..runtime import single_instance
@@ -292,6 +292,10 @@ async def mail_action(request: Request, box_id: str):
         if action in ("accept", "move"):
             folder = move_mail(box.cfg, creds, box.workspace, key, category)
             return _("Moved to %(folder)s.", folder=folder) if folder else _("Now in the inbox.")
+        if action == "star":
+            starred = _flag(form, "starred")
+            set_star(box.cfg, creds, box.workspace, key, starred)
+            return _("Star set.") if starred else _("Star removed.")
         raise EditError(_("Unknown action."))
 
     def locked() -> str:
