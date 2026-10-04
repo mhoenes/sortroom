@@ -24,14 +24,17 @@
     {% if not configured %}
       <p class="error" role="alert">{{ _('Login is locked: <code>ADMIN_PASSWORD</code> (at least 8 characters) is missing in <code>.env</code>. Add it and restart the container.') }}</p>
     {% else %}
+      {# the one account, named for password managers, which want a user name next to a password to fill and save it #}
+      <input class="sr-only" type="text" name="username" value="admin" autocomplete="username" tabindex="-1" aria-hidden="true" readonly>
       <label class="f">{{ _('Password') }}
-        <input type="password" name="password" autocomplete="current-password" autofocus required>
+        <span class="pw"><input type="password" name="password" autocomplete="current-password" autofocus required></span>
       </label>
       {% if error %}<p class="error" role="alert" style="margin:0">{{ error }}</p>{% endif %}
       <input type="hidden" name="next" value="{{ next }}">
       <button class="btn primary" type="submit">{{ _('Log in') }}</button>
     {% endif %}
   </form>
+  <script src="{{ asset('login.js') }}" data-show="{{ _('Show password') }}" data-hide="{{ _('Hide password') }}"></script>
   <a class="source-login" href="{{ source_url }}" target="_blank" rel="noopener">{{ _('Sortroom v%(version)s is free software (AGPL-3.0)', version=version) }} · {{ _('Source code') }}</a>
 </div>
 </body>
