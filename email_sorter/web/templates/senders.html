@@ -43,6 +43,10 @@
             <span class="pill ok">{{ _('Unsubscribed %(date)s', date=r.unsubscribed|date) }}</span>
             {% if r.since %}<span class="pill warn">{{ ngettext('%(num)s mail since', '%(num)s mails since', r.since) }}</span>{% endif %}
             {{ act(r, 'reset', _('Reset')) }}
+          {% elif r.suspicious %}
+            {# no unsubscribing, no link, no mail: that would only tell the sender the address is read #}
+            <span class="pill err" title="{{ ngettext('%(num)s mail of this sender was sorted as suspicious', '%(num)s mails of this sender were sorted as suspicious', r.suspicious) }}">{{ _('Suspicious') }}</span>
+            <span class="unsub-note">{{ _('Do not unsubscribe – that only tells the sender your address is read.') }}</span>
           {% elif r.one_click %}
             {{ act(r, 'unsubscribe', _('Unsubscribe'), 'primary', _('Unsubscribe from %(sender)s? Sortroom sends the unsubscribe request to %(host)s.', sender=r.address, host=r.one_click_host)) }}
           {% else %}
