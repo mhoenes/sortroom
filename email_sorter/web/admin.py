@@ -267,6 +267,8 @@ async def mail_action(request: Request, box_id: str):
     back = f"/ui/m/{box.id}/mails?{back}" if back and not back.startswith(("/", "http")) else \
         f"/ui/m/{box.id}/mails?period=all&key={quote(key, safe='')}"
     then = str(form.get("then") or "")  # the list with the next mail open: where accepting it goes on to
+    if form.get("to") == "overview":  # accepted in the Overview's list: back there
+        back, then = f"/ui/m/{box.id}", ""
     category = str(form.get("category") or "")
 
     if action == "move" and not category:  # "Correct" with nothing chosen
@@ -313,6 +315,8 @@ async def mail_action(request: Request, box_id: str):
         elif then and not then.startswith(("/", "http")):  # done with this one: on to the next mail
             text = _("\"%(subject)s\": %(result)s", subject=_subject(box, key), result=text)
             back = f"/ui/m/{box.id}/mails?{then}"
+        elif form.get("to") == "overview":
+            text = _("\"%(subject)s\": %(result)s", subject=_subject(box, key), result=text)
         _flash(request, text)
     except (EditError, ManualError, ConfigError) as e:
         _flash(request, str(e), "err")

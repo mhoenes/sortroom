@@ -65,17 +65,38 @@
   </div>
 </div>
 
+{# the uncertain mails: start going through them (the Mails page goes on to the next one after each), or
+   accept a suggestion right here; nothing to review is said too, once there are runs #}
 {% if review %}
 <section class="card stack tight" aria-label="{{ _('To review') }}">
-  <div class="row"><h2 class="grow">{{ _('To review') }}</h2><a href="/ui/m/{{ box.id }}/mails?uncertain=1&amp;period=30d" style="font-size:13px">{{ _('Show all %(n)s', n=stats.uncertain|num) if stats.uncertain > review|length else _('Open in the list') }}</a></div>
+  <div class="row review-head"><h2 class="grow">{{ _('To review') }}</h2>
+    <a href="/ui/m/{{ box.id }}/mails?uncertain=1&amp;period=30d" style="font-size:13px">{{ _('Show all %(n)s', n=stats.uncertain|num) if stats.uncertain > review|length else _('Open in the list') }}</a>
+    <a class="btn small primary" href="/ui/m/{{ box.id }}/mails?uncertain=1&amp;period=30d&amp;key={{ review[0].message_key|urlencode }}">{{ _('Start reviewing') }}</a></div>
   <div class="review">
     {% for m in review %}
-    <a href="/ui/m/{{ box.id }}/mails?uncertain=1&amp;period=30d&amp;key={{ m.message_key|urlencode }}">
-      <span class="what"><b>{{ m.subject or _('(no subject)') }}</b><span class="muted">{{ m.received|dt }} · {{ sender(m.sender_name, m.sender) }}</span></span>
-      <span class="guess"><span class="muted">{{ _('Suggestion') }}</span><b>{{ label(m.category) }} <span class="muted">{{ m.confidence|conf }}</span></b></span>
-    </a>
+    {% set c = box.cfg.categories.get(m.category) %}
+    <div class="rv">
+      <a href="/ui/m/{{ box.id }}/mails?uncertain=1&amp;period=30d&amp;key={{ m.message_key|urlencode }}">
+        <span class="what"><b>{{ m.subject or _('(no subject)') }}</b><span class="muted">{{ m.received|dt }} · {{ sender(m.sender_name, m.sender) }}</span></span>
+        <span class="guess"><span class="muted">{{ _('Suggestion') }}</span><b>{{ label(m.category) }} <span class="muted">{{ m.confidence|conf }}</span></b></span>
+      </a>
+      {# a suggestion with a folder can be taken over here; one without would leave the mail where it is #}
+      {% if c and c.folder %}
+      <form method="post" action="/ui/m/{{ box.id }}/mails/action" class="rv-accept">
+        <input type="hidden" name="csrf" value="{{ csrf_token(request) }}"><input type="hidden" name="key" value="{{ m.message_key }}">
+        <input type="hidden" name="action" value="accept"><input type="hidden" name="category" value="{{ m.category }}">
+        <input type="hidden" name="to" value="overview">
+        <button class="btn small tonal" type="submit" title="{{ _('Accept: move to %(folder)s', folder=c.folder|folder_label) }}">{{ _('Accept') }}</button>
+      </form>
+      {% else %}<span class="rv-accept"></span>{% endif %}
+    </div>
     {% endfor %}
   </div>
+</section>
+{% elif stats.last_run %}
+<section class="card review-done" aria-label="{{ _('To review') }}">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.8 2.8L16 9.8"/></svg>
+  <span><b>{{ _('Nothing to review.') }}</b> <span class="muted">{{ _('Every mail of the last 30 days was sorted with enough confidence or by you.') }}</span></span>
 </section>
 {% endif %}
 
