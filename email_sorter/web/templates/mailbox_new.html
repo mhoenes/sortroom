@@ -9,13 +9,14 @@
     <h1>{{ _('Add mailbox') }}</h1>
     <div class="sub">{{ _('Creates its own folder with settings, log and reports') }}</div>
   </div>
-  <a class="btn" href="/ui">{{ _('Cancel') }}</a>
 </div>
 
 {% if blocked %}
 <div class="banner" role="status">{{ blocked }}</div>
 {% else %}
-{% if error and not error_field %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
+{# a mailbox only sorts with the AI service's key: said before, not after the first run fails #}
+{% if no_key %}<div class="banner" role="status">{{ _('No API key for the AI service is saved yet. A new mailbox is only sorted once it is: <a href="%(url)s">Global settings</a>.', url='/ui/settings#model') }}</div>{% endif %}
+{% if error and not error_field %}<div class="banner err" role="alert" data-stale-on-type>{{ error }}</div>{% endif %}
 <form method="post" action="/ui/mailboxes/new" class="stack" data-auth-scope>
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <section class="card stack">
@@ -29,9 +30,8 @@
     <div class="grid cols-3">
       <label class="f"><span class="lt">{{ _('Display name') }} <span class="req" aria-hidden="true">*</span> {{ help(_('What the mailbox is called in the interface, e.g. "Gmail".')) }}</span>
         <input type="text" name="name" value="{{ form.name }}" maxlength="60" required{{ invalid('name') }}
-          data-id-preview="box-id" data-taken='{{ taken_ids|tojson }}'>{{ field_error('name') }}</label>
-      <div class="f"><span class="lt">{{ _('Folder') }} {{ help(_('Name of the folder under mailboxes/ and the id for --mailbox and the API. It follows the display name, also when you rename the mailbox later.')) }}</span>
-        <span class="static mono">mailboxes/<span id="box-id">{{ form.id or '…' }}</span></span></div>
+          data-id-preview="box-id" data-taken='{{ taken_ids|tojson }}'>{{ field_error('name') }}
+        <span class="hint folder-line">{{ _('Folder on the server:') }} <span class="mono">mailboxes/<span id="box-id">{{ form.id or '…' }}</span></span> {{ help(_('Name of the folder under mailboxes/ and the id for --mailbox and the API. It follows the display name, also when you rename the mailbox later.')) }}</span></label>
     </div>
   </section>
 
@@ -77,18 +77,29 @@
 
   <section class="card stack">
     <h2>{{ _('3 · Categories') }} {{ help(_('The new mailbox starts with the categories, thresholds and schedule of an existing mailbox or with the standard categories. Everything can be changed independently afterwards. Sender rules are not copied.')) }}</h2>
-    <label class="f" style="max-width:360px">{{ _('Copy from') }}
-      <select name="template">{% for id, b in boxes.items() %}<option value="{{ id }}" {% if form.template == id %}selected{% endif %}>{{ b.name }} ({{ ngettext('%(num)s category', '%(num)s categories', b.cfg.categories|length) }})</option>{% endfor %}
-        {% for code, n in example_categories.items() %}<option value="_example_{{ code }}" {% if form.template == '_example_' ~ code %}selected{% endif %}>{{ _('Standard categories, %(language)s', language=languages[code]) }} ({{ ngettext('%(num)s category', '%(num)s categories', n) }})</option>{% endfor %}</select>
+    <label class="f" style="max-width:420px">{{ _('Categories from') }}
+      <select name="template">
+        {% for code, n in example_categories.items() %}<option value="_example_{{ code }}" {% if form.template == '_example_' ~ code %}selected{% endif %}>{{ _('Standard categories, %(language)s', language=languages[code]) }} ({{ ngettext('%(num)s category', '%(num)s categories', n) }})</option>{% endfor %}
+        {% if boxes %}<optgroup label="{{ _('Copy of a mailbox: its categories, thresholds and schedule') }}">
+          {% for id, b in boxes.items() %}<option value="{{ id }}" {% if form.template == id %}selected{% endif %}>{{ b.name }} ({{ ngettext('%(num)s category', '%(num)s categories', b.cfg.categories|length) }})</option>{% endfor %}
+        </optgroup>{% endif %}
+      </select>
     </label>
-    <p class="muted hint">{{ _('With Gmail (imap.gmail.com) the target folders are created as top-level labels, i.e. "Promotions" instead of "INBOX/Promotions". Outlook still shows them under the inbox.') }}</p>
+    <p class="muted hint" data-auth="google">{{ _('With Gmail (imap.gmail.com) the target folders are created as top-level labels, i.e. "Promotions" instead of "INBOX/Promotions". Outlook still shows them under the inbox.') }}</p>
   </section>
 
   <div class="actions"><button class="btn primary" type="submit">{{ _('Create mailbox') }}</button>
+    <a class="btn" href="/ui">{{ _('Cancel') }}</a>
     <span class="muted hint">{{ _('Nothing is sorted yet: the next scheduled run picks up the mailbox automatically as soon as the login works.') }}</span></div>
 </form>
 {{ test_script() }}
 <script src="{{ asset('mailbox-id.js') }}"></script>
 <script src="{{ asset('login-method.js') }}"></script>
+<script>
+  // the type changes what the form needs: an error of the last attempt that isn't at a field no longer applies
+  document.querySelectorAll('input[name=kind]').forEach(radio => radio.addEventListener('change', () => {
+    document.querySelectorAll('[data-stale-on-type]').forEach(el => el.remove());
+  }));
+</script>
 {% endif %}
 {% endblock %}

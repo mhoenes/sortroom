@@ -398,9 +398,14 @@ def _new_mailbox_page(request: Request, form: dict | None = None, error: EditErr
     boxes = _boxes(request)
     blocked = can_add_mailbox(request.app.state.base_dir)
     root = request.app.state.base_dir / "mailboxes"
+    try:  # a mailbox only sorts with the AI service's key
+        no_key = not classifier_key(_shared_path(request).with_name(SECRETS_FILE))
+    except ConfigError:
+        no_key = True
     return _page(request, "mailbox_new.html", {
         **_sidebar(request, boxes, None, "all"), "boxes": boxes, "blocked": blocked, "error": error and str(error),
         "error_field": error.field if error and error.field in NEW_MAILBOX_FIELDS else None, "tested": tested,
+        "no_key": no_key,
         "example_categories": {code: len(tomllib.loads(path.read_text(encoding="utf-8"))["categories"])
                                for code, path in EXAMPLE_MAILBOXES.items()},
         "languages": i18n.LANGUAGES, "retype": retype, "retype_secret": retype_secret, "secrets_file": SECRETS_FILE,
@@ -412,7 +417,7 @@ def _new_mailbox_page(request: Request, form: dict | None = None, error: EditErr
                            "auth": "password"}},
         "taken_ids": sorted(p.name for p in root.iterdir() if p.is_dir()) if root.is_dir() else [],
         "form": form or {"imap_port": "993", "source_folder": "INBOX",
-                         "template": next(iter(boxes), EXAMPLE + i18n.language())}},
+                         "template": EXAMPLE + i18n.language()}},
         status)
 
 
