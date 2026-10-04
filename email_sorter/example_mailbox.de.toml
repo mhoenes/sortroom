@@ -46,7 +46,7 @@ reconcile_hours = 24          # reconcile the log with the mailbox every N hours
 #                   for advertising ("voucher expires!") and anything suspicious
 #   track_expiry  true = find the end date of time-limited offers; the day after it
 #                 has passed, move the mail to expired_folder
-# The order is the order of the lists in the admin UI, not for sorting. Keys must be unique,
+# The order is the order of the lists in the admin UI. Keys must be unique,
 # lowercase, no spaces.
 # ---------------------------------------------------------------------------
 
