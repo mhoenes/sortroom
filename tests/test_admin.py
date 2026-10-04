@@ -207,6 +207,9 @@ def test_mail_actions(client, setup, monkeypatch):
     r = client.post("/ui/m/privat/mails/action", data={"csrf": token, "key": "<m1@x>", "action": "accept",
                                                        "category": "werbung", "back": "period=all"})
     assert "Verschoben nach INBOX/Werbung" in r.text and moves == [("<m1@x>", "werbung")]
+    r = client.post("/ui/m/privat/mails/action", data={"csrf": token, "key": "<m1@x>", "action": "move",
+                                                       "category": "", "back": "period=all"})
+    assert "Bitte eine Kategorie wählen." in r.text and len(moves) == 1  # "Correct" with nothing chosen
     r = client.post("/ui/m/privat/mails/action", data={"csrf": token, "key": "<m1@x>", "action": "rule",
                                                        "match": "@example.de", "category": "werbung"})
     assert "Absender-Regel für @example.de gespeichert" in r.text and len(moves) == 1

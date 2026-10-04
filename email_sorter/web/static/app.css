@@ -222,6 +222,14 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 .detail a.close { margin-right: -8px; }
 .detail a.close:hover, .detail a.navbtn:hover { background: var(--neutral-bg); color: var(--ink); }
 .detail .notice { padding: 10px 12px; font-size: 13px; overflow-wrap: anywhere; }
+.detail-head { display: flex; flex-direction: column; gap: 4px; }
+.detail-bar { align-items: center; font-size: 13px; }
+.detail-bar a.navbtn, .detail-bar a.close { margin-top: 0; }
+.detail-from { font-size: 13px; overflow-wrap: anywhere; margin-top: -4px; }
+.detail-status { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.star-pill { display: inline-flex; align-items: center; gap: 4px; }
+.detail .decision { margin: 2px 0 0; font-size: 14px; }
+.detail .more-info dl { margin-top: 2px; }
 .maillist td { white-space: nowrap; padding-top: 8px; padding-bottom: 8px; }
 .maillist td.mail { width: 100%; }
 .maillist .subj, .maillist .meta { display: block; overflow: hidden; text-overflow: ellipsis; }
