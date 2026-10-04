@@ -4,9 +4,9 @@
 {% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text|forceescape }}" data-tip="{{ text|forceescape }}">?</span>{% endmacro %}
 {% macro remove_button() %}{% if editable %}<button class="icon-btn rule-remove" type="button" aria-label="{{ _('Remove rule') }}" title="{{ _('Remove rule') }}">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>{% endif %}{% endmacro %}
-{% macro rule_row(i, match, action) %}<tr>
+{% macro rule_row(i, match, action, new=false) %}<tr {% if new %}class="rule-new"{% endif %}>
             <td><input type="text" name="match_{{ i }}" value="{{ match }}" aria-label="{{ _('Sender') }}" placeholder="{{ _('name@company.com or @company.com') }}"></td>
-            <td><select name="action_{{ i }}" aria-label="{{ _('Target') }}">
+            <td><select name="action_{{ i }}" aria-label="{{ _('Target') }}" {% if new %}autofocus{% endif %}>
               <option value="inbox" {% if action == 'inbox' %}selected{% endif %}>{{ _('Leave in the inbox') }}</option>
               {% for key, c in cfg.categories.items() %}<option value="{{ key }}" {% if action == key %}selected{% endif %}>{{ c.label }}{% if c.folder %} → {{ c.folder|folder_label }}{% endif %}</option>{% endfor %}
             </select></td>
@@ -33,7 +33,9 @@
 <datalist id="known-folders">{% for f in folders %}<option value="{{ f }}">{% endfor %}</datalist>
 
 {# both lists in one form with one save; row numbers only grow, a removed row leaves a gap the server skips #}
-<form method="post" action="/ui/m/{{ box.id }}/rules" {% if error or tested %}data-dirty{% endif %} data-guard="{{ _('Rules') }}">
+{% if added %}<div class="banner ok" role="status">{{ _('A new rule for %(sender)s at the end of the sender rules: check the target, then save.', sender=add) }}</div>
+{% elif new_row is not none %}<div class="banner ok" role="status">{{ _('%(sender)s already has a rule (marked).', sender=add) }}</div>{% endif %}
+<form method="post" action="/ui/m/{{ box.id }}/rules" {% if error or tested or added %}data-dirty{% endif %} data-guard="{{ _('Rules') }}">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <fieldset {% if not editable %}disabled{% endif %} class="stack">
     <section class="card stack rules-box" id="sender-rules" data-row-template="rule-row">
@@ -47,7 +49,7 @@
         <thead><tr><th scope="col">{{ _('Sender') }}</th><th scope="col">{{ _('Target') }}</th><th scope="col"><span class="sr-only">{{ _('Remove') }}</span></th></tr></thead>
         <tbody>
         {% for match, action in rules %}
-          {{ rule_row(loop.index0, match, action) }}
+          {{ rule_row(loop.index0, match, action, loop.index0 == new_row) }}
         {% endfor %}
         </tbody>
       </table></div>

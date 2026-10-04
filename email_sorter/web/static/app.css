@@ -571,6 +571,15 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
 .unsub-mark.asked .text-btn { font-weight: 600; }
 .unsub .text-btn, .unsub-alt { font-size: 13px; }
 .senders td.status .pill { margin: 2px 4px 2px 0; white-space: nowrap; }
+.senders .rule-pill { text-decoration: none; }
+.senders .rule-pill:hover { text-decoration: underline; }
+/* the row of the last action, and how it went */
+table.senders tr.at > td { background: var(--accent-soft); }
+table.senders tr.row-notice > td { padding-top: 0; }
+table.senders tr.row-notice .banner { padding: 10px 14px; font-size: 13px; }
+table.senders tr[id] { scroll-margin-top: 80px; }
+/* a rule added from another page, not saved yet */
+table.rules tr.rule-new > td { background: var(--accent-soft); }
 .senders td.status .status-note { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
 .unsub-note { font-size: 13px; color: var(--muted); }
 

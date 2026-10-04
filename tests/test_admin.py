@@ -14,7 +14,7 @@ from email_sorter.classifier import Decision
 from email_sorter.sorter import RunResult
 from email_sorter.store import Store
 from email_sorter.web import admin
-from email_sorter.web import senders as senders_web
+from email_sorter.web import subscriptions as subscriptions_web
 from email_sorter.unsubscribe import UnsubscribeError
 from email_sorter.web.editing import (EditError, rename_category_key, rename_folder_refs, save_sender_rules,
                                       write_secrets)
@@ -386,9 +386,9 @@ def test_undo_a_run_from_the_run_log(client, setup, monkeypatch):
 
 
 def test_senders_page_without_senders(client):
-    html = client.get("/ui/m/privat/senders").text
+    html = client.get("/ui/m/privat/subscriptions").text
     assert "Kein Absender mit Abmelde-Link" in html and 'name="category"' not in html  # nothing to filter yet
-    html = client.get("/ui/m/privat/senders?category=werbung").text                   # a filter set: it stays
+    html = client.get("/ui/m/privat/subscriptions?category=werbung").text                   # a filter set: it stays
     assert "Kein Absender dieser Kategorie" in html and 'name="category"' in html
 
 
@@ -401,36 +401,36 @@ def test_senders_page_and_unsubscribe(client, setup, monkeypatch):
                                      folder="INBOX/Werbung", flag=False, expires=None, unsubscribe=links))
     store.close()
     sent = []
-    monkeypatch.setattr(senders_web, "one_click", lambda url: sent.append(url) or 200)
+    monkeypatch.setattr(subscriptions_web, "one_click", lambda url: sent.append(url) or 200)
 
-    html = client.get("/ui/m/privat/senders").text
-    assert "Abonnements · Privat" in html and 'href="/ui/m/privat/senders" aria-current="page"' in html
+    html = client.get("/ui/m/privat/subscriptions").text
+    assert "Abonnements · Privat" in html and 'href="/ui/m/privat/subscriptions" aria-current="page"' in html
     assert "news@shop.example" in html and "Von news@shop.example abmelden? Sortroom schickt die Abmeldung an shop.example." in html
     # one Unsubscribe per sender: here the mail, then noting it
     assert 'href="mailto:off@verein.example" data-unsub' in html and "Als abgemeldet markieren" in html
     assert '<option value="" selected>Zu erledigen (2)</option>' in html and "Abgemeldet (0)" in html
-    assert "Kein Absender mit diesem Status" in client.get("/ui/m/privat/senders?status=done").text
+    assert "Kein Absender mit diesem Status" in client.get("/ui/m/privat/subscriptions?status=done").text
     token = _csrf(html)
-    r = client.post("/ui/m/privat/senders/action", data={"csrf": token, "address": "news@shop.example",
+    r = client.post("/ui/m/privat/subscriptions/action", data={"csrf": token, "address": "news@shop.example",
                                                           "action": "unsubscribe", "category": "werbung", "status": ""})
     assert sent == ["https://shop.example/u"] and "Von news@shop.example abgemeldet" in r.text
-    assert str(r.url).endswith("/senders?category=werbung")
+    assert "/subscriptions?category=werbung&at=news%40shop.example#s-" in str(r.url)  # back at the row
     assert "Zu erledigen (1)" in r.text and 'class="status-note"' not in r.text  # done: no longer in "To do"
-    html = client.get("/ui/m/privat/senders?status=done").text
+    html = client.get("/ui/m/privat/subscriptions?status=done").text
     assert '<span class="pill ok">Abgemeldet</span>' in html and '<span class="status-note">am ' in html
     assert "club@verein.example" not in html and "Nicht abgemeldet" in html
-    r = client.post("/ui/m/privat/senders/action", data={"csrf": token, "address": "club@verein.example",
+    r = client.post("/ui/m/privat/subscriptions/action", data={"csrf": token, "address": "club@verein.example",
                                                           "action": "unsubscribe"})
     assert "bietet keine One-Click-Abmeldung" in r.text and len(sent) == 1
-    client.post("/ui/m/privat/senders/action", data={"csrf": token, "address": "club@verein.example", "action": "mark"})
+    client.post("/ui/m/privat/subscriptions/action", data={"csrf": token, "address": "club@verein.example", "action": "mark"})
     store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
     assert store.sender("club@verein.example")["method"] == "manual"
     assert store.sender("news@shop.example")["method"] == "one-click"
     store.close()
-    r = client.post("/ui/m/privat/senders/action", data={"csrf": token, "address": "news@shop.example",
+    r = client.post("/ui/m/privat/subscriptions/action", data={"csrf": token, "address": "news@shop.example",
                                                           "action": "reset", "status": "done"})
-    assert "nicht mehr als abgemeldet markiert" in r.text and str(r.url).endswith("/senders?status=done")
-    html = client.get("/ui/m/privat/senders").text
+    assert "nicht mehr als abgemeldet markiert" in r.text and "/subscriptions?status=done&at=" in str(r.url)
+    html = client.get("/ui/m/privat/subscriptions").text
     assert "news@shop.example" in html and "club@verein.example" not in html
 
     # mail after unsubscribing: on top, also in "To do"
@@ -438,9 +438,41 @@ def test_senders_page_and_unsubscribe(client, setup, monkeypatch):
     store.db.execute("UPDATE senders SET unsubscribed = '2020-01-01T00:00:00' WHERE address = 'club@verein.example'")
     store.db.commit()
     store.close()
-    html = client.get("/ui/m/privat/senders").text
+    html = client.get("/ui/m/privat/subscriptions").text
     assert html.index("club@verein.example") < html.index("news@shop.example") and "1 Mail seitdem" in html
     assert "Mails trotz Abmeldung (1)" in html
+
+
+def test_subscriptions_search_rules_and_the_row_of_an_action(client, setup):
+    store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
+    for key, sender, name in (("<n1@x>", "news@shop.example", "Shop News"), ("<n2@x>", "club@verein.example", "")):
+        store.record(SimpleNamespace(key=key, received=datetime.now().astimezone().isoformat(timespec="minutes"),
+                                     sender=sender, sender_name=name, subject="Angebot",
+                                     decision=Decision("werbung", 0.9, {}, 0.1, 0.0), folder="INBOX/Werbung",
+                                     flag=False, expires=None, unsubscribe=(["mailto:off@x.example"], False)))
+    store.close()
+    save_sender_rules(_box(setup), setup / "config.toml", [("@verein.example", "werbung")])
+
+    html = client.get("/ui/m/privat/subscriptions?q=shop+news").text  # the name is searched too
+    assert "news@shop.example" in html and "club@verein.example" not in html
+    assert "Kein Absender passt zur Suche" in client.get("/ui/m/privat/subscriptions?q=nichts").text
+    html = client.get("/ui/m/privat/subscriptions").text
+    # a sender rule: shown; none: one to create on the Rules page
+    assert 'href="/ui/m/privat/rules#sender-rules"' in html and "Regel: Werbung" in html
+    assert html.count("Regel anlegen") == 1 and "/ui/m/privat/rules?add=news%40shop.example&amp;target=werbung" in html
+    rules = client.get("/ui/m/privat/rules?add=news%40shop.example&target=werbung").text
+    assert "Neue Regel für news@shop.example" in rules and "data-dirty" in rules
+    assert '<tr class="rule-new">' in rules and 'value="news@shop.example"' in rules
+    assert '<option value="werbung" selected>' in rules.split('class="rule-new"')[1].split("</tr>")[0]
+    rules = client.get("/ui/m/privat/rules?add=%40verein.example").text  # there already
+    assert "gibt es schon eine Regel" in rules and rules.count('class="rule-new"') == 1 and "data-dirty" not in rules
+
+    # an action on a sender that stays listed: its outcome in its row, not on top
+    r = client.post("/ui/m/privat/subscriptions/action", data={"csrf": _csrf(html), "address": "news@shop.example",
+                                                                "action": "unsubscribe", "q": "news"})
+    assert "/subscriptions?q=news&at=news%40shop.example#s-" in str(r.url)
+    assert '<tr id="s-' in r.text and 'class="at"' in r.text and 'class="row-notice"' in r.text
+    assert r.text.count("bietet keine One-Click-Abmeldung") == 1
 
 
 def test_no_unsubscribing_from_suspicious_senders(client, setup, monkeypatch):
@@ -452,14 +484,14 @@ def test_no_unsubscribing_from_suspicious_senders(client, setup, monkeypatch):
                                  flag=False, expires=None, unsubscribe=links))
     store.close()
     sent = []
-    monkeypatch.setattr(senders_web, "one_click", lambda url: sent.append(url) or 200)
+    monkeypatch.setattr(subscriptions_web, "one_click", lambda url: sent.append(url) or 200)
 
-    html = client.get("/ui/m/privat/senders").text
+    html = client.get("/ui/m/privat/subscriptions").text
     assert "alert@bank-check.example" in html and "Nicht abmelden" in html
     assert "1 Mail dieses Absenders wurde als verdächtig einsortiert" in html
     # no button, no link, no mail to the sender
     assert 'value="unsubscribe"' not in html and "bank-check.example/u" not in html and "mailto:" not in html
-    r = client.post("/ui/m/privat/senders/action", data={"csrf": _csrf(html), "address": "alert@bank-check.example",
+    r = client.post("/ui/m/privat/subscriptions/action", data={"csrf": _csrf(html), "address": "alert@bank-check.example",
                                                           "action": "unsubscribe"})
     assert "hat verdächtige Mails geschickt" in r.text and sent == []
     store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
@@ -475,9 +507,9 @@ def test_failed_unsubscribe_is_not_noted(client, setup, monkeypatch):
     def refuse(url):
         raise UnsubscribeError("shop.example hat mit Fehler 500 geantwortet.")
 
-    monkeypatch.setattr(senders_web, "one_click", refuse)
+    monkeypatch.setattr(subscriptions_web, "one_click", refuse)
     token = _csrf(client.get("/ui/m/privat/maintenance").text)  # the sender has no mail in the log to list
-    r = client.post("/ui/m/privat/senders/action", data={"csrf": token, "address": "news@shop.example",
+    r = client.post("/ui/m/privat/subscriptions/action", data={"csrf": token, "address": "news@shop.example",
                                                           "action": "unsubscribe"})
     assert "Abmelden von news@shop.example fehlgeschlagen" in r.text
     store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
