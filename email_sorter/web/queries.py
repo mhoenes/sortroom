@@ -151,6 +151,43 @@ def recent_runs(db: sqlite3.Connection | None, limit: int = 8, skip_empty: bool 
         f"SELECT *, {undoable} AS undoable FROM runs {where} ORDER BY started DESC, id DESC LIMIT ?", (limit,))]
 
 
+def runs_today(db: sqlite3.Connection | None, now: datetime | None = None) -> dict:
+    """Today's runs in one line: how many, the mails they moved (for real) and how many had errors."""
+    if db is None:
+        return {"runs": 0, "moved": 0, "errors": 0}
+    today = _iso(datetime.combine((now or datetime.now()).date(), datetime.min.time()))
+    runs, moved, errors = db.execute(
+        "SELECT COUNT(*), COALESCE(SUM(CASE WHEN live = 1 THEN moved ELSE 0 END), 0), "
+        "COALESCE(SUM(exit_code != 0), 0) FROM runs WHERE started >= ?", (today,)).fetchone()
+    return {"runs": runs, "moved": moved, "errors": errors}
+
+
+def notable_runs(db: sqlite3.Connection | None, days: int = 7, limit: int = 6,
+                 now: datetime | None = None) -> list[dict]:
+    """The runs worth a look of the last `days` days, newest first: the ones with errors, and everything but
+    the scheduled runs (backfill, re-sort, undo, deletion rules …). Each with `undoable`."""
+    if db is None:
+        return []
+    since = _iso((now or datetime.now()) - timedelta(days=days))
+    undoable = ("live = 1 AND EXISTS (SELECT 1 FROM undo WHERE undo.run = runs.started)"
+                if _has_table(db, "undo") else "0")
+    return [dict(r) for r in db.execute(
+        f"SELECT *, {undoable} AS undoable FROM runs WHERE started >= ? AND (kind != 'run' OR exit_code != 0) "
+        "ORDER BY started DESC, id DESC LIMIT ?", (since, limit))]
+
+
+def last_failure(db: sqlite3.Connection | None, now: datetime | None = None) -> dict | None:
+    """Today's latest run with errors, with `recovered`: a later run of the same kind went through."""
+    if db is None:
+        return None
+    today = _iso(datetime.combine((now or datetime.now()).date(), datetime.min.time()))
+    row = db.execute(
+        "SELECT *, EXISTS (SELECT 1 FROM runs l WHERE l.kind = runs.kind AND l.started > runs.started "
+        "AND l.exit_code = 0) AS recovered FROM runs WHERE exit_code != 0 AND started >= ? "
+        "ORDER BY started DESC, id DESC LIMIT 1", (today,)).fetchone()
+    return dict(row) if row else None
+
+
 def undoable_runs(db: sqlite3.Connection | None) -> list[dict]:
     """The live runs that can be undone, newest first: started, kind, detail and the number of mails."""
     if db is None or not _has_table(db, "undo"):

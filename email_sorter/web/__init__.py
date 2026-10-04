@@ -211,6 +211,32 @@ def run_status(run: dict) -> tuple[str, str]:
     return ("OK", "ok")
 
 
+# words of the errors that come from the IMAP server or the way to it (login, OAuth, TLS, network)
+_IMAP_WORDS = ("login", "authenticat", "credential", "password", "oauth", "token", "imap", "ssl", "certificate",
+               "socket", "timed out", "timeout", "connection", "getaddrinfo", "errno", "eof", "network", "unreachable")
+
+
+def run_problem(run: dict | None) -> str:
+    """What a failed run points to: 'model' (the AI service: key, credit, unreachable), 'imap' (the mailbox's
+    login or connection), 'mails' (single mails failed, retried by the next run) or '' (an error of its own)."""
+    error = ((run or {}).get("error") or "").lower()
+    if not error:
+        return "mails"
+    if error.startswith("http ") or "classification endpoint" in error:
+        return "model"
+    return "imap" if any(w in error for w in _IMAP_WORDS) else ""
+
+
+def run_error(text: str | None) -> str:
+    """A run's error as the server sent it: without the b'…' around a message passed on as bytes."""
+    text = (text or "").strip()
+    return text[2:-1] if len(text) > 2 and text[:2] in ("b'", 'b"') and text[-1] == text[1] else text
+
+
+templates.env.globals["run_problem"] = run_problem
+templates.env.filters["run_error"] = run_error
+
+
 # categories shown in red: suspicious mail (key of the German and the English standard categories)
 DANGER_CATEGORIES = {"verdaechtig", "suspicious"}
 
@@ -331,6 +357,9 @@ def overview(request: Request, box_id: str):
         st = queries.stats(db, cfg.min_confidence)
         dist = queries.distribution(db, 7)
         runs = queries.recent_runs(db, 8)
+        notable = queries.notable_runs(db)
+        today = queries.runs_today(db)
+        failure = queries.last_failure(db)
         review = queries.uncertain_mails(db, cfg.min_confidence, 5, days=30)  # as stats().uncertain
         filed, corrected = map(sum, zip(*queries.corrections(db, cfg.min_confidence).values() or [(0, 0)], strict=True))
         expired = queries.expired_moved(db, 7)
@@ -345,7 +374,8 @@ def overview(request: Request, box_id: str):
              "tone": "inbox" if c == "" else ("danger" if c in DANGER_CATEGORIES else "")} for c, n in dist]
     return templates.TemplateResponse(request, "overview.html", {
         **_sidebar(request, boxes, box, "overview"), "box": box, "stats": st, "bars": bars,
-        "total_7d": total_7d, "runs": runs, "review": review, "expired_7d": expired,
+        "total_7d": total_7d, "runs": runs, "notable": notable, "today": today, "failure": failure,
+        "review": review, "expired_7d": expired,
         "filed_30d": filed, "corrected_30d": corrected, "rule_tips": rule_tips, "hints": hints,
         "schedule": request.app.state.scheduler.status(box), "label": lambda k: _label(box, k)})
 

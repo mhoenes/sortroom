@@ -387,6 +387,19 @@ div.f { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-w
 .danger-zone .grow { flex: 1 1 260px; }
 .btn.danger:hover { background: var(--err-bg); color: var(--err); }
 .banner.ok { background: var(--ok-bg); color: var(--ok); }
+/* errors of a run: the message as the server or the service sent it */
+.run-error { font-size: 13px; overflow-wrap: anywhere; }
+.run-error code { font-family: var(--mono); font-size: 12px; }
+.banner.run-problem { align-items: flex-start; flex-wrap: wrap; }
+.banner.run-problem > .grow { flex: 1 1 260px; }  /* on a phone the button goes below the text */
+.banner.run-problem .btn { flex-shrink: 0; }
+/* the Overview's runs: today, the ones worth a look, the latest ones folded */
+.runs-today { margin: 0; font-size: 14px; }
+.notable-runs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.notable-runs li { display: flex; flex-direction: column; gap: 4px; padding: 10px 0; border-top: 1px solid var(--line-soft); font-size: 14px; }
+.notable-runs .run-error { color: var(--muted); }
+.notable-runs .undo-link { font-size: 13px; align-self: flex-start; }
+.all-runs > summary { font-size: 14px; }
 .catgrid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: start; }
 /* headers on one line and the name with its Star/Expiry pills beside it; the folder takes what is left (clipped)
    and goes when the card is too narrow - the editor shows it too */

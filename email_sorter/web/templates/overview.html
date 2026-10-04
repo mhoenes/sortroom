@@ -11,10 +11,24 @@
   </div>
 </div>
 
-{% if stats.errors_today %}
-<div class="banner" role="status">
+{# errors today: what the last one said, what to do about it, and whether it went through since #}
+{% if failure %}
+{% set problem = run_problem(failure) %}
+<div class="banner run-problem {{ '' if failure.recovered or problem == 'mails' else 'err' }}" role="{{ 'status' if failure.recovered else 'alert' }}">
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-  <div style="flex-grow:1"><strong>{{ ngettext('%(num)s run with errors today.', '%(num)s runs with errors today.', stats.errors_today) }}</strong> {{ _('Affected mails are retried in the next run.') }}</div>
+  <div class="grow stack tight">
+    <div><strong>{{ ngettext('%(num)s run with errors today.', '%(num)s runs with errors today.', stats.errors_today) }}</strong>
+      {% if failure.recovered %}{{ _('The next one went through again.') }}
+      {% elif problem == 'mails' %}{{ _('Single mails failed; they are retried in the next run.') }}
+      {% elif problem == 'model' %}{{ _('The AI service refused or did not answer – runs stop until it works again.') }}
+      {% elif problem == 'imap' %}{{ _('Sortroom could not sign in to the mailbox or reach it – runs stop until it works again.') }}
+      {% else %}{{ _('The run stopped with an error.') }}{% endif %}</div>
+    {% if failure.error %}<div class="run-error">{{ _('%(kind)s at %(time)s:', kind=run_kind(failure.kind), time=failure.started|dt) }} <code>{{ failure.error|run_error|truncate(300) }}</code></div>{% endif %}
+  </div>
+  {% if not failure.recovered %}
+    {% if problem == 'imap' %}<a class="btn small" href="/ui/m/{{ box.id }}/settings#connection">{{ _('Check the connection') }}</a>
+    {% elif problem == 'model' %}<a class="btn small" href="/ui/settings#model">{{ _('Check the AI service') }}</a>{% endif %}
+  {% endif %}
 </div>
 {% endif %}
 
@@ -113,28 +127,47 @@
     </div>
   </section>
 
-  <section class="card" style="display:flex;flex-direction:column;gap:12px;min-width:0">
-    <h2>{{ _('Recent runs') }}</h2>
+  {# the runs: today in one line, the ones worth a look, the latest ones folded #}
+  <section class="card runs-card" style="display:flex;flex-direction:column;gap:12px;min-width:0" aria-label="{{ _('Runs') }}">
+    <h2>{{ _('Runs') }}</h2>
+    <p class="runs-today">{{ ngettext('Today %(num)s run', 'Today %(num)s runs', today.runs) }} · {{ ngettext('%(num)s mail moved', '%(num)s mails moved', today.moved) }} ·
+      {% if today.errors %}<span class="pill warn">{{ ngettext('%(num)s with errors', '%(num)s with errors', today.errors) }}</span>{% else %}{{ _('no errors') }}{% endif %}</p>
+    {% if notable %}
+    <ul class="notable-runs">
+      {% for r in notable %}
+      {% set st = run_status(r) %}
+      <li>
+        <div class="row"><span class="grow"><b>{{ run_kind(r.kind) }}</b>{% if r.detail %} <span class="muted">{{ r.detail|dt if r.kind == 'undo' else r.detail }}</span>{% endif %}
+          <span class="muted"> · {{ r.started|dt }}{% if r.classified %} · {{ ngettext('%(num)s mail', '%(num)s mails', r.classified, num=r.classified|num) }}{% endif %}{% if r.moved %} · {{ _('%(moved)s moved', moved=r.moved|num) }}{% endif %}</span></span>
+          <span class="pill {{ st[1] }}">{{ st[0] }}</span></div>
+        {% if r.error %}<div class="run-error"><code>{{ r.error|run_error|truncate(200) }}</code></div>{% endif %}
+        {% if r.undoable %}<a class="undo-link" href="/ui/m/{{ box.id }}/undo?run={{ r.started|urlencode }}">{{ _('Undo …') }}</a>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted" style="margin:0">{{ _('Nothing special in the last 7 days: only scheduled runs, without errors.') }}</p>{% endif %}
+    <details class="more all-runs">
+      <summary>{{ _('Latest runs') }}</summary>
     {% if runs %}
     <div class="scroll-x"><table>
-      <thead><tr><th scope="col">{{ _('Time') }}</th><th scope="col">{{ _('Kind') }}</th><th scope="col" class="num">{{ _('Mails') }}</th><th scope="col" class="num">{{ _('Moved') }}</th><th scope="col" class="num">{{ _('Cost') }}</th><th scope="col">{{ _('Status') }}</th></tr></thead>
+      <thead><tr><th scope="col">{{ _('Time') }}</th><th scope="col">{{ _('Status') }}</th><th scope="col">{{ _('Kind') }}</th><th scope="col" class="num">{{ _('Mails') }}</th><th scope="col" class="num">{{ _('Moved') }}</th><th scope="col" class="num">{{ _('Cost') }}</th><th scope="col"><span class="sr-only">{{ _('Undo') }}</span></th></tr></thead>
       <tbody>
       {% for r in runs %}
         {% set st = run_status(r) %}
         <tr>
           <td style="white-space:nowrap">{{ r.started|dt }}</td>
+          <td style="white-space:nowrap"><span class="pill {{ st[1] }}" {% if r.error %}title="{{ r.error }}"{% endif %}>{{ st[0] }}</span></td>
           <td>{{ run_kind(r.kind) }}{% if r.detail %} <span class="muted">{{ r.detail|dt if r.kind == 'undo' else r.detail }}</span>{% endif %}</td>
           <td class="num">{{ r.classified|num }}</td>
           <td class="num">{{ r.moved|num }}</td>
           <td class="num">{{ r.cost_usd|usd(4) }}</td>
-          <td style="white-space:nowrap"><span class="pill {{ st[1] }}" {% if r.error %}title="{{ r.error }}"{% endif %}>{{ st[0] }}</span>
-            {% if r.undoable %}<a style="font-size:13px;margin-left:6px" href="/ui/m/{{ box.id }}/undo?run={{ r.started|urlencode }}">{{ _('Show') }}</a>{% endif %}</td>
+          <td style="white-space:nowrap">{% if r.undoable %}<a style="font-size:13px" href="/ui/m/{{ box.id }}/undo?run={{ r.started|urlencode }}">{{ _('Undo …') }}</a>{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>
     </table></div>
     {% else %}<div class="empty">{{ _('No runs with mails logged yet.') }}</div>{% endif %}
-
+    </details>
   </section>
 </div>
 {% endblock %}

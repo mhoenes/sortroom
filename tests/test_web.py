@@ -171,6 +171,12 @@ def test_overview_page(client):
     assert "Werbung" in html and "Finanzen" in html              # distribution bars
     assert "Backfill" in html and "Abgebrochen" in html          # run log with the failed backfill
     assert "1 Lauf mit Fehlern heute" in html
+    # the runs: today in one line, the failed backfill worth a look with its message, the rest folded
+    assert "Heute 2 Läufe · 3 Mails verschoben ·" in html and "1 mit Fehlern" in html
+    assert '<ul class="notable-runs">' in html and "<code>socket error</code>" in html
+    assert '<details class="more all-runs">' in html
+    # the banner: what the error said, and what to do about it (a network error: the connection)
+    assert "Backfill um " in html and 'href="/ui/m/privat/settings#connection">Verbindung prüfen</a>' in html
     assert "Ein Vertrag bucht im Juli" in html                    # "zur Prüfung"
     assert '<span class="from-name">Max Mustermann</span> <span class="from-addr">dein@finanzguru.de</span>' in html
 
@@ -207,6 +213,24 @@ def test_mails_page_filters_and_detail(client):
     # on a tablet the details lie over the list; the dimmed list behind them closes them
     assert '<a class="detail-backdrop" href="/ui/m/privat/mails?period=all&amp;page=1" tabindex="-1"' in html
     assert 'class="detail-backdrop"' not in c.get("/ui/m/privat/mails?period=all").text  # nothing open: none
+
+
+def test_run_problems_and_their_banner():
+    assert [web.run_problem(r) for r in (
+        {"error": "HTTP 401: invalid api key"}, {"error": "the classification endpoint failed for 5 mails in a row"},
+        {"error": "b'[AUTHENTICATIONFAILED] Invalid credentials (Failure)'"}, {"error": "[Errno 11001] getaddrinfo failed"},
+        {"error": "folder INBOX/X not found"}, {"error": None, "failed": 2})] == ["model", "model", "imap", "imap", "", "mails"]
+    assert web.run_error("b'[AUTHENTICATIONFAILED] Invalid credentials'") == "[AUTHENTICATIONFAILED] Invalid credentials"
+    assert web.run_error("socket error") == "socket error" and web.run_error(None) == ""
+
+
+def test_recovered_failure_is_only_noted(client, tmp_path):
+    store = Store(tmp_path / "privat" / "data" / "state.db")
+    later = datetime.now() + timedelta(minutes=1)  # the run log keeps seconds: after the failed one
+    store.record_run("backfill", "since 2025-01-01", later, later, RunResult(exit_code=0, live=True, classified=1))
+    store.close()
+    html = _login(client).get("/ui/m/privat").text
+    assert "Der nächste lief wieder durch." in html and "Verbindung prüfen" not in html
 
 
 def test_search_treats_wildcards_literally(client):
