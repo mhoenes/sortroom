@@ -296,6 +296,19 @@ def test_add_mailbox(client, setup):
     assert r.status_code == 303 and r.headers["location"] == "/ui/m/gmail-2/settings"
 
 
+def test_add_mailbox_steps_are_numbered_and_google_starts_with_its_steps(client):
+    html = client.get("/ui/mailboxes/new").text
+    # three steps: server and login are one ("Connection"), the server only for an IMAP login with password
+    assert "1 · Postfach" in html and "2 · Verbindung" in html and "3 · Kategorien" in html
+    assert "2 · Zugangsdaten" not in html and html.count("<h2>") == 3
+    assert '<h3 class="subhead" data-auth="password">Server</h3>' in html
+    # Google: the steps come first, before the fields; the guide is a link
+    steps = html.split('<ol class="setup-steps" data-auth="google">')[1].split("</ol>")[0]
+    assert "Schritt-für-Schritt-Anleitung im Wiki</a>" in steps and "/wiki/Gmail" in steps
+    assert "Client-ID und Client-Secret der App unten eintragen." in steps
+    assert html.index('class="setup-steps"') < html.index('name="oauth_client_id"')
+
+
 def test_add_mailbox_check_connection_without_creating_and_errors_at_their_fields(client, setup, monkeypatch):
     seen = []
 
