@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% block title %}{{ _('Subscriptions') }} · {{ box.name }}{% endblock %}
-{% macro act(r, action, text, cls='btn small', confirm=none) %}<form method="post" action="/ui/m/{{ box.id }}/senders/action">
+{% macro act(r, action, text, cls='btn small', confirm=none) %}<form method="post" action="/ui/m/{{ box.id }}/subscriptions/action">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="address" value="{{ r.address }}">
       <input type="hidden" name="category" value="{{ category }}"><input type="hidden" name="status" value="{{ status }}">
+      <input type="hidden" name="q" value="{{ q }}">
       <button class="{{ cls }}" type="submit" name="action" value="{{ action }}"
         {% if confirm %}onclick='return confirm({{ confirm|tojson }})'{% endif %}>{{ text }}</button></form>{% endmacro %}
 {% block content %}
@@ -15,8 +16,12 @@
 </div>
 
 {# the filters only once there is something to filter, or while one is set #}
-{% if any or category or status %}
-<form class="filters" method="get" action="/ui/m/{{ box.id }}/senders">
+{% if any or category or status or q %}
+<form class="filters" method="get" action="/ui/m/{{ box.id }}/subscriptions">
+  <div class="f search"><label for="q">{{ _('Search') }}</label>
+    <span class="search-field"><input type="search" id="q" name="q" value="{{ q }}" placeholder="{{ _('Name or address') }}">
+      <button class="search-go" type="submit" aria-label="{{ _('Search') }}" title="{{ _('Search') }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button></span>
+  </div>
   <label class="f sel">{{ _('Status') }}
     <select name="status" onchange="this.form.submit()">
       {% for key, text in (('', _('To do')), ('coming', _('Mail despite unsubscribing')), ('done', _('Unsubscribed')), ('all', _('All'))) %}
@@ -40,7 +45,7 @@
       <th scope="col">{{ _('Status') }}</th><th scope="col"><span class="sr-only">{{ _('Action') }}</span></th></tr></thead>
     <tbody>
     {% for r in rows %}
-      <tr>
+      <tr id="{{ r.anchor }}" {% if r.address == at %}class="at"{% endif %}>
         {# the display name of its newest mail with one, the address below #}
         <td class="clip addr" title="{{ r.name ~ ' <' ~ r.address ~ '>' if r.name else r.address }}">
           {%- if r.name %}<span class="from-name">{{ r.name }}</span>{% endif -%}
@@ -53,7 +58,9 @@
             {%- if r.since %} <span class="pill warn">{{ ngettext('%(num)s mail since', '%(num)s mails since', r.since) }}</span>{% endif %}
             <span class="status-note">{{ _('on %(date)s', date=r.unsubscribed|date) }}</span>
           {%- elif r.suspicious %}<span class="pill err" title="{{ ngettext('%(num)s mail of this sender was sorted as suspicious', '%(num)s mails of this sender were sorted as suspicious', r.suspicious) }}">{{ _('Suspicious') }}</span>
-          {%- endif %}</td>
+          {%- endif %}
+          {#- a sender rule puts its mail somewhere without the model #}
+          {%- if r.rule %}<a class="pill rule-pill" href="/ui/m/{{ box.id }}/rules#sender-rules" title="{{ _('A sender rule decides where its mail goes') }}">{{ _('Rule: %(target)s', target=label('' if r.rule == 'inbox' else r.rule)) }}</a>{% endif %}</td>
         <td class="act"><div class="unsub">
           {% if r.unsubscribed %}
             {{ act(r, 'reset', _('Not unsubscribed'), 'text-btn') }}
@@ -74,12 +81,18 @@
               {{ act(r, 'mark', _('Mark as unsubscribed'), 'text-btn') }}</span>
             {% if r.web and r.mailto and not r.one_click %}<a class="unsub-alt" href="{{ r.mailto }}">{{ _('or by mail') }}</a>{% endif %}
           {% endif %}
+          {# keep the mail, but always in one place: a rule for the sender, on the Rules page to check and save #}
+          {% if not r.rule %}<a class="unsub-alt" href="/ui/m/{{ box.id }}/rules?add={{ r.address|urlencode }}&amp;target={{ (r.category or 'inbox')|urlencode }}"
+            title="{{ _('Its mail always into one category, without the model') }}">{{ _('Create a rule') }}</a>{% endif %}
         </div></td>
       </tr>
+      {% if notice and r.address == at %}<tr class="row-notice"><td colspan="6">
+        <div class="banner {{ notice[0] }}" role="{{ 'alert' if notice[0] == 'err' else 'status' }}">{{ notice[1] }}</div></td></tr>{% endif %}
     {% endfor %}
     </tbody>
   </table></div>
   <p class="muted hint">{{ _('"Unsubscribe" sends the one-click request of the sender (RFC 8058) from this server, or opens its unsubscribe page or mail – then mark it as unsubscribed. Unsubscribe links are read when mails are sorted and when the log is reconciled.') }}</p>
+  {% elif q %}<div class="empty">{{ _('No sender matches the search.') }}</div>
   {% elif any %}<div class="empty">{{ _('No sender with this status.') if status else _('Nothing left to do: you unsubscribed from all of them.') }}</div>
   {% elif category %}<div class="empty">{{ _('No sender of this category with an unsubscribe link in the last %(days)s days.', days=days) }}</div>
   {% else %}<div class="empty">{{ _('No sender with an unsubscribe link in the last %(days)s days. The links are read when mails are sorted and when the log is reconciled (Maintenance).', days=days) }}</div>{% endif %}

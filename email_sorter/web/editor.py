@@ -353,18 +353,27 @@ async def settings_test(request: Request, box_id: str):
 
 def _rules_page(request: Request, box_id: str, sender_rules: list[tuple[str, str]] | None = None,
                 delete_rules: list[dict] | None = None, error: str | None = None, status: int = 200,
-                tested: tuple[str, str, str, str] | None = None):
+                tested: tuple[str, str, str, str] | None = None, add: tuple[str, str] | None = None):
     boxes, box = _box(request, box_id)
     cfg = box.cfg
     if sender_rules is None:
         sender_rules = [(r.match, r.action) for r in cfg.sender_rules]
+    # a rule asked for from another page (Subscriptions): a new row at the end, not saved yet; or the one there is
+    new_row, added = None, False
+    if add and add[0] and writable(box):
+        match = add[0].strip().lower()
+        new_row = next((i for i, (m, _a) in enumerate(sender_rules) if m.strip().lower() == match), None)
+        if new_row is None:
+            sender_rules = [*sender_rules, (match, add[1] if add[1] in cfg.categories else INBOX_ACTION)]
+            new_row, added = len(sender_rules) - 1, True
     if delete_rules is None:
         delete_rules = [{"folder": r.folder, "days": r.days, "only_read": r.only_read, "starred": r.starred}
                         for r in cfg.delete_rules]
     return _page(request, "rules.html", {
         **_sidebar(request, boxes, box, "rules"), "box": box, "cfg": cfg, "rules": sender_rules,
         "delete_rules": delete_rules, "folders": _known_folders(box), "editable": writable(box), "error": error,
-        "config_name": box.config_file.name if box.config_file else "–", "tested": tested}, status)
+        "config_name": box.config_file.name if box.config_file else "–", "tested": tested,
+        "new_row": new_row, "added": added, "add": add[0].strip().lower() if add else ""}, status)
 
 
 def _rules_from(form: dict) -> tuple[list[tuple[str, str]], list[dict]]:
@@ -380,8 +389,9 @@ def _rules_from(form: dict) -> tuple[list[tuple[str, str]], list[dict]]:
 
 
 @router.get("/ui/m/{box_id}/rules", response_class=HTMLResponse, dependencies=[Depends(require_login)])
-def rules_page(request: Request, box_id: str):
-    return _rules_page(request, box_id)
+def rules_page(request: Request, box_id: str, add: str = "", target: str = ""):
+    """With `add` (a sender address) and `target`: a rule for it, ready to check and save."""
+    return _rules_page(request, box_id, add=(add, target) if add.strip() else None)
 
 
 @router.post("/ui/m/{box_id}/rules", response_class=HTMLResponse, dependencies=[Depends(require_login)])

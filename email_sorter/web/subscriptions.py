@@ -1,6 +1,7 @@
 """The Subscriptions page: who sends the most mail with an unsubscribe link, and unsubscribing from them."""
 from __future__ import annotations
 
+import hashlib
 import logging
 from urllib.parse import urlencode, urlsplit
 
@@ -42,40 +43,56 @@ def _shown(status: str, wanted: str) -> bool:
     return {"": status != "done", "coming": status == "coming", "done": status != "open"}.get(wanted, True)
 
 
-def _back(box_id: str, category: str, status: str) -> str:
-    query = {k: v for k, v in (("category", category), ("status", status)) if v}
-    return f"/ui/m/{box_id}/senders" + (f"?{urlencode(query)}" if query else "")
+def _anchor(address: str) -> str:
+    """The id of a sender's row, to come back to it after an action."""
+    return "s-" + hashlib.sha1(address.encode("utf-8")).hexdigest()[:10]
 
 
-@router.get("/ui/m/{box_id}/senders", response_class=HTMLResponse, dependencies=[Depends(require_login)])
-def senders(request: Request, box_id: str, category: str = "", status: str = ""):
+def _back(box_id: str, category: str, status: str, q: str = "", at: str = "") -> str:
+    """The page with the same filters; with `at`, at that sender's row, which shows how the action went."""
+    query = {k: v for k, v in (("category", category), ("status", status), ("q", q), ("at", at)) if v}
+    return (f"/ui/m/{box_id}/subscriptions" + (f"?{urlencode(query)}" if query else "")
+            + (f"#{_anchor(at)}" if at else ""))
+
+
+@router.get("/ui/m/{box_id}/subscriptions", response_class=HTMLResponse, dependencies=[Depends(require_login)])
+def subscriptions(request: Request, box_id: str, category: str = "", status: str = "", q: str = "", at: str = ""):
     boxes, box = _box(request, box_id)
     category = category if category in box.cfg.categories else ""
     status = status if status in STATUSES else ""
+    q = q.strip()
     db = queries.connect(box.workspace)
     try:
         everyone = queries.senders(db, category, danger=DANGER_CATEGORIES)
     finally:
         if db:
             db.close()
+    found = bool(everyone)
+    if q:  # in the address or the display name
+        needle = q.lower()
+        everyone = [r for r in everyone if needle in r["address"] or needle in (r["name"] or "").lower()]
     for row in everyone:
-        row.update(_links(row), status=_status(row))
+        rule = box.cfg.rule_for(row["address"])
+        row.update(_links(row), status=_status(row), anchor=_anchor(row["address"]), rule=rule.action if rule else None)
     counts = {s: sum(_shown(r["status"], s) for r in everyone) for s in STATUSES}
     # mail still coming after you unsubscribed: on top, it needs a look
     rows = sorted((r for r in everyone if _shown(r["status"], status)), key=lambda r: r["status"] != "coming")
-    return _page(request, "senders.html", {
-        **_sidebar(request, boxes, box, "senders"), "box": box, "rows": rows, "any": bool(everyone),
-        "category": category, "status": status, "counts": counts, "days": queries.SENDER_DAYS,
-        "label": lambda k: _label(box, k)})
+    # back from an action on a sender still listed: its outcome in its row, not at the top of the page
+    notice = request.session.pop("flash", None) if at and any(r["address"] == at for r in rows) else None
+    return _page(request, "subscriptions.html", {
+        **_sidebar(request, boxes, box, "subscriptions"), "box": box, "rows": rows, "any": found,
+        "category": category, "status": status, "q": q, "at": at, "notice": notice, "counts": counts,
+        "days": queries.SENDER_DAYS, "label": lambda k: _label(box, k)})
 
 
-@router.post("/ui/m/{box_id}/senders/action", dependencies=[Depends(require_login)])
+@router.post("/ui/m/{box_id}/subscriptions/action", dependencies=[Depends(require_login)])
 async def sender_action(request: Request, box_id: str):
     form = await _form(request)
     _all_boxes, box = _box(request, box_id)
     address, action = str(form.get("address") or "").strip().lower(), str(form.get("action") or "")
     category, status = str(form.get("category") or ""), str(form.get("status") or "")
-    back = _back(box.id, category if category in box.cfg.categories else "", status if status in STATUSES else "")
+    back = _back(box.id, category if category in box.cfg.categories else "", status if status in STATUSES else "",
+                 str(form.get("q") or "").strip(), address)
     store = Store(box.workspace / "data" / "state.db")
     try:
         sender = store.sender(address) if address else None
