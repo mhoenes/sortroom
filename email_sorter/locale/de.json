@@ -528,6 +528,7 @@
  "Please enter the user and the password of the mailbox.": "Bitte Benutzer und Passwort des Postfachs angeben.",
  "Please enter the user and the password.": "Bitte Benutzer und Passwort eingeben.",
  "Please fill in the SMTP server, From and To first.": "Bitte zuerst SMTP-Server, Absender und Empfänger ausfüllen.",
+ "Please log in to continue.": "Bitte melde dich an, um fortzufahren.",
  "Please wait …": "Bitte warten …",
  "Port": "Port",
  "Previous mail": "Vorige Mail",

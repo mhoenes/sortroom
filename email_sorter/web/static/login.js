@@ -21,6 +21,7 @@
     button.setAttribute('aria-pressed', String(shown));
   };
   button.addEventListener('click', () => { set(field.type === 'password'); field.focus(); });
+  button.disabled = field.disabled;  // locked: nothing to show
   set(false);
   field.parentElement.append(button);
 })();

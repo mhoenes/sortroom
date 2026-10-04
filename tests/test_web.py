@@ -122,6 +122,23 @@ def test_login_form_has_a_user_name_for_password_managers_and_can_show_the_passw
     assert client.post("/login", data={"username": "admin", "password": "falsch"}).status_code == 401  # ignored
 
 
+def test_login_page_says_why_marks_the_field_of_an_error_and_is_locked_while_locked(client, monkeypatch):
+    # sent here by a page that needs the login: say why; the plain page has no such line
+    r = client.get("/ui", follow_redirects=True)
+    assert "Bitte melde dich an, um fortzufahren." in r.text and "autofocus" in r.text
+    assert "fortzufahren" not in client.get("/login").text
+    # a wrong password: the field is marked and connected to the message
+    r = client.post("/login", data={"password": "falsch"})
+    assert 'aria-invalid="true" aria-describedby="login-error"' in r.text and 'id="login-error"' in r.text
+    assert "fortzufahren" not in r.text and " disabled" not in r.text
+    # locked: field and button are disabled, nothing to focus or mark
+    for _attempt in range(web.MAX_FAILED_PER_ADDRESS):
+        client.post("/login", data={"password": "falsch"})
+    r = client.post("/login", data={"password": "falsch"})
+    assert r.status_code == 429 and r.text.count(" disabled") == 2 and "autofocus" not in r.text
+    assert "aria-invalid" not in r.text
+
+
 def test_api_documentation_needs_the_login(client):
     for path in ("/docs", "/redoc", "/openapi.json"):
         r = client.get(path, follow_redirects=False)
