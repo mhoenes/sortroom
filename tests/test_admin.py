@@ -245,7 +245,7 @@ def test_reviewing_from_the_overview(client, setup, monkeypatch):
     html = client.get("/ui/m/privat").text
     # going through them starts at the newest; a suggestion with a folder can be accepted right here
     assert 'class="btn small primary" href="/ui/m/privat/mails?uncertain=1&amp;period=30d&amp;key=%3Cu1%40x%3E">Prüfung starten' in html
-    assert html.count('class="rv-accept"') == 1 and 'name="to" value="overview"' in html
+    assert html.count('name="to" value="overview"') == 1  # only the one with a folder
     r = client.post("/ui/m/privat/mails/action", follow_redirects=False, data={
         "csrf": _csrf(html), "key": "<u1@x>", "action": "accept", "category": "werbung", "to": "overview"})
     assert r.headers["location"] == "/ui/m/privat" and moves == [("<u1@x>", "werbung")]
