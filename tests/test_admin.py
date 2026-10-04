@@ -416,13 +416,17 @@ def test_undo_a_run_from_the_run_log(client, setup, monkeypatch):
 
     monkeypatch.setattr(admin, "run_undo", fake_undo)
     link = "/ui/m/privat/undo?run=2026-09-30T10%3A00%3A00"
-    assert f'href="{link}">Rückgängig …</a>' in client.get("/ui/m/privat").text  # in the folded list of runs
+    # in the folded list of runs; coming from the Overview the page's button goes back there
+    assert f'href="{link}&amp;from=overview">Rückgängig …</a>' in client.get("/ui/m/privat").text
+    assert 'href="/ui/m/privat">Zur Übersicht</a>' in client.get(link + "&from=overview").text
+    assert 'href="/ui/m/privat/maintenance">Zur Wartung</a>' in client.get(link).text
     html = client.get("/ui/m/privat/maintenance").text  # the run can be picked there too
     assert '<option value="2026-09-30T10:00:00">' in html and 'action="/ui/m/privat/undo"' in html
     html = client.get(link).text                          # its page lists the mails, all chosen
     assert "Rechnung" in html and "a@b.de" in html
     assert 'name="key" value="&lt;m2@x&gt;" data-target="INBOX/Werbung" checked' in html
     assert "1 lässt sich noch rückgängig machen" in html
+    assert "Möglich" not in html  # a mail that can go back says nothing: its box does
     # for real only after a question with how many (the page's script); "All" for the box on a phone
     assert 'data-confirm-one="{n} Mail jetzt dorthin zurückverschieben, wo sie herkam?' in html
     assert 'data-confirm-many="{n} Mails jetzt dorthin zurückverschieben, wo sie herkamen?' in html

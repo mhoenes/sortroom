@@ -10,7 +10,7 @@ from collections import Counter
 from datetime import date, datetime, timedelta
 from urllib.parse import quote
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
@@ -69,7 +69,7 @@ def maintenance(request: Request, box_id: str, category: str = ""):
 
 
 @router.get("/ui/m/{box_id}/undo", response_class=HTMLResponse, dependencies=[Depends(require_login)])
-def undo_page(request: Request, box_id: str, run: str = ""):
+def undo_page(request: Request, box_id: str, run: str = "", came_from: str = Query("", alias="from")):
     """The mails of a run: which can still be undone, and why the others can't any more."""
     boxes, box = _box(request, box_id)
     db = queries.connect(box.workspace)
@@ -93,7 +93,7 @@ def undo_page(request: Request, box_id: str, run: str = ""):
     older = sum(1 for m in open_ if _received(m["received"]) < since)
     return _page(request, "undo.html", {
         **_sidebar(request, boxes, box, "maintenance"), "box": box, "run": info, "mails": mails,
-        "undoable": len(open_), "done": done, "targets": targets, "older": older,
+        "undoable": len(open_), "done": done, "targets": targets, "older": older, "came_from": came_from,
         "busy": request.app.state.is_busy(box)})
 
 

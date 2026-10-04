@@ -167,7 +167,7 @@
           <span class="muted"> · {{ r.started|dt }}{% if r.classified %} · {{ ngettext('%(num)s mail', '%(num)s mails', r.classified, num=r.classified|num) }}{% endif %}{% if r.moved %} · {{ _('%(moved)s moved', moved=r.moved|num) }}{% endif %}</span></span>
           <span class="pill {{ st[1] }}">{{ st[0] }}</span></div>
         {% if r.error %}<div class="run-error"><code>{{ r.error|run_error|truncate(200) }}</code></div>{% endif %}
-        {% if r.undoable %}<a class="undo-link" href="/ui/m/{{ box.id }}/undo?run={{ r.started|urlencode }}">{{ _('Undo …') }}</a>{% endif %}
+        {% if r.undoable %}<a class="undo-link" href="/ui/m/{{ box.id }}/undo?run={{ r.started|urlencode }}&amp;from=overview">{{ _('Undo …') }}</a>{% endif %}
       </li>
       {% endfor %}
     </ul>
@@ -187,7 +187,7 @@
           <td class="num">{{ r.classified|num }}</td>
           <td class="num">{{ r.moved|num }}</td>
           <td class="num">{{ r.cost_usd|usd(4) }}</td>
-          <td style="white-space:nowrap">{% if r.undoable %}<a style="font-size:13px" href="/ui/m/{{ box.id }}/undo?run={{ r.started|urlencode }}">{{ _('Undo …') }}</a>{% endif %}</td>
+          <td style="white-space:nowrap">{% if r.undoable %}<a style="font-size:13px" href="/ui/m/{{ box.id }}/undo?run={{ r.started|urlencode }}&amp;from=overview">{{ _('Undo …') }}</a>{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>

@@ -13,7 +13,8 @@
     <div class="sub">{{ run_kind(run.kind) }}{% if run.detail %} {{ run.detail }}{% endif %} · {{ run.started|dt(true) }} · {{ ngettext('%(num)s mail sorted', '%(num)s mails sorted', mails|length) }} · {{ ngettext('%(num)s can still be undone', '%(num)s can still be undone', undoable) }}
       {%- if done %}<br>{% for folder, n in done[:4] %}{{ _('%(num)s to %(folder)s', num=n, folder=folder|folder_label if folder else _('Inbox')) }}{{ ', ' if not loop.last }}{% endfor %}{% if done|length > 4 %} …{% endif %}{% endif %}</div>
   </div>
-  <a class="btn" href="/ui/m/{{ box.id }}/maintenance">{{ _('To maintenance') }}</a>
+  {% if came_from == 'overview' %}<a class="btn" href="/ui/m/{{ box.id }}">{{ _('To the overview') }}</a>
+  {% else %}<a class="btn" href="/ui/m/{{ box.id }}/maintenance">{{ _('To maintenance') }}</a>{% endif %}
 </div>
 
 {% if busy %}<div class="banner" role="status">{{ _('A run is in progress for this mailbox. New jobs wait until it is done.') }}</div>{% endif %}
@@ -39,7 +40,7 @@
         <th scope="col">{{ _('Back: from → to') }}</th><th scope="col">{{ _('Undo') }}</th></tr></thead>
       <tbody>
       {% for m in mails %}
-        <tr>
+        <tr {% if m.blocked %}class="blocked"{% endif %}>
           <td class="pick">{% if not m.blocked %}<input type="checkbox" name="key" value="{{ m.key }}" data-target="{{ m.run_moved_to or '' }}" checked
             aria-label="{{ _('Undo for %(subject)s', subject=m.subject or _('(no subject)')) }}">{% endif %}</td>
           <td class="date">{{ m.received|dt if m.received else '–' }}</td>
@@ -49,7 +50,7 @@
             {% else %}<span class="muted">{{ m.key }}</span>{% endif %}</td>
           <td class="route">{{ m.run_moved_to|folder_label if m.run_moved_to else _('Inbox') }} → <b>{{ m.origin|folder_label if m.origin else _('Inbox') }}</b>
             {%- if m.starred %}<span class="unstar"> · <svg class="star inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z"/></svg> {{ _('star removed') }}</span>{% endif %}</td>
-          <td class="state">{% if m.blocked %}<span class="muted">{{ reasons[m.blocked] }}</span>{% else %}<span class="pill ok">{{ _('Possible') }}</span>{% endif %}</td>
+          <td class="state">{% if m.blocked %}<span class="muted">{{ reasons[m.blocked] }}</span>{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>
@@ -58,7 +59,7 @@
 
   {% if undoable %}
   <section class="card stack tight">
-    <p class="muted hint">{{ _('Undo moves the chosen mails back to where they came from and removes the stars the run set. Mails that changed since stay as they are. Those not chosen can still be undone later.') }}</p>
+    <p class="muted hint">{{ _('Mails not chosen can still be undone later.') }}</p>
     {# afterwards: the choice that decides whether the mails are ever sorted again #}
     <fieldset class="after-choice">
       <legend class="lt">{{ _('Afterwards') }}</legend>
