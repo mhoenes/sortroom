@@ -114,6 +114,14 @@ def test_login_and_logout(client):
     assert client.get("/ui", follow_redirects=False).status_code == 303
 
 
+def test_login_form_has_a_user_name_for_password_managers_and_can_show_the_password(client):
+    html = client.get("/login").text
+    # the one account, so a password manager offers to fill and save it; the script adds the show/hide button
+    assert 'name="username" value="admin" autocomplete="username"' in html and 'autocomplete="current-password"' in html
+    assert 'class="pw"' in html and 'data-show="Passwort anzeigen" data-hide="Passwort verbergen"' in html
+    assert client.post("/login", data={"username": "admin", "password": "falsch"}).status_code == 401  # ignored
+
+
 def test_api_documentation_needs_the_login(client):
     for path in ("/docs", "/redoc", "/openapi.json"):
         r = client.get(path, follow_redirects=False)
