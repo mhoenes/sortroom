@@ -359,6 +359,10 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 .boxcard .actions { display: flex; gap: 8px; margin-top: auto; }
 /* a mailbox with an error still open: its card carries it, with what to do */
 .boxcard.problem { border-color: var(--err-line); }
+/* the review count, when there is something to review */
+.boxcard a.stat.needs-review b { font-size: 26px; color: var(--accent-ink); }
+.boxcard .login-note { font-size: 13px; color: var(--warn); }
+.totals-line { margin-top: 2px; }
 .boxcard .run-problem-box { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 12px;
   border-radius: 8px; background: var(--err-bg); color: var(--err); font-size: 13px; }
 .boxcard .run-problem-box .btn { background: var(--surface); }

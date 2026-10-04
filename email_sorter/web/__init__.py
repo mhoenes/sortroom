@@ -21,7 +21,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from .. import __version__, i18n
-from ..config import INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, default_label, read_secrets
+from ..config import INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, default_label, imap_credentials, read_secrets
 from ..i18n import _
 from ..sorter import expired_target
 from . import queries
@@ -317,6 +317,15 @@ def root():
     return RedirectResponse("/ui", status_code=303)
 
 
+def _login_missing(box: Mailbox) -> bool:
+    """No IMAP login saved for the mailbox (yet): it can't be sorted."""
+    try:
+        imap_credentials(box)
+    except ConfigError:
+        return True
+    return False
+
+
 @router.get("/ui", response_class=HTMLResponse, dependencies=[Depends(require_login)])
 def all_mailboxes(request: Request):
     boxes = _boxes(request)
@@ -326,6 +335,8 @@ def all_mailboxes(request: Request):
         try:
             st = queries.stats(db, b.cfg.min_confidence)
             failure = queries.last_failure(db)
+            newest = queries.uncertain_mails(db, b.cfg.min_confidence, 1, days=30)  # where "Review" starts
+            first_review = newest[0]["message_key"] if newest else ""
         finally:
             if db:
                 db.close()
@@ -333,7 +344,8 @@ def all_mailboxes(request: Request):
         open_failure = failure if failure and not failure["recovered"] else None
         cards.append({"box": b, "stats": st, "busy": request.app.state.is_busy(b),
                       "schedule": request.app.state.scheduler.status(b),
-                      "categories": len(b.cfg.categories), "failure": failure, "open_failure": open_failure})
+                      "categories": len(b.cfg.categories), "failure": failure, "open_failure": open_failure,
+                      "first_review": first_review, "login_missing": _login_missing(b)})
         totals["today"] += st.sorted_today
         totals["uncertain"] += st.uncertain
         totals["cost"] += st.cost_month
@@ -343,6 +355,8 @@ def all_mailboxes(request: Request):
         "running": [c["box"].name for c in cards if c["busy"] or c["schedule"]["running"]],
         "errors": sum(1 for c in cards if c["open_failure"]),
         "first_problem": next((c["box"].id for c in cards if c["open_failure"]), ""),
+        # the cards say how often a mailbox runs only where the intervals differ
+        "mixed_intervals": len({s["minutes"] for s in schedules if s["enabled"] and s["active"]}) > 1,
         "next": min((s["next"] for s in schedules if s["enabled"] and s["active"] and s["next"]), default=None),
         "scheduled": any(s["enabled"] and s["active"] for s in schedules),
         "process_off": bool(schedules) and not any(s["active"] for s in schedules),

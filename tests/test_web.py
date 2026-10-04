@@ -357,6 +357,31 @@ def test_all_mailboxes_subtitle_says_what_is_going_on(client, monkeypatch):
     assert "Läuft gerade: Privat" in html and "Nächster Lauf" not in html.split('class="sub"')[1].split("</div>")[0]
 
 
+def test_all_mailboxes_sums_in_the_subtitle_review_button_quiet_schedule_and_login(client, monkeypatch):
+    c = _login(client)
+    html = c.get("/ui").text
+    # the sums: one line below the subtitle (two mailboxes), not cards of their own
+    assert 'class="grid totals"' not in html
+    assert '<div class="sub totals-line">' in html and "heute einsortiert ·" in html and "diesen Monat</div>" in html
+    # the review is what the card is for: its count stands out and the button starts it (privat has an uncertain mail)
+    assert 'class="stat needs-review" href="/ui/m/privat/mails?uncertain=1&amp;period=30d"' in html
+    assert ('class="btn primary" href="/ui/m/privat/mails?uncertain=1&amp;period=30d&amp;key=%3Cr3%40x%3E">'
+            'Prüfen (1)</a>') in html
+    assert 'class="stat" href="/ui/m/privat"><span>Kosten diesen Monat' in html  # the cost: on to the Overview
+    # the server only where the name doesn't say the account; no login saved: said, with the way
+    assert CFG.imap_host in html
+    assert "Noch kein Login gespeichert" in html and 'href="/ui/m/gmail/settings#connection">Login eintragen</a>' in html
+    # the usual schedule isn't repeated on every card: only what is not usual
+    usual = {"enabled": True, "active": True, "running": False, "minutes": 10, "next": datetime(2026, 9, 27, 17, 45)}
+    monkeypatch.setattr(api.app.state.scheduler, "status", lambda box: dict(usual))
+    html = c.get("/ui").text
+    assert "Nächster Lauf 17:45" in html.split('class="sub"')[1].split("</div>")[0]  # in the subtitle
+    assert "alle 10 Min" not in html
+    monkeypatch.setattr(api.app.state.scheduler, "status",
+                        lambda box: {**usual, "minutes": 30 if box.id == "gmail" else 10})
+    assert html.count("alle 10 Min") == 0 and c.get("/ui").text.count("alle 10 Min") == 1  # intervals differ: said
+
+
 def test_all_mailboxes_an_error_is_shown_with_its_way_out_and_comes_first(client, tmp_path):
     c = _login(client)
     html = c.get("/ui").text
