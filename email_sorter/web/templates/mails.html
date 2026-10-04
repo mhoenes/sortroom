@@ -75,32 +75,41 @@
       {% set m = selected %}
       {# what the last action did – also when it was the mail before, and this one opened next #}
       {% if notice %}<div class="banner {{ notice[0] }} notice" role="{{ 'alert' if notice[0] == 'err' else 'status' }}">{{ notice[1] }}</div>{% endif %}
-      <div style="display:flex;flex-direction:column;gap:4px">
-        <div class="row" style="align-items:flex-start">
-          <div class="muted grow" style="font-size:13px;overflow-wrap:anywhere">{{ m.received|dt(true) }} · {{ m.sender }}</div>
+      {# when and from whom, the arrows to the mails before and after it, the subject; then what was decided
+         and why, which matters for a review; the rest under "More details" #}
+      <div class="detail-head">
+        <div class="row detail-bar">
+          <span class="muted grow">{{ m.received|dt(true) }}</span>
           {# the mails before and after this one in the list; keys k and j #}
           {% if prev_key %}<a class="navbtn" data-nav="prev" href="{{ list_href }}&amp;key={{ link_key(prev_key) }}" aria-label="{{ _('Previous mail') }}" title="{{ _('Previous mail') }} (k)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></a>{% endif %}
           {% if next_key %}<a class="navbtn" data-nav="next" href="{{ list_href }}&amp;key={{ link_key(next_key) }}" aria-label="{{ _('Next mail') }}" title="{{ _('Next mail') }} (j)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></a>{% endif %}
           <a class="close" href="{{ list_href }}" aria-label="{{ _('Close details') }}" title="{{ _('Close') }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></a>
         </div>
+        <div class="muted detail-from">{{ m.sender }}</div>
         <h2>{{ m.subject or _('(no subject)') }}</h2>
-        <div>
+        <div class="detail-status">
           {% if m.gone %}<span class="pill">{{ _('No longer in the mailbox') }}</span>
           {% elif m.moved_to %}<span class="pill ok">{{ _('In %(folder)s', folder=m.moved_to|folder_label) }}</span>
-          {% elif m.confidence < min_conf %}<span class="pill warn">{{ _('Uncertain – left in the inbox') }}</span>
+          {% elif m.confidence < min_conf and m.source not in ('rule', 'manual') %}<span class="pill warn">{{ _('Uncertain – left in the inbox') }}</span>
           {% else %}<span class="pill">{{ _('In the inbox') }}</span>{% endif %}
+          {% if m.flagged %}<span class="pill star-pill"><svg class="star inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z"/></svg>{{ _('starred') }}</span>{% endif %}
         </div>
+        <p class="decision">
+          {%- if m.source == 'rule' %}{{ _('Sender rule: %(category)s', category=label(m.category)) }}
+          {%- elif m.source == 'manual' %}{{ _('By hand: %(category)s', category=label(m.category)) }}
+          {%- else %}{{ _('Model: %(category)s · confidence %(conf)s', category=label(m.category), conf=m.confidence|conf) }}
+            {%- if m.confidence < min_conf %} <span class="muted">{{ _('(at least %(min)s needed)', min=min_conf|conf) }}</span>{% endif %}{% endif -%}
+        </p>
+        {% if m.expires %}<p class="decision muted">{{ _('Valid until %(date)s', date=m.expires|date) }}{% if m.expired_tagged == 1 %} · {{ _('moved to "expired"') }}{% endif %}</p>{% endif %}
       </div>
-      <dl>
-        <dt>{{ _('Category') }}</dt><dd>{{ label(m.category) }}</dd>
-        <dt>{{ _('Decided by') }}</dt><dd>{{ {'rule': _('Sender rule'), 'manual': _('by hand')}.get(m.source, _('Model')) }}</dd>
-        {% if m.source not in ('rule', 'manual') %}<dt>{{ _('Confidence') }}</dt><dd>{{ m.confidence|conf }}</dd>
-        <dt>{{ _('Needs action') }}</dt><dd>{{ m.needs_action|conf }}</dd>{% endif %}
-        <dt>{{ _('Star') }}</dt><dd>{{ _('yes') if m.flagged else _('no') }}</dd>
-        {% if m.expires %}<dt>{{ _('Valid until') }}</dt><dd>{{ m.expires|date }}{% if m.expired_tagged == 1 %} · {{ _('moved to "expired"') }}{% endif %}</dd>{% endif %}
-        <dt>{{ _('Cost') }}</dt><dd>{{ m.cost_usd|usd(6) }}</dd>
-        <dt>{{ _('Processed') }}</dt><dd>{{ m.processed_at|dt(true) }}</dd>
-      </dl>
+      <details class="more more-info">
+        <summary>{{ _('More details') }}</summary>
+        <dl>
+          {% if m.source not in ('rule', 'manual') %}<dt>{{ _('Needs action') }}</dt><dd>{{ m.needs_action|conf }}</dd>{% endif %}
+          <dt>{{ _('Cost') }}</dt><dd>{{ m.cost_usd|usd(6) }}</dd>
+          <dt>{{ _('Processed') }}</dt><dd>{{ m.processed_at|dt(true) }}</dd>
+        </dl>
+      </details>
       {% if m.gone %}<p class="muted hint">{{ _('This mail was deleted or is in the trash – at the last reconcile it was in no folder any more.') }}</p>{% else %}
       {% set back = query ~ ('&' if query else '') ~ 'page=' ~ f.page ~ '&key=' ~ link_key(m.message_key) %}
       {% set token = csrf_token(request) %}
@@ -121,13 +130,16 @@
       <form method="post" action="/ui/m/{{ box.id }}/mails/action" class="act">
         {{ hidden }}<input type="hidden" name="action" value="move">
         <div class="f"><label for="correct">{{ _('Correct') }}</label>
-          <span class="combo"><select name="category" id="correct">
-            {% for key, c in box.cfg.categories.items() %}{% set where = c.folder|folder_label %}<option value="{{ key }}" {% if key == m.category %}selected{% endif %}>{{ c.label }}{% if where != c.label %} → {{ where }}{% endif %}</option>{% endfor %}
+          <span class="combo"><select name="category" id="correct" required>
+            <option value="" selected disabled>{{ _('Choose a category …') }}</option>
+            {% for key, c in box.cfg.categories.items() %}{% set where = c.folder|folder_label %}<option value="{{ key }}">{{ c.label }}{% if where != c.label %} → {{ where }}{% endif %}</option>{% endfor %}
             <option value="inbox">{{ _('Back to the inbox') }}</option>
           </select><button class="btn" type="submit">{{ _('Move') }}</button></span></div>
       </form>
       {% if m.expired_tagged != 1 %}
-      <form method="post" action="/ui/m/{{ box.id }}/mails/action" class="act">
+      {% set offer = m.expires or (suggested and suggested.track_expiry) %}
+      {% if not offer %}<details class="more act"><summary>{{ _('Set an expiry date') }}</summary>{% endif %}
+      <form method="post" action="/ui/m/{{ box.id }}/mails/action" class="{{ 'act' if offer else 'stack tight' }}">
         {{ hidden }}<input type="hidden" name="action" value="expiry">
         {% set tip = _('After this day the next run moves the mail to %(folder)s.', folder=expired_to(m.category)) if expired_to(m.category) else _('No folder for expired mail is set – the date is only shown.') %}
         <div class="f"><span class="lt"><label for="expires">{{ _('Valid until') }}</label>
@@ -136,6 +148,7 @@
             {% if m.expires %}<button class="btn icon" type="submit" name="clear" value="1" aria-label="{{ _('Remove the date') }}" title="{{ _('Remove the date') }}">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>{% endif %}</span></div>
       </form>
+      {% if not offer %}</details>{% endif %}
       {% endif %}
       <details class="more act" {% if offer_rule %}open{% endif %}>
         <summary>{{ _('Always for this sender?') if offer_rule else _('Create a sender rule') }}</summary>

@@ -184,7 +184,12 @@ def test_mails_page_filters_and_detail(client):
     html = c.get("/ui/m/privat/mails?period=all&folder=inbox").text
     assert "1 Eintrag" in html
     html = c.get("/ui/m/privat/mails?period=all&key=%3Cr2%40x%3E").text
-    assert "Gültig bis" in html and "24.09.2026" in html and "Entschieden von" in html
+    assert "Gültig bis 24.09.2026" in html and "Modell: Werbung · Sicherheit 1,00" in html
+    assert '<option value="" selected disabled>Kategorie wählen …</option>' in html  # "Correct": nothing chosen
+    assert "Ablaufdatum setzen" not in html  # a mail with a date: the field is open
+    html = c.get("/ui/m/privat/mails?period=all&key=%3Cr3%40x%3E").text  # uncertain: why, and no date yet
+    assert "Modell: Finanzen · Sicherheit 0,45" in html and "(mindestens 0,70 nötig)" in html
+    assert "<summary>Ablaufdatum setzen</summary>" in html and "<summary>Mehr Details</summary>" in html
 
 
 def test_search_treats_wildcards_literally(client):

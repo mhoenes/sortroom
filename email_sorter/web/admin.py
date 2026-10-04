@@ -267,6 +267,9 @@ async def mail_action(request: Request, box_id: str):
     then = str(form.get("then") or "")  # the list with the next mail open: where accepting it goes on to
     category = str(form.get("category") or "")
 
+    if action == "move" and not category:  # "Correct" with nothing chosen
+        _flash(request, _("Please choose a category."), "err")
+        return RedirectResponse(back, status_code=303)
     if action == "expiry":  # only the log changes, no IMAP and no lock needed
         try:
             _flash(request, _set_expiry(box, key, form))
