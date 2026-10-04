@@ -9,7 +9,7 @@
   </div>
 </div>
 <div class="actions">
-  {% if to_maintenance %}<a class="btn primary" href="/ui/m/{{ box.id }}/maintenance">{{ _('To maintenance') }}</a>{% endif %}
+  {% if back %}<a class="btn primary" href="{{ back[0] }}">{{ back[1] }}</a>{% endif %}
   {% if box %}<a class="btn" href="/ui/m/{{ box.id }}">{{ _('Overview') }}</a>{% endif %}
   <a class="btn" href="/ui">{{ _('All mailboxes') }}</a>
 </div>

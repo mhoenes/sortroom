@@ -1,0 +1,9 @@
+{# A failure in plain words, what to do about it where we know (problem: "imap", "model" or ""), and the raw message
+   under it. `fallback` says what failed when the cause is unknown; `back` is a way back as (url, label). Needs `box`. #}
+{% macro problem_banner(text, problem, fallback, back=none) %}<div class="banner err problem" role="alert">
+  <div class="grow"><b>{% if problem == 'imap' %}{{ _("The mailbox can't be reached, or its login failed.") }}{% elif problem == 'model' %}{{ _("The AI service doesn't answer, or rejects the key.") }}{% else %}{{ fallback }}{% endif %}</b>
+    <span class="raw mono">{{ text|run_error }}</span></div>
+  {% if problem == 'imap' %}<a class="btn small" href="/ui/m/{{ box.id }}/settings#connection">{{ _('Check the connection') }}</a>
+  {% elif problem == 'model' %}<a class="btn small" href="/ui/settings#model">{{ _('Check the AI service') }}</a>{% endif %}
+  {% if back %}<a class="btn small" href="{{ back[0] }}">{{ back[1] }}</a>{% endif %}
+</div>{% endmacro %}
