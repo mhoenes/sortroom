@@ -15,7 +15,7 @@
               <input type="hidden" name="pos_{{ i }}" value="{{ i }}" data-pos></td>
             <td><select name="action_{{ i }}" aria-label="{{ _('Target') }}" {% if new %}autofocus{% endif %}{{ invalid('action_' ~ i) }}>
               <option value="inbox" {% if action == 'inbox' %}selected{% endif %}>{{ _('Leave in the inbox') }}</option>
-              {% for key, c in cfg.categories.items() %}<option value="{{ key }}" {% if action == key %}selected{% endif %}>{{ c.label }}{% if c.folder %} → {{ c.folder|folder_label }}{% endif %}</option>{% endfor %}
+              {% for key, c in cfg.categories.items() %}<option value="{{ key }}" {% if action == key %}selected{% endif %}>{{ c.label }}{% if c.folder and c.folder|folder_label != c.label %} → {{ c.folder|folder_label }}{% endif %}</option>{% endfor %}
             </select>{{ field_error('action_' ~ i) }}</td>
             <td class="rule-tools">{{ move_buttons() }}{{ remove_button() }}</td>
           </tr>{% endmacro %}
@@ -51,6 +51,7 @@
       <div>
         <h2>{{ _('Sender rules') }} {{ help(_('Mails from these senders are not decided by the model: they stay in the inbox or go straight into a category. A rule is an address (news@shop.com: exactly this sender), a domain with @ (@shop.com: every sender of this domain) or without (shop.com: also its subdomains such as mail.shop.com). Any other text matches when it is part of the address. The first matching rule wins.')) }}</h2>
         <p class="muted hint">{{ _('Where mail from a sender goes, before the model is asked. The first matching rule wins: the order is the order of the rows.') }}</p>
+        <p class="muted hint">{{ _('You can also make a rule from a mail on the Mails page, on Subscriptions, and from the suggestions on the Overview.') }}</p>
       </div>
       <p class="muted no-rules">{{ _('No rules yet – the model decides every mail.') }}</p>
       <div class="scroll-x"><table class="rules">
@@ -74,6 +75,7 @@
         <p class="muted hint">{{ _('Applied once a day, and under Maintenance by hand. Starred mail stays unless "Starred too" is ticked.') }}</p>
       </div>
       <p class="muted no-rules">{{ _('No deletion rules – nothing is moved to the trash.') }}</p>
+      <p class="banner dry-nudge" role="status" hidden>{{ _('Deletion rules move mail to the trash every day: try the dry run below before you save.') }}</p>
       <div class="scroll-x"><table class="rules deleterules">
         <thead><tr><th scope="col">{{ _('Folder') }}</th><th scope="col">{{ _('Older than (days)') }}</th>
           <th scope="col">{{ _('Only read') }}</th><th scope="col">{{ _('Starred too') }}</th><th scope="col"><span class="sr-only">{{ _('Remove') }}</span></th></tr></thead>
@@ -128,6 +130,11 @@
     }, 400);
   };
   senders.addEventListener('input', e => { if (e.target.name && e.target.name.startsWith('match_')) ask(); });
+  // a changed or new deletion rule: a reminder of the dry run, which is the only way to see what it would do
+  const deletion = document.getElementById('deletion-rules');
+  const nudge = () => deletion.querySelector('.dry-nudge').removeAttribute('hidden');
+  deletion.addEventListener('input', nudge);
+  deletion.addEventListener('click', e => { if (e.target.closest('.rule-add')) nudge(); });
   senders.closest('form').addEventListener('submit', settle);  // the order on screen is the one that counts
   settle();
 

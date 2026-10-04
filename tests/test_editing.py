@@ -666,3 +666,21 @@ def test_concurrent_edits_of_a_mailbox_keep_both(setup, monkeypatch):
     category.join()
     box = _box(setup)
     assert box.cfg.categories["werbung"].description == "Neu" and box.cfg.rule_for("x@shop.de")
+
+
+def test_rules_page_small_things_and_an_unreachable_server_in_the_dry_run(client, setup, monkeypatch):
+    html = client.get("/ui/m/privat/rules").text
+    assert "Werbung → Werbung" not in html and "Finanzen → Finanzen" not in html  # the folder only where it differs
+    assert "<th scope=\"col\">Nur gelesen</th>" in html and "<th scope=\"col\">Mit Stern</th>" in html
+    assert "Eine Regel geht auch von einer Mail auf der Mails-Seite" in html
+    assert 'class="banner dry-nudge" role="status" hidden' in html and "Probelauf unten" in html
+
+    def unreachable(cfg, creds, workspace, live):
+        raise OSError("[Errno 11001] getaddrinfo failed")
+
+    monkeypatch.setattr(editor, "run_cleanup", unreachable)
+    from email_sorter.web.editing import write_secrets
+    write_secrets(setup / "mailboxes" / "privat" / "secrets.toml", "imap", {"user": "u", "password": "p"})
+    r = client.post("/ui/m/privat/rules/dry-run", headers={"Accept": "application/json"},
+                    data={"csrf": _csrf(html), "rows": "0", "drows": "1", "dfolder_0": "INBOX/Werbung", "ddays_0": "30"})
+    assert r.json()["tone"] == "err" and "nicht erreichbar" in r.json()["text"] and "getaddrinfo" in r.json()["text"]
