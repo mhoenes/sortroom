@@ -375,9 +375,25 @@ async def settings_test(request: Request, box_id: str):
 
 # ---------------------------------------------------------------- the Rules page: sender rules, deletion rules
 
+def _shown_field(field: str | None, sender_rules: list[tuple[str, str]], delete_rules: list[dict]) -> str | None:
+    """The row field of an error (its number in the form) as the page shows it again: rows without a sender or
+    folder are left out then, so the rows after them move up."""
+    name, _sep, number = (field or "").rpartition("_")
+    if not number.isdigit():
+        return None
+    if name in ("match", "action"):
+        kept = [i for i, r in enumerate(sender_rules) if r[0].strip()]
+    elif name in ("dfolder", "ddays"):
+        kept = [i for i, r in enumerate(delete_rules) if r["folder"].strip()]
+    else:
+        return None
+    return f"{name}_{kept.index(int(number))}" if int(number) in kept else None
+
+
 def _rules_page(request: Request, box_id: str, sender_rules: list[tuple[str, str]] | None = None,
                 delete_rules: list[dict] | None = None, error: str | None = None, status: int = 200,
-                tested: tuple[str, str, str, str] | None = None, add: tuple[str, str] | None = None):
+                tested: tuple[str, str, str, str] | None = None, add: tuple[str, str] | None = None,
+                error_field: str | None = None):
     boxes, box = _box(request, box_id)
     cfg = box.cfg
     if sender_rules is None:
@@ -397,7 +413,8 @@ def _rules_page(request: Request, box_id: str, sender_rules: list[tuple[str, str
         **_sidebar(request, boxes, box, "rules"), "box": box, "cfg": cfg, "rules": sender_rules,
         "delete_rules": delete_rules, "folders": _known_folders(box), "editable": writable(box), "error": error,
         "config_name": box.config_file.name if box.config_file else "–", "tested": tested,
-        "new_row": new_row, "added": added, "add": add[0].strip().lower() if add else ""}, status)
+        "new_row": new_row, "added": added, "add": add[0].strip().lower() if add else "",
+        "error_field": error_field}, status)
 
 
 def _rules_from(form: dict) -> tuple[list[tuple[str, str]], list[dict]]:
@@ -429,7 +446,8 @@ async def rules_save(request: Request, box_id: str):
     except EditError as e:
         return _rules_page(request, box_id, error=str(e), status=422,
                            sender_rules=[r for r in sender_rules if r[0].strip()],
-                           delete_rules=[r for r in delete_rules if r["folder"].strip()])
+                           delete_rules=[r for r in delete_rules if r["folder"].strip()],
+                           error_field=_shown_field(e.field, sender_rules, delete_rules))
     _flash(request, _("Rules saved. They apply from the next run."))
     return RedirectResponse(f"/ui/m/{box.id}/rules", status_code=303)
 
@@ -467,7 +485,7 @@ async def rules_dry_run(request: Request, box_id: str):
     form = await _form(request)
     _all_boxes, box = _box(request, box_id)
     sender_rules, delete_rules = _rules_from(form)
-    details = ""
+    details, field = "", None
     try:
         cfg = config_with_delete_rules(box, _shared_path(request), delete_rules)
         if not cfg.delete_rules:
@@ -477,11 +495,11 @@ async def rules_dry_run(request: Request, box_id: str):
     except ConfigError:
         tone, text = "err", _("The login of this mailbox is not set yet.")
     except EditError as e:
-        tone, text = "err", str(e)
+        tone, text, field = "err", str(e), e.field  # the page's script goes to the row's field
     except Exception as e:  # the server is not reachable, the login fails …
         tone, text = "err", _("The dry run failed: %(e)s", e=e)
     if "application/json" in request.headers.get("accept", ""):
-        return JSONResponse({"tone": tone, "text": text, "field": None, "details": details})
+        return JSONResponse({"tone": tone, "text": text, "field": field, "details": details})
     return _rules_page(request, box_id, sender_rules=[r for r in sender_rules if r[0].strip()],
                        delete_rules=[r for r in delete_rules if r["folder"].strip()],
                        tested=("dry-run", tone, text, details))

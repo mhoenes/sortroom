@@ -1,22 +1,24 @@
 {% extends "base.html" %}
 {% block title %}{{ _('Rules') }} · {{ box.name }}{% endblock %}
 {% from "_test.html" import test_row, test_script, eye_icon with context %}
+{% from "_fields.html" import invalid, field_error with context %}
 {% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text|forceescape }}" data-tip="{{ text|forceescape }}">?</span>{% endmacro %}
 {% macro remove_button() %}{% if editable %}<button class="icon-btn rule-remove" type="button" aria-label="{{ _('Remove rule') }}" title="{{ _('Remove rule') }}">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>{% endif %}{% endmacro %}
 {% macro rule_row(i, match, action, new=false) %}<tr {% if new %}class="rule-new"{% endif %}>
-            <td><input type="text" name="match_{{ i }}" value="{{ match }}" aria-label="{{ _('Sender') }}" placeholder="{{ _('name@company.com or @company.com') }}"></td>
-            <td><select name="action_{{ i }}" aria-label="{{ _('Target') }}" {% if new %}autofocus{% endif %}>
+            <td><input type="text" name="match_{{ i }}" value="{{ match }}" aria-label="{{ _('Sender') }}" placeholder="{{ _('name@company.com or @company.com') }}"{{ invalid('match_' ~ i) }}>{{ field_error('match_' ~ i) }}</td>
+            <td><select name="action_{{ i }}" aria-label="{{ _('Target') }}" {% if new %}autofocus{% endif %}{{ invalid('action_' ~ i) }}>
               <option value="inbox" {% if action == 'inbox' %}selected{% endif %}>{{ _('Leave in the inbox') }}</option>
               {% for key, c in cfg.categories.items() %}<option value="{{ key }}" {% if action == key %}selected{% endif %}>{{ c.label }}{% if c.folder %} → {{ c.folder|folder_label }}{% endif %}</option>{% endfor %}
-            </select></td>
+            </select>{{ field_error('action_' ~ i) }}</td>
             <td class="rule-del">{{ remove_button() }}</td>
           </tr>{% endmacro %}
 {% macro delete_row(i, r) %}<tr>
-            <td><input type="text" name="dfolder_{{ i }}" value="{{ r.folder }}" list="known-folders" aria-label="{{ _('Folder') }}" placeholder="INBOX/…" spellcheck="false"></td>
-            <td class="days"><input type="number" name="ddays_{{ i }}" value="{{ r.days }}" min="1" max="3650" step="1" aria-label="{{ _('Older than (days)') }}"></td>
-            <td class="tick"><input type="checkbox" name="dread_{{ i }}" value="1" {% if r.only_read %}checked{% endif %} aria-label="{{ _('Only read mails') }}"></td>
-            <td class="tick"><input type="checkbox" name="dstar_{{ i }}" value="1" {% if r.starred %}checked{% endif %} aria-label="{{ _('Starred mails too') }}"></td>
+            <td><input type="text" name="dfolder_{{ i }}" value="{{ r.folder }}" list="known-folders" aria-label="{{ _('Folder') }}" placeholder="INBOX/…" spellcheck="false"{{ invalid('dfolder_' ~ i) }}>{{ field_error('dfolder_' ~ i) }}</td>
+            {# data-label: the column titles are hidden on a phone, where each rule is a block #}
+            <td class="days" data-label="{{ _('Older than (days)') }}"><input type="number" name="ddays_{{ i }}" value="{{ r.days }}" min="1" max="3650" step="1" aria-label="{{ _('Older than (days)') }}"{{ invalid('ddays_' ~ i) }}>{{ field_error('ddays_' ~ i) }}</td>
+            <td class="tick" data-label="{{ _('Only read mails') }}"><input type="checkbox" name="dread_{{ i }}" value="1" {% if r.only_read %}checked{% endif %} aria-label="{{ _('Only read mails') }}"></td>
+            <td class="tick" data-label="{{ _('Starred mails too') }}"><input type="checkbox" name="dstar_{{ i }}" value="1" {% if r.starred %}checked{% endif %} aria-label="{{ _('Starred mails too') }}"></td>
             <td class="rule-del">{{ remove_button() }}</td>
           </tr>{% endmacro %}
 {% block content %}
@@ -29,7 +31,7 @@
 </div>
 
 {% if not editable %}<div class="banner" role="status">{{ _('Read only: %(file)s is mounted read-only. Please make changes in the file.', file=config_name) }}</div>{% endif %}
-{% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
+{% if error and not error_field %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
 <datalist id="known-folders">{% for f in folders %}<option value="{{ f }}">{% endfor %}</datalist>
 
 {# both lists in one form with one save; row numbers only grow, a removed row leaves a gap the server skips #}

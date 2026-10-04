@@ -453,14 +453,15 @@ def _set_sender_rules(doc: tomlkit.TOMLDocument, rules: list[tuple[str, str]]) -
     """Put the sender rules into the document; False when they were the same already."""
     categories = doc.get("categories") or {}
     clean: list[tuple[str, str]] = []
-    for match, action in rules:
+    for i, (match, action) in enumerate(rules):  # i: the row's number in the Rules page's form
         match = match.strip().lower()
         if not match:
             continue
         if len(match) > 200:
-            raise EditError(_("Sender \"%(match)s…\" is too long.", match=match[:40]))
+            raise EditError(_("Sender \"%(match)s…\" is too long.", match=match[:40]), f"match_{i}")
         if action != INBOX_ACTION and action not in categories:
-            raise EditError(_("Unknown target \"%(target)s\" for %(match)s.", target=action, match=match))
+            raise EditError(_("Unknown target \"%(target)s\" for %(match)s.", target=action, match=match),
+                            f"action_{i}")
         clean.append((match, action))
     return _replace_tables(doc, "sender_rules", [{"match": m, "action": a} for m, a in clean])
 
@@ -510,21 +511,22 @@ def _set_delete_rules(doc: tomlkit.TOMLDocument, rules: list[dict]) -> bool:
     """Put the deletion rules into the document; False when they were the same already."""
     source = str((doc.get("imap") or {}).get("source_folder", "INBOX")).strip("/")
     clean: list[dict] = []
-    for r in rules:
+    for i, r in enumerate(rules):  # i: the row's number in the Rules page's form
         folder = str(r.get("folder") or "").strip().strip("/")
         if not folder:
             continue
         if len(folder) > 200 or not _FOLDER_RE.match(folder):
-            raise EditError(_("Deletion rule: invalid folder name \"%(folder)s\".", folder=folder[:40]))
+            raise EditError(_("Deletion rule: invalid folder name \"%(folder)s\".", folder=folder[:40]),
+                            f"dfolder_{i}")
         if folder.lower() == source.lower():
-            raise EditError(_("The inbox can't have a deletion rule."))
+            raise EditError(_("The inbox can't have a deletion rule."), f"dfolder_{i}")
         try:
             days = int(str(r.get("days") or "").strip())
         except ValueError:
             days = 0
         if not 1 <= days <= DELETE_MAX_DAYS:
             raise EditError(_("Deletion rule for %(folder)s: the age is a whole number of days from 1 to %(max)s.",
-                              folder=folder, max=DELETE_MAX_DAYS))
+                              folder=folder, max=DELETE_MAX_DAYS), f"ddays_{i}")
         row: dict = {"folder": folder, "days": days}
         if r.get("only_read"):
             row["only_read"] = True

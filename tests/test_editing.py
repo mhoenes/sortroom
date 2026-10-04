@@ -397,6 +397,32 @@ def test_rules_page(client, setup):
     assert "delete_rules" not in (setup / "mailboxes" / "privat" / "mailbox.toml").read_text(encoding="utf-8")
 
 
+def test_rules_errors_are_at_their_row_and_each_rule_has_labels_for_a_phone(client, setup):
+    html = client.get("/ui/m/privat/rules").text
+    # on a phone each deletion rule is a block: its cells carry the labels the hidden column titles had
+    assert 'class="days" data-label="Älter als (Tage)"' in html and 'class="tick" data-label="Nur gelesene Mails"' in html
+    token = _csrf(html)
+    # a deletion rule for the inbox: the error under that row's folder field, which is marked; no banner on top
+    r = client.post("/ui/m/privat/rules", data={"csrf": token, "rows": "0", "drows": "2", "dfolder_0": "INBOX/Werbung",
+                                                "ddays_0": "30", "dfolder_1": "INBOX", "ddays_1": "3"})
+    assert r.status_code == 422 and 'id="error-dfolder_1"' in r.text and 'aria-invalid="true"' in r.text
+    assert 'class="banner err"' not in r.text and "Posteingang kann keine Lösch-Regel" in r.text
+    # rows without a sender are dropped when the page comes back, so the row after them moves up: row 2 is 1 now
+    r = client.post("/ui/m/privat/rules", data={"csrf": token, "rows": "3", "match_1": "@shop.de", "action_1": "werbung",
+                                                "match_2": "@x.de", "action_2": "gibtsnicht", "drows": "0"})
+    assert r.status_code == 422 and 'id="error-action_1"' in r.text and 'id="error-action_2"' not in r.text
+    assert r.text.count('aria-invalid="true"') == 1  # one field is marked: the target of that row
+    # the age: the field of the age
+    r = client.post("/ui/m/privat/rules", data={"csrf": token, "rows": "0", "drows": "1", "dfolder_0": "INBOX/Werbung",
+                                                "ddays_0": "x"})
+    assert r.status_code == 422 and 'id="error-ddays_0"' in r.text
+    # the dry run names the field too, as its row is in the page: the script goes there
+    r = client.post("/ui/m/privat/rules/dry-run", headers={"Accept": "application/json"},
+                    data={"csrf": token, "rows": "0", "drows": "3", "dfolder_0": "", "dfolder_2": "INBOX", "ddays_2": "5"})
+    assert r.json()["tone"] == "err" and r.json()["field"] == "dfolder_2"
+    assert _box(setup).cfg.sender_rules[0].match == "scanner@brother.com"  # nothing of it was saved
+
+
 def test_read_only_mailbox_page(client, setup):
     path = setup / "mailboxes" / "privat" / "mailbox.toml"
     os.chmod(path, stat.S_IREAD)

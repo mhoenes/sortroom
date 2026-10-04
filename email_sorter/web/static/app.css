@@ -704,6 +704,21 @@ table.senders tr.row-notice .banner { padding: 10px 14px; font-size: 13px; }
 table.senders tr[id] { scroll-margin-top: 80px; }
 /* a rule added from another page, not saved yet */
 table.rules tr.rule-new > td { background: var(--accent-soft); }
+/* the error of a rule's field, in its cell */
+table.rules .field-error { display: block; margin-top: 4px; }
+@media (max-width: 760px) {
+  /* a rule is a block: the sender (or folder) full width, the rest below it, the remove button beside the first line */
+  table.rules thead { display: none; }
+  table.rules tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 6px 8px; align-items: center;
+    padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+  table.rules tbody tr:last-child { border-bottom: 0; }
+  table.rules td { padding: 0; border: 0; grid-column: 1; }
+  table.rules td.rule-del { grid-column: 2; grid-row: 1; width: auto; }
+  table.rules td.days, table.rules td.tick { width: auto; display: flex; align-items: center; gap: 10px; text-align: left; }
+  table.rules td.tick { flex-direction: row-reverse; justify-content: flex-end; }
+  table.rules td[data-label]::before { content: attr(data-label); font-size: 13px; color: var(--muted); }
+  table.deleterules td.days input { width: 110px; }
+}
 .senders td.status .status-note { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
 .unsub-note { font-size: 13px; color: var(--muted); }
 
