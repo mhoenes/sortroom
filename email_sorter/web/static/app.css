@@ -505,6 +505,7 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
 .runmails th.pick, .runmails td.pick { width: 32px; padding-right: 0; }
 .runmails .pick input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
 .runmails td.route { color: var(--muted); }
+.runmails .pick-all-label { display: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 .expired { color: var(--muted); text-decoration: line-through; }
@@ -590,6 +591,19 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
   /* the address on its own line, not cut off after the name: it is what shows who really sent a mail */
   .maillist .meta .from-addr { display: block; overflow: hidden; text-overflow: ellipsis; }
   .maillist .pill { max-width: 110px; }
+  /* the mails of a run to undo: one block each – the box, then the mail, where it went and whether it can go back */
+  table.runmails thead tr, table.runmails tbody tr { display: grid; grid-template-columns: 32px minmax(0, 1fr); }
+  table.runmails thead th:not(.pick):not(.mailcol) { display: none; }
+  table.runmails .mail-title { display: none; }
+  table.runmails .pick-all-label { display: inline; cursor: pointer; }
+  table.runmails td { border-bottom: 0; }
+  table.runmails tbody tr { border-bottom: 1px solid var(--line-soft); padding: 4px 0; }
+  table.runmails tbody tr:last-child { border-bottom: 0; }
+  table.runmails td.pick { grid-row: 1 / span 3; padding-top: 10px; }
+  table.runmails td.mail, table.runmails td.route, table.runmails td.state { grid-column: 2; }
+  table.runmails td.clip { max-width: none; }  /* the table's clipping would leave the grid cell no width */
+  table.runmails td.date { display: none; }
+  table.runmails td.route, table.runmails td.state { padding-top: 0; padding-bottom: 4px; white-space: normal; font-size: 13px; }
   .task { grid-template-columns: minmax(0, 1fr); }
   .task .fields { flex-wrap: wrap; }
   .task .fields .f { flex-basis: 140px; }

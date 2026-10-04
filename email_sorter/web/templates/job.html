@@ -37,7 +37,8 @@
     <span class="muted">{{ _('If the result looks right, the same task can now run for real with the same settings.') }}</span></div>
   <button class="btn {{ 'danger' if risky else 'primary' }}" type="submit" name="live" value="1"
     {% if risky and not editable %}disabled title="{{ _('Settings are read-only') }}"{% endif %}
-    {% if risky %}onclick='return confirm({{ _("Really run it?")|tojson }})'{% endif %}>{{ _('Run for real now') }}</button>
+    {% if risky %}onclick='return confirm({{ _("Really run it?")|tojson }})'
+    {% elif confirm_text %}onclick='return confirm({{ confirm_text|tojson }})'{% endif %}>{{ _('Run for real now') }}</button>
 </form>
 {% endif %}
 

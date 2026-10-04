@@ -239,9 +239,16 @@ def job_page(request: Request, box_id: str, job_id: str):
     job = jobs.get(job_id)
     if not job or job["mailbox"] != box.id:
         raise HTTPException(404, _("Unknown job (jobs are only kept until the next restart)"))
+    rerun = _live_rerun(job)
+    confirm_text = ""
+    if rerun is not None and job["kind"] == "undo":  # moving mails back can't be undone itself: ask, with how many
+        n = int(job["result"].get("moved") or 0)
+        confirm_text = i18n.ngettext(
+            "Move %(num)s mail back to where it came from now? Undoing cannot itself be undone.",
+            "Move %(num)s mails back to where they came from now? Undoing cannot itself be undone.", n)
     return _page(request, "job.html", {**_sidebar(request, boxes, box, "maintenance"), "box": box, "job": job,
-                                       "rerun": _live_rerun(job), "risky": job["kind"] in RISKY_TASKS,
-                                       "editable": writable(box)})
+                                       "rerun": rerun, "risky": job["kind"] in RISKY_TASKS,
+                                       "editable": writable(box), "confirm_text": confirm_text})
 
 
 def _live_rerun(job: dict) -> dict | None:

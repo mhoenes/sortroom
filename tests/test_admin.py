@@ -387,7 +387,7 @@ def test_undo_a_run_from_the_run_log(client, setup, monkeypatch):
 
     def fake_undo(cfg, creds, ws, run, live, sort_again, keys=None):
         calls.append((run, live, sort_again, keys))
-        return {"ok": True, "live": live, "exit_code": 0, "summary": "1 Mail(s) zurückverschoben"}
+        return {"ok": True, "live": live, "exit_code": 0, "moved": 1, "summary": "1 Mail(s) zurückverschoben"}
 
     monkeypatch.setattr(admin, "run_undo", fake_undo)
     link = "/ui/m/privat/undo?run=2026-09-30T10%3A00%3A00"
@@ -397,6 +397,10 @@ def test_undo_a_run_from_the_run_log(client, setup, monkeypatch):
     html = client.get(link).text                          # its page lists the mails, all chosen
     assert "Rechnung" in html and "a@b.de" in html and 'name="key" value="&lt;m2@x&gt;" checked' in html
     assert "1 lässt sich noch rückgängig machen" in html
+    # for real only after a question with how many (the page's script); "All" for the box on a phone
+    assert 'data-confirm-one="{n} Mail jetzt dorthin zurückverschieben, wo sie herkam?' in html
+    assert 'data-confirm-many="{n} Mails jetzt dorthin zurückverschieben, wo sie herkamen?' in html
+    assert '<label for="pick-all" class="pick-all-label">Alle</label>' in html
     form = {"csrf": _csrf(html), "run": "2026-09-30T10:00:00", "chosen": "1", "sort_again": "1"}
     r = client.post("/ui/m/privat/maintenance/undo", data=form, follow_redirects=False)  # none ticked
     assert r.status_code == 303 and r.headers["location"] == "/ui/m/privat/undo?run=2026-09-30T10%3A00%3A00"
@@ -408,6 +412,7 @@ def test_undo_a_run_from_the_run_log(client, setup, monkeypatch):
     assert "Lauf vom 30.09." in page and "1 Mail (Probelauf)" in page and "zurückverschoben" in page
     assert 'name="keys"' in page  # "run it for real" undoes the same chosen mails
     assert "Jetzt ausführen" in page  # the dry run can be run for real with the same choice
+    assert "1 Mail jetzt dorthin zur\\u00fcckverschieben, wo sie herkam?" in page  # after a question there too (as JSON)
 
 
 def test_senders_page_without_senders(client):
