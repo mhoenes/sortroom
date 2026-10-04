@@ -21,6 +21,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 
 from ..config import INBOX_ACTION, Config, ConfigError, Mailbox, SenderRule
+from ..config import sender_address as address
 from ..i18n import _
 from ..store import Store
 from . import _box, queries, require_login, router
@@ -52,12 +53,6 @@ class CategoryHint:
     into: int             # mails corrected into it
 
 
-def address(sender: str | None) -> str:
-    """The address of "Name <address>", in lower case."""
-    s = (sender or "").strip().lower()
-    if "<" in s:
-        s = s[s.rfind("<") + 1:].rstrip(">").strip()
-    return s
 
 
 def _dismissed(db: sqlite3.Connection, kind: str, since: str | None = None) -> set[tuple[str, str]]:

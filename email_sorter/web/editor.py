@@ -29,7 +29,7 @@ from ..classifier import ClassifierAuthError
 from ..i18n import _
 from ..removal import MailboxBusy, delete_mailbox
 from ..trial import OTHER_SAMPLE, OWN_SAMPLE, run_trial
-from . import _box, _sidebar, queries, require_login, router, templates
+from . import _box, _sidebar, queries, require_login, router, rulecheck, templates
 from .editing import (EditError, category_view, config_with_delete_rules, connection_from_form, delete_category,
                       key_from_label, move_category, save_category, save_rules, save_settings, secrets_writable,
                       writable)
@@ -411,17 +411,38 @@ def _rules_page(request: Request, box_id: str, sender_rules: list[tuple[str, str
                         for r in cfg.delete_rules]
     return _page(request, "rules.html", {
         **_sidebar(request, boxes, box, "rules"), "box": box, "cfg": cfg, "rules": sender_rules,
+        "notes": _rule_notes(box, [m for m, _a in sender_rules]),
         "delete_rules": delete_rules, "folders": _known_folders(box), "editable": writable(box), "error": error,
         "config_name": box.config_file.name if box.config_file else "–", "tested": tested,
         "new_row": new_row, "added": added, "add": add[0].strip().lower() if add else "",
         "error_field": error_field}, status)
 
 
+def _sender_row_order(form: dict) -> list[int]:
+    """The numbers of the sender rule rows in the order the page shows them, which is the order the rules are
+    checked in: the page's script puts each row's place into `pos_<n>` when rows are moved. A row without
+    one (no script) stays where its number puts it."""
+    def place(i: int) -> tuple[int, int]:
+        pos = str(form.get(f"pos_{i}") or "")
+        return (int(pos) if pos.isdigit() else i), i
+    return sorted(range(int(form.get("rows") or 0)), key=place)
+
+
+def _rule_notes(box: Mailbox, matches: list[str]) -> list[dict[str, str]]:
+    """What each sender rule matches and catches, from the log (see rulecheck.py)."""
+    db = queries.connect(box.workspace)
+    try:
+        return rulecheck.rule_notes(matches, rulecheck.recent_senders(db))
+    finally:
+        if db:
+            db.close()
+
+
 def _rules_from(form: dict) -> tuple[list[tuple[str, str]], list[dict]]:
-    """The sender rules and the deletion rules of the Rules page; a row removed in the page leaves a gap in
-    the numbers, which comes back empty and is skipped."""
+    """The sender rules (in their order) and the deletion rules of the Rules page; a row removed in the page
+    leaves a gap in the numbers, which comes back empty and is skipped."""
     sender_rules = [(str(form.get(f"match_{i}") or ""), str(form.get(f"action_{i}") or INBOX_ACTION))
-                    for i in range(int(form.get("rows") or 0))]
+                    for i in _sender_row_order(form)]
     delete_rules: list[dict] = [
         {"folder": str(form.get(f"dfolder_{i}") or ""), "days": str(form.get(f"ddays_{i}") or ""),
          "only_read": bool(form.get(f"dread_{i}")), "starred": bool(form.get(f"dstar_{i}"))}
@@ -450,6 +471,17 @@ async def rules_save(request: Request, box_id: str):
                            error_field=_shown_field(e.field, sender_rules, delete_rules))
     _flash(request, _("Rules saved. They apply from the next run."))
     return RedirectResponse(f"/ui/m/{box.id}/rules", status_code=303)
+
+
+@router.post("/ui/m/{box_id}/rules/check", dependencies=[Depends(require_login)])
+async def rules_check(request: Request, box_id: str):
+    """The notes of the sender rules as they are in the page, saved or not: {row number: note}. The page's
+    script asks again when a rule is typed, moved, added or removed."""
+    form = await _form(request)
+    _all_boxes, box = _box(request, box_id)
+    order = _sender_row_order(form)
+    notes = await run_in_threadpool(_rule_notes, box, [str(form.get(f"match_{i}") or "") for i in order])
+    return JSONResponse({str(i): note for i, note in zip(order, notes, strict=True)})
 
 
 class _Lines(logging.Handler):
