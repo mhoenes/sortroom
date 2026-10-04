@@ -7,7 +7,15 @@
   <div class="title">
     <span class="eyebrow">{{ box.name }}</span>
     <h1>{{ _('Overview') }}</h1>
-    <div class="sub">{{ cfg.imap_host }}{% if cfg.min_age_hours %} · {{ _('New mails are sorted %(hours)s hours after they arrive', hours=cfg.min_age_hours|num) }}{% if cfg.sort_read_at_once %}{{ _(', read ones at once') }}{% endif %}{% endif %}</div>
+    {# below the title what the mailbox is doing: the schedule (a way to switch it on when it is off), and the waiting time #}
+    <div class="sub">
+      {%- if schedule.running %}{{ _('A run is in progress') }}
+      {%- elif schedule.enabled and schedule.active and schedule.next %}{{ _('Sorting automatically · next run %(time)s, every %(minutes)s min', time=schedule.next.strftime('%H:%M'), minutes=schedule.minutes) }}
+      {%- elif schedule.enabled and schedule.active %}{{ _('Schedule starts shortly') }}
+      {%- elif schedule.enabled %}{{ _('Schedule switched off in this process') }}
+      {%- else %}{{ _('Schedule off') }} (<a href="/ui/m/{{ box.id }}/settings#schedule">{{ _('switch on') }}</a>){% endif %}
+      {%- if cfg.min_age_hours %} · {{ _('New mails are sorted %(hours)s hours after they arrive', hours=cfg.min_age_hours|num) }}{% if cfg.sort_read_at_once %}{{ _(', read ones at once') }}{% endif %}{% endif -%}
+    </div>
   </div>
 </div>
 
@@ -42,11 +50,6 @@
     {% else %}
       <span class="v">–</span><span class="d">{{ _('No run logged yet') }}</span>
     {% endif %}
-    <span class="d">{% if schedule.running %}{{ _('A run is in progress') }}
-      {% elif schedule.enabled and schedule.active and schedule.next %}{{ _('Next %(time)s · every %(minutes)s min', time=schedule.next.strftime('%H:%M'), minutes=schedule.minutes) }}
-      {% elif schedule.enabled and schedule.active %}{{ _('Schedule starts shortly') }}
-      {% elif schedule.enabled %}{{ _('Schedule switched off in this process') }}
-      {% else %}{{ _('Schedule off') }}{% endif %}</span>
   </a>
   <a class="card kpi link" href="/ui/m/{{ box.id }}/mails?flagged=1&amp;period=7d">
     <span class="k">{{ _('Starred · 7 days') }}</span>
