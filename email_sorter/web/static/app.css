@@ -10,6 +10,7 @@
   --warn-bg: #FBEEDC; --warn: #6E3503; --warn-bar: #B45309;
   --err-bg: #FBE7E4; --err: #95251A; --err-bar: #A32A1D; --err-line: #C4766A;
   --neutral-bg: #EFEDE7; --star: #AD7A00;
+  --btn-bg: #E6E3DA; --btn-hover: #DAD6CB;
   --on-accent: #FFFFFF; --side-strong: #FFFFFF; --side-disabled: #6F6A5E; --dot-err: #E0735F; --dot-busy: #5DB8AE;
   --row-hover: #FAF9F6; --row-changed: #FBF7EC; --tip-bg: #1B1A17; --tip-ink: #FFFFFF; --shadow: rgba(0, 0, 0, .18);
   color-scheme: light;  /* native parts (date picker, select lists, scrollbars) match */
@@ -31,6 +32,7 @@
     --warn-bg: #3A2A12; --warn: #F2B866; --warn-bar: #D98A2B;
     --err-bg: #3D1E1A; --err: #F29B8E; --err-bar: #D2503F; --err-line: #B0645A;
     --neutral-bg: #2E2C28; --star: #E0A82E;
+    --btn-bg: #36342F; --btn-hover: #43403A;
     --on-accent: #0B1F1D; --row-hover: #25231F; --row-changed: #2E2818; --tip-bg: #3A3833; --tip-ink: #F4F3EF;
     --shadow: rgba(0, 0, 0, .5);
     color-scheme: dark;
@@ -47,6 +49,7 @@
   --warn-bg: #3A2A12; --warn: #F2B866; --warn-bar: #D98A2B;
   --err-bg: #3D1E1A; --err: #F29B8E; --err-bar: #D2503F; --err-line: #B0645A;
   --neutral-bg: #2E2C28; --star: #E0A82E;
+  --btn-bg: #36342F; --btn-hover: #43403A;
   --on-accent: #0B1F1D; --row-hover: #25231F; --row-changed: #2E2818; --tip-bg: #3A3833; --tip-ink: #F4F3EF;
   --shadow: rgba(0, 0, 0, .5);
   color-scheme: dark;
@@ -150,16 +153,18 @@ a.card.link:hover { border-color: var(--line-strong); }
 .banner a { color: inherit; font-weight: 600; }
 .empty { padding: 28px; text-align: center; color: var(--muted); }
 
+/* a button is filled and has no frame, so it can't pass for a field (white with a frame) beside it; the
+   transparent border keeps it as high as a field */
 .btn { display: inline-flex; align-items: center; justify-content: center; height: 44px; padding: 0 18px; border-radius: 8px;
-  border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font: inherit; font-weight: 500;
+  border: 1px solid transparent; background: var(--btn-bg); color: var(--ink); font: inherit; font-weight: 600;
   text-decoration: none; cursor: pointer; }
-.btn:hover { border-color: var(--faint); color: var(--ink); }
+.btn:hover { background: var(--btn-hover); color: var(--ink); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
 .btn.primary:hover { background: var(--accent-ink); }
 /* the save bar's button stands out once there is something to save (unsaved.js marks the form .dirty);
    without JavaScript it always does */
-.js form[data-guard]:not(.dirty) .savebar .btn.primary { background: var(--surface); border-color: var(--line-strong);
-  color: var(--ink); font-weight: 500; }
+.js form[data-guard]:not(.dirty) .savebar .btn.primary { background: var(--btn-bg); border-color: transparent;
+  color: var(--ink); }
 .rename-view { gap: 10px; }
 .btn.small { height: 36px; padding: 0 12px; font-size: 13px; }
 /* an action that tries something out (Check model, Send test mail): tinted, so it doesn't pass for a field */
@@ -376,7 +381,7 @@ div.f { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-w
 .signin-steps li::marker { font-weight: 600; }
 .signin-steps h2 { margin-bottom: 4px; }
 .signin-steps p { margin: 6px 0 0; }
-.btn.danger { color: var(--err); border-color: var(--err-line); }
+.btn.danger { background: var(--surface); color: var(--err); border-color: var(--err-line); }
 .danger-zone { border-color: var(--err-line); }
 .danger-zone .actions { align-items: flex-end; }
 .danger-zone .grow { flex: 1 1 260px; }
