@@ -3,7 +3,7 @@
 Mails you deleted (or that sit in the trash) are marked `gone`: they stay in the log, so cost and
 history are kept and nothing is classified twice, but they no longer show up for review. Mails the
 sorter left in the inbox and you filed by hand get the folder they are in now. The unsubscribe links
-of logged mails are noted for the senders page, and their senders' display names. A mail the model
+of logged mails are noted for the Subscriptions page, and their senders' display names. A mail the model
 filed that you moved into the folder of another category, or back into the inbox, counts as corrected
 for the Categories page.
 

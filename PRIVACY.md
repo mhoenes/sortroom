@@ -57,7 +57,7 @@ Nothing, apart from:
 
 ## Unsubscribing
 
-The *Senders* page lists senders whose mails carry an unsubscribe link (the
+The *Subscriptions* page lists senders whose mails carry an unsubscribe link (the
 `List-Unsubscribe` header). When you press **Unsubscribe** and confirm, Sortroom sends
 the sender's one-click unsubscribe request (RFC 8058): an HTTPS `POST` to the link from
 the sender's mail, from the machine that runs Sortroom. The sender learns that the
