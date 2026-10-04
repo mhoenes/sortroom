@@ -337,6 +337,7 @@
   "In den letzten 30 Tagen hat das Modell %(num)s Mails hier einsortiert; keine wurde von Hand umsortiert."
  ],
  "Inbox": "Posteingang",
+ "Installation": "Installation",
  "Interface": "Oberfläche",
  "Interface, AI service and Mail": "Oberfläche, KI-Dienst und Mail",
  "Internal name under which the model and the log keep the category.": "Interner Name, unter dem Modell und Protokoll die Kategorie führen.",
@@ -368,7 +369,6 @@
  "Log out every browser, this one too?": "Jeden Browser abmelden, auch diesen?",
  "Log out everywhere": "Überall abmelden",
  "Login": "Zugangsdaten",
- "Login is locked: <code>ADMIN_PASSWORD</code> (at least 8 characters) is missing in <code>.env</code>. Add it and restart the container.": "Die Anmeldung ist gesperrt: In der <code>.env</code> fehlt <code>ADMIN_PASSWORD</code> (mindestens 8 Zeichen). Danach den Container neu starten.",
  "Logs in with the server and login above and looks at the inbox. Creates nothing.": "Meldet sich mit Server und Zugangsdaten oben an und schaut in den Posteingang. Legt nichts an.",
  "Logs in with the values above and lists the target folders. Moves nothing, saves nothing.": "Meldet sich mit den Werten oben an und listet die Zielordner. Verschiebt nichts, speichert nichts.",
  "Logs out every browser that is logged in, this one too – e.g. after using someone else's computer, or if a login may have been copied. A logout only ends the session of its own browser.": "Meldet jeden angemeldeten Browser ab, auch diesen – z. B. nach der Anmeldung an einem fremden Rechner oder wenn eine Anmeldung kopiert worden sein könnte. Ein Abmelden beendet nur die Sitzung des eigenen Browsers.",
@@ -711,6 +711,7 @@
  "The folder could not be renamed: %(e)s": "Der Ordner ließ sich nicht umbenennen: %(e)s",
  "The inbox can't have a deletion rule.": "Der Posteingang kann keine Lösch-Regel haben.",
  "The inbox itself cannot be renamed.": "Der Posteingang selbst kann nicht umbenannt werden.",
+ "The login is not set up yet: <code>ADMIN_PASSWORD</code> (at least 8 characters) is missing in <code>.env</code>. Add it and restart the container.": "Die Anmeldung ist noch nicht eingerichtet: <code>ADMIN_PASSWORD</code> (mindestens 8 Zeichen) fehlt in der <code>.env</code>. Trage es ein und starte den Container neu.",
  "The login of this mailbox is not set yet.": "Die Zugangsdaten dieses Postfachs sind noch nicht gesetzt.",
  "The mail is no longer in %(folder)s – deleted or moved by hand?": "Die Mail liegt nicht mehr in %(folder)s – gelöscht oder von Hand verschoben?",
  "The mail was moved.": "Die Mail wurde verschoben.",
@@ -836,6 +837,10 @@
  "Writes the unsubscribe mail to the sender": "Schreibt die Abmelde-Mail an den Absender",
  "Wrong password.": "Falsches Passwort.",
  "You can also make a rule from a mail on the Mails page, on Subscriptions, and from the suggestions on the Overview.": "Eine Regel geht auch von einer Mail auf der Mails-Seite, bei den Abonnements und über die Vorschläge der Übersicht.",
+ "You stay logged in on this device for %(num)s day.": [
+  "Du bleibst auf diesem Gerät %(num)s Tag angemeldet.",
+  "Du bleibst auf diesem Gerät %(num)s Tage angemeldet."
+ ],
  "all": "alle",
  "all from this sender": "alle von diesem Absender",
  "any provider · user and password": "jeder Anbieter · Benutzer und Passwort",

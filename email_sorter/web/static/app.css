@@ -373,6 +373,7 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 .login .card { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 18px; padding: 32px; }
 .login h1 { font-size: 22px; font-weight: 600; }
 .error { color: var(--err); font-size: 13px; }
+.login .notice-setup { margin: 0; font-size: 14px; line-height: 1.5; }
 /* the password field with its show/hide button inside, at the end */
 .pw { position: relative; display: block; }
 .pw input { width: 100%; padding-right: 46px; }

@@ -24,4 +24,21 @@
   button.disabled = field.disabled;  // locked: nothing to show
   set(false);
   field.parentElement.append(button);
+
+  // focus the field, but not on a phone or tablet, where that brings up the keyboard at once and covers the card
+  if (!field.disabled && matchMedia('(pointer: fine)').matches) field.focus();
+
+  // while the login is checked the button is busy, so a slow server isn't asked twice
+  const form = field.form, submit = form.querySelector('button[type=submit]'), idle = submit.textContent;
+  form.addEventListener('submit', () => {
+    submit.disabled = true;
+    submit.setAttribute('aria-busy', 'true');
+    submit.textContent = script.dataset.busy;
+  });
+  addEventListener('pageshow', e => {  // back to the page from the history: as it was
+    if (!e.persisted) return;
+    submit.disabled = false;
+    submit.removeAttribute('aria-busy');
+    submit.textContent = idle;
+  });
 })();

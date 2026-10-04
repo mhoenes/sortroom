@@ -119,13 +119,16 @@ def test_login_form_has_a_user_name_for_password_managers_and_can_show_the_passw
     # the one account, so a password manager offers to fill and save it; the script adds the show/hide button
     assert 'name="username" value="admin" autocomplete="username"' in html and 'autocomplete="current-password"' in html
     assert 'class="pw"' in html and 'data-show="Passwort anzeigen" data-hide="Passwort verbergen"' in html
+    # no autofocus in the page (the script focuses on a mouse device only); the busy text; how long a login lasts
+    assert "autofocus" not in html and 'data-busy="Bitte warten …"' in html
+    assert f"Du bleibst auf diesem Gerät {web.SESSION_DAYS} Tage angemeldet." in html
     assert client.post("/login", data={"username": "admin", "password": "falsch"}).status_code == 401  # ignored
 
 
 def test_login_page_says_why_marks_the_field_of_an_error_and_is_locked_while_locked(client, monkeypatch):
     # sent here by a page that needs the login: say why; the plain page has no such line
     r = client.get("/ui", follow_redirects=True)
-    assert "Bitte melde dich an, um fortzufahren." in r.text and "autofocus" in r.text
+    assert "Bitte melde dich an, um fortzufahren." in r.text
     assert "fortzufahren" not in client.get("/login").text
     # a wrong password: the field is marked and connected to the message
     r = client.post("/login", data={"password": "falsch"})
@@ -135,7 +138,7 @@ def test_login_page_says_why_marks_the_field_of_an_error_and_is_locked_while_loc
     for _attempt in range(web.MAX_FAILED_PER_ADDRESS):
         client.post("/login", data={"password": "falsch"})
     r = client.post("/login", data={"password": "falsch"})
-    assert r.status_code == 429 and r.text.count(" disabled") == 2 and "autofocus" not in r.text
+    assert r.status_code == 429 and r.text.count(" disabled") == 2
     assert "aria-invalid" not in r.text
 
 
@@ -165,7 +168,9 @@ def test_login_returns_to_the_page_asked_for(client):
 def test_locked_without_admin_password(client, monkeypatch):
     monkeypatch.setenv("ADMIN_PASSWORD", "")
     r = client.get("/login")
-    assert "ADMIN_PASSWORD" in r.text
+    # a notice (not an error) with the way to the instructions, and no form to fill in
+    assert "ADMIN_PASSWORD" in r.text and 'class="notice-setup" role="status"' in r.text and 'role="alert"' not in r.text
+    assert "https://github.com/mhoenes/sortroom/wiki/Installation" in r.text and 'type="password"' not in r.text
     r = client.post("/login", data={"password": ""}, follow_redirects=False)
     assert r.status_code == 401 and client.get("/ui", follow_redirects=False).status_code == 303
 
