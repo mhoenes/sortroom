@@ -407,6 +407,8 @@ table.cats td.rate { font-weight: 600; }
 .char-count.near { color: var(--warn); font-weight: 600; }
 .star-choice { margin: 0; padding: 0; border: 0; min-width: 0; }
 .star-choice legend { padding: 0; margin-bottom: 2px; }
+/* "Track expiry date" right below the star: both are lines of choices, without the gap between fields */
+.star-choice + .toggles { margin-top: -12px; }
 .quote { margin: 0; white-space: pre-wrap; color: var(--muted); }
 tr.changed td { background: var(--row-changed); }
 table.rules input[type=text], table.rules select { width: 100%; }
