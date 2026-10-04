@@ -552,6 +552,7 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
 .senders .addr { max-width: 320px; }
 .unsub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .unsub form { display: contents; }
+.unsub-note { font-size: 13px; color: var(--muted); }
 
 /* with a mouse or trackpad the controls can be lower than the 44px a finger needs: forms like Settings and
    Maintenance get noticeably shorter. Touch screens keep the full height. */

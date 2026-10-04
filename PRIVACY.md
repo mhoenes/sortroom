@@ -64,6 +64,8 @@ the sender's mail, from the machine that runs Sortroom. The sender learns that t
 address behind the link unsubscribed, and sees that machine's IP address. Sortroom
 sends nothing else to senders, never on its own and never to addresses in your own
 network. Links without one-click unsubscribe are only shown; you open them yourself.
+Senders whose mail was sorted into the suspicious category get no unsubscribe offer at
+all: unsubscribing would only tell them that the address is read.
 
 ## Mail Sortroom sends
 

@@ -424,6 +424,30 @@ def test_senders_page_and_unsubscribe(client, setup, monkeypatch):
     assert "nicht mehr als abgemeldet markiert" in r.text
 
 
+def test_no_unsubscribing_from_suspicious_senders(client, setup, monkeypatch):
+    store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
+    links = (["https://bank-check.example/u", "mailto:off@bank-check.example"], True)
+    store.record(SimpleNamespace(key="<p1@x>", received=datetime.now().astimezone().isoformat(timespec="minutes"),
+                                 sender="alert@bank-check.example", subject="Konto gesperrt",
+                                 decision=Decision("verdaechtig", 0.9, {}, 0.1, 0.0), folder="INBOX/Verdaechtig",
+                                 flag=False, expires=None, unsubscribe=links))
+    store.close()
+    sent = []
+    monkeypatch.setattr(senders_web, "one_click", lambda url: sent.append(url) or 200)
+
+    html = client.get("/ui/m/privat/senders").text
+    assert "alert@bank-check.example" in html and "Nicht abmelden" in html
+    assert "1 Mail dieses Absenders wurde als verdächtig einsortiert" in html
+    # no button, no link, no mail to the sender
+    assert 'value="unsubscribe"' not in html and "bank-check.example/u" not in html and "mailto:" not in html
+    r = client.post("/ui/m/privat/senders/action", data={"csrf": _csrf(html), "address": "alert@bank-check.example",
+                                                          "action": "unsubscribe"})
+    assert "hat verdächtige Mails geschickt" in r.text and sent == []
+    store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
+    assert store.sender("alert@bank-check.example")["unsubscribed"] is None
+    store.close()
+
+
 def test_failed_unsubscribe_is_not_noted(client, setup, monkeypatch):
     store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
     store.note_unsubscribe([("news@shop.example", ["https://shop.example/u"], True, None)])
