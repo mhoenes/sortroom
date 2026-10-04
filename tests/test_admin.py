@@ -309,6 +309,28 @@ def test_add_mailbox_steps_are_numbered_and_google_starts_with_its_steps(client)
     assert html.index('class="setup-steps"') < html.index('name="oauth_client_id"')
 
 
+def test_add_mailbox_folder_line_categories_default_cancel_and_api_key(client, setup):
+    html = client.get("/ui/mailboxes/new").text
+    # the folder name: a quiet line under the display name, no field of its own
+    assert 'class="static mono"' not in html
+    assert 'Ordner auf dem Server: <span class="mono">mailboxes/<span id="box-id">…</span></span>' in html
+    # the standard categories are the default; a copy of a mailbox the second choice, in its own group
+    assert '<option value="_example_de" selected>' in html and "Kopie eines Postfachs" in html
+    assert html.index('value="_example_de"') < html.index("<optgroup") < html.index('<option value="privat"')
+    # the Gmail note only for Gmail; Cancel with the form's button, not in the header
+    assert '<p class="muted hint" data-auth="google">Bei Gmail (imap.gmail.com)' in html
+    assert html.index("Postfach anlegen") < html.index(">Abbrechen</a>") and "<h1>Postfach hinzufügen</h1>" in html
+    assert html.count(">Abbrechen</a>") == 1
+    # with the AI service's key the page says nothing; without it: said, with the way
+    assert "noch kein API-Schlüssel" not in html
+    (setup / "secrets.toml").unlink()
+    html = client.get("/ui/mailboxes/new").text
+    assert "noch kein API-Schlüssel gespeichert" in html and 'href="/ui/settings#model">Globale Einstellungen</a>' in html
+    # an error that isn't at a field is gone once the type changes (the script removes what is marked)
+    r = client.post("/ui/mailboxes/new", data={"csrf": _csrf(html), "kind": "bogus", "name": "X"})
+    assert r.status_code == 422 and 'role="alert" data-stale-on-type' in r.text
+
+
 def test_add_mailbox_check_connection_without_creating_and_errors_at_their_fields(client, setup, monkeypatch):
     seen = []
 

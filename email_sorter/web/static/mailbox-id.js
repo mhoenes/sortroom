@@ -26,6 +26,18 @@
     input.addEventListener('input', show);
     show();
   });
+  // Add mailbox: with no name yet, the login address is the name until a name is typed (the user can change it)
+  const name = document.querySelector('input[name=name][data-id-preview]');
+  const user = document.querySelector('input[name=imap_user]');
+  if (name && user && !name.value) {
+    let typed = false;
+    name.addEventListener('input', e => { if (e.isTrusted) typed = true; });  // not our own input event below
+    user.addEventListener('input', () => {
+      if (typed) return;
+      name.value = user.value.trim().slice(0, name.maxLength > 0 ? name.maxLength : 60);
+      name.dispatchEvent(new Event('input', { bubbles: true }));  // the folder name follows
+    });
+  }
   // the settings page: the folder name is set by hand; say what changing it does
   document.querySelectorAll('input[data-rename-note]').forEach(input => {
     const note = document.getElementById(input.dataset.renameNote);
