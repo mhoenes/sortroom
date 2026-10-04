@@ -550,7 +550,13 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
   table.senders tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; border-bottom: 1px solid var(--line-soft); }
   table.senders tr:last-child { border-bottom: 0; }
   table.senders td { border-bottom: 0; }
-  table.senders td:last-child, table.senders td.status { grid-column: 1 / -1; padding-top: 0; }
+  table.senders td.addr { grid-row: 1; grid-column: 1; }
+  table.senders td.num { grid-row: 1; grid-column: 2; }
+  table.senders td:last-child, table.senders td.status, table.senders td.cat { grid-column: 1 / -1; padding-top: 0; }
+  /* the category in one small line below the address: "Promotions · Create a rule" */
+  table.senders td.cat { font-size: 13px; color: var(--muted); }
+  table.senders .cat-note { display: inline; margin: 0; }
+  table.senders .cat-note::before { content: "·"; display: inline-block; margin: 0 6px; color: var(--muted); }
   table.senders td.status:empty { display: none; }
   table.senders .addr { max-width: none; }
   .review a { flex-direction: column; align-items: stretch; gap: 6px; }
@@ -571,8 +577,14 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
 .unsub-mark.asked .text-btn { font-weight: 600; }
 .unsub .text-btn, .unsub-alt { font-size: 13px; }
 .senders td.status .pill { margin: 2px 4px 2px 0; white-space: nowrap; }
-.senders .rule-pill { text-decoration: none; }
-.senders .rule-pill:hover { text-decoration: underline; }
+/* below the category: the sender rule, or one to create */
+.senders .cat-note { display: block; margin-top: 2px; font-size: 12px; white-space: nowrap; }
+/* "⋯": the rarely needed actions, folded beside the Unsubscribe button */
+.more-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0;
+  border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; }
+.more-btn:hover, .more-btn[aria-expanded="true"] { background: var(--neutral-bg); color: var(--ink); }
+.more-btn[hidden], .more-acts[hidden] { display: none; }
+.more-acts { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
 /* the row of the last action, and how it went */
 table.senders tr.at > td { background: var(--accent-soft); }
 table.senders tr.row-notice > td { padding-top: 0; }

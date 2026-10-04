@@ -457,9 +457,11 @@ def test_subscriptions_search_rules_and_the_row_of_an_action(client, setup):
     assert "news@shop.example" in html and "club@verein.example" not in html
     assert "Kein Absender passt zur Suche" in client.get("/ui/m/privat/subscriptions?q=nichts").text
     html = client.get("/ui/m/privat/subscriptions").text
-    # a sender rule: shown; none: one to create on the Rules page
-    assert 'href="/ui/m/privat/rules#sender-rules"' in html and "Regel: Werbung" in html
+    # below the category: a sender rule (to its own category: "per Regel"); none: one to create on the Rules page
+    assert 'href="/ui/m/privat/rules#sender-rules"' in html and ">per Regel</a>" in html
     assert html.count("Regel anlegen") == 1 and "/ui/m/privat/rules?add=news%40shop.example&amp;target=werbung" in html
+    # marking it is folded behind "⋯" (the button shows with the script), with the mail where there is a page too
+    assert 'aria-label="Mehr" title="Mehr" hidden data-more>' in html and html.count('class="more-acts" data-more-list') == 2
     rules = client.get("/ui/m/privat/rules?add=news%40shop.example&target=werbung").text
     assert "Neue Regel für news@shop.example" in rules and "data-dirty" in rules
     assert '<tr class="rule-new">' in rules and 'value="news@shop.example"' in rules
