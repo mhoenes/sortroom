@@ -253,7 +253,7 @@ def test_the_job_page_says_what_a_failure_points_to_and_what_took_how_long(clien
     html = client.get(f"/ui/m/privat/jobs/{_job(client, other)}").text
     assert "Der Job ist fehlgeschlagen." in html and "something odd" in html and "#connection" not in html
     # the header: when it started and how long it took; the status beside it
-    assert re.search(r"Gestartet \d\d:\d\d, dauerte unter 1 s", html)
+    assert re.search(r"Gestartet \d\d:\d\d, dauerte (unter 1|\d+) s", html)  # how long depends on the machine
     # a job that was not started shows its own notice only, not the raw English error under it
     box = api.app.state.load_mailboxes()["privat"]
     now = datetime.now().isoformat(timespec="seconds")
