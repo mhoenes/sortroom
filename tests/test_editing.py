@@ -257,6 +257,40 @@ def test_category_form_name_first_key_from_the_name_one_star_choice(client, setu
     assert 'id="rename-category"' in html and '<option value="werbung" selected>' in html
 
 
+def test_move_category(setup):
+    from email_sorter.web.editing import move_category
+    shared = setup / "config.toml"
+    save_category(_box(setup), shared, "vereine", CAT_FORM, create=True)
+    move_category(_box(setup), shared, "vereine", -1)
+    assert list(_box(setup).cfg.categories) == ["finanzen", "vereine", "werbung"]
+    move_category(_box(setup), shared, "finanzen", -1)  # already first: nothing
+    move_category(_box(setup), shared, "finanzen", 1)
+    assert list(_box(setup).cfg.categories) == ["vereine", "finanzen", "werbung"]
+    text = (setup / "mailboxes" / "privat" / "mailbox.toml").read_text(encoding="utf-8")
+    assert "# Privates Postfach" in text and "min_confidence = 0.70   # darunter bleibt die Mail liegen" in text
+    werbung = _box(setup).cfg.categories["werbung"]
+    assert werbung.track_expiry and not werbung.flag_on_action  # each category keeps what it had
+    with pytest.raises(EditError, match="gibt es nicht"):
+        move_category(_box(setup), shared, "gibtsnicht", 1)
+
+
+def test_categories_list_and_order(client, setup):
+    save_sender_rules(_box(setup), setup / "config.toml", [("@shop.de", "werbung")])
+    html = client.get("/ui/m/privat/categories?cat=werbung").text
+    # marks after the name: the star when action is needed (finanzen), expiry (werbung), with their meaning
+    assert 'title="Stern: Bei Handlungsbedarf"' in html and 'title="Ablaufdatum verfolgen"' in html
+    # the count opens the mails; "+ Neue Kategorie" below the list
+    assert '<a href="/ui/m/privat/mails?category=werbung&amp;period=30d"' in html
+    assert 'class="cats-foot"><a class="btn" href="/ui/m/privat/categories?new=1#edit">+ Neue Kategorie</a>' in html
+    # a category used by a rule: the rules a link away; the order: up (werbung is last: not down)
+    assert 'Von <a href="/ui/m/privat/rules#sender-rules">Absender-Regeln</a> verwendet' in html
+    assert 'value="-1"' in html and 'name="step" value="1" disabled' in html
+    r = client.post("/ui/m/privat/categories/move", data={"csrf": _csrf(html), "key": "werbung", "step": "-1"},
+                    follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/ui/m/privat/categories?cat=werbung#edit"
+    assert list(_box(setup).cfg.categories) == ["werbung", "finanzen"]
+
+
 def test_categories_page_links_folders_and_the_test(client, setup):
     html = client.get("/ui/m/privat/categories?cat=finanzen").text
     # a click in the list goes on to the editor where it is below the list (#edit, the page's script)

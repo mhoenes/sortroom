@@ -31,7 +31,8 @@ from ..removal import MailboxBusy, delete_mailbox
 from ..trial import OTHER_SAMPLE, OWN_SAMPLE, run_trial
 from . import _box, _sidebar, queries, require_login, router, templates
 from .editing import (EditError, category_view, config_with_delete_rules, connection_from_form, delete_category,
-                      key_from_label, save_category, save_rules, save_settings, secrets_writable, writable)
+                      key_from_label, move_category, save_category, save_rules, save_settings, secrets_writable,
+                      writable)
 
 log = logging.getLogger(__name__)
 
@@ -165,6 +166,19 @@ async def categories_save(request: Request, box_id: str):
         return _category_page(request, box_id, cat=key, new=new, form=category_view(form), error=str(e), status=422)
     _flash(request, _("Saved. Applies from the next run."))
     return RedirectResponse(f"/ui/m/{box.id}/categories?cat={quote(key)}", status_code=303)
+
+
+@router.post("/ui/m/{box_id}/categories/move", dependencies=[Depends(require_login)])
+async def categories_move(request: Request, box_id: str):
+    """A category one place up or down in the list."""
+    form = await _form(request)
+    _all_boxes, box = _box(request, box_id)
+    key = str(form.get("key") or "")
+    try:
+        move_category(box, _shared_path(request), key, -1 if form.get("step") == "-1" else 1)
+    except EditError as e:
+        _flash(request, str(e), "err")
+    return RedirectResponse(f"/ui/m/{box.id}/categories?cat={quote(key)}#edit", status_code=303)
 
 
 # ---------------------------------------------------------------- model trial

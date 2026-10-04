@@ -227,6 +227,27 @@ def delete_category(box: Mailbox, shared_path: Path, key: str) -> None:
     _save(box, doc, shared_path)
 
 
+@_one_at_a_time
+def move_category(box: Mailbox, shared_path: Path, key: str, step: int) -> None:
+    """One place up (step -1) or down (+1) in the file: the order of the categories in the UI's lists.
+    Comments inside a category move with it; a comment above its header stays with the one before."""
+    doc = _doc(box)
+    cats = doc.get("categories")
+    if cats is None or key not in cats:
+        raise EditError(_("The category \"%(key)s\" does not exist.", key=key))
+    order = list(cats)
+    i = order.index(key)
+    j = i + (1 if step > 0 else -1)
+    if not 0 <= j < len(order):
+        return  # already first or last
+    order[i], order[j] = order[j], order[i]
+    moved = tomlkit.table(is_super_table=True)
+    for name in order:
+        moved.append(name, cats[name])
+    doc["categories"] = moved
+    _save(box, doc, shared_path)
+
+
 # ---------------------------------------------------------------- mailbox settings
 
 @_one_at_a_time
