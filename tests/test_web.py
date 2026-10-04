@@ -142,6 +142,38 @@ def test_login_page_says_why_marks_the_field_of_an_error_and_is_locked_while_loc
     assert "aria-invalid" not in r.text
 
 
+def test_a_reverse_proxy_whose_headers_are_not_trusted_is_noticed(client, monkeypatch, caplog):
+    from types import SimpleNamespace
+
+    def request(host, forwarded=None):
+        headers = {"x-forwarded-for": forwarded} if forwarded else {}
+        return SimpleNamespace(client=SimpleNamespace(host=host), headers=headers)
+
+    # uvicorn trusted the proxy: the client address is the one the header names, so there is nothing to say
+    assert web.behind_untrusted_proxy(request("203.0.113.7", "203.0.113.7")) == ""
+    assert web.behind_untrusted_proxy(request("203.0.113.7", "198.51.100.1, 203.0.113.7")) == ""
+    assert web.behind_untrusted_proxy(request("172.18.0.3")) == ""  # no proxy at all: a direct connection
+    # the header is there but the address is another: the proxy's own, its header wasn't trusted
+    assert web.behind_untrusted_proxy(request("172.18.0.3", "203.0.113.7")) == "172.18.0.3"
+    assert web.behind_untrusted_proxy(SimpleNamespace(client=None, headers={"x-forwarded-for": "1.2.3.4"})) == ""
+
+    # Global settings says so, with what to set; without such a header it says nothing
+    _login(client)
+    html = client.get("/ui/settings", headers={"X-Forwarded-For": "203.0.113.7"}).text
+    assert "Sortroom sieht jede Anmeldung nur von deinem Reverse-Proxy (testclient)" in html
+    assert "FORWARDED_ALLOW_IPS=testclient" in html
+    assert "Reverse-Proxy" not in client.get("/ui/settings").text
+    assert "Reverse-Proxy" not in client.get("/ui/settings", headers={"X-Forwarded-For": "testclient"}).text
+
+    # the log says so once, at the first failed login
+    monkeypatch.setattr(web, "_proxy_warned", False)
+    with caplog.at_level("WARNING", logger="email_sorter.web"):
+        for _attempt in range(2):
+            client.post("/login", data={"password": "falsch"}, headers={"X-Forwarded-For": "203.0.113.7"})
+    warnings = [r.getMessage() for r in caplog.records if "reverse proxy" in r.getMessage()]
+    assert len(warnings) == 1 and "FORWARDED_ALLOW_IPS=testclient" in warnings[0]
+
+
 def test_api_documentation_needs_the_login(client):
     for path in ("/docs", "/redoc", "/openapi.json"):
         r = client.get(path, follow_redirects=False)
