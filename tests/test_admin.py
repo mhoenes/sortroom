@@ -128,6 +128,20 @@ def _csrf(html):
     return re.search(r'name="csrf" value="([^"]+)"', html).group(1)
 
 
+def test_maintenance_page_names_its_buttons_after_the_task_and_points_to_the_rules_page(client):
+    html = client.get("/ui/m/privat/maintenance").text
+    # the real button says what it does, the dry run stays "Probelauf"; no English "Backfill" in the German page
+    for label in ("Jetzt sortieren", "Ältere Mails sortieren", "Ordner neu einsortieren", "Daten prüfen",
+                  "Jetzt abgleichen", "Regeln anwenden", "Mails verschieben", "Ordner umbenennen", "Schlüssel umbenennen"):
+        assert f">{label}</button>" in html, label
+    assert ">Lauf</button>" not in html and "Backfill" not in html and "Nachsortieren" in html
+    # the dry run hint once on top; the cards are named after what they do
+    assert html.count("Jede Aufgabe hat einen Probelauf") == 1 and "Postfach pflegen" in html
+    # no deletion rule yet: the link goes to the rules page's card, not to a settings anchor that is gone
+    assert 'href="/ui/m/privat/rules#deletion-rules"' in html and "#loeschregeln" not in html
+    assert 'placeholder="leer = alle"' in html and 'placeholder="Standard: 200"' in html
+
+
 def test_maintenance_page_and_run_job(client, monkeypatch):
     calls = []
 

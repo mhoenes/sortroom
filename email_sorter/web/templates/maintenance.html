@@ -11,6 +11,8 @@
   </div>
 </div>
 
+<p class="muted hint">{{ _('Every task has a dry run: it shows in the log what would happen and changes nothing.') }}</p>
+
 {% if busy %}<div class="banner" role="status">{{ _('A run is in progress for this mailbox. New jobs wait until it is done.') }}</div>{% endif %}
 
 {# only once there is something to show: an empty card at the top would push the tasks down #}
@@ -30,30 +32,30 @@
 </section>
 {% endif %}
 
-{% macro go(primary=false, danger=false, disabled=false, why=none) %}<div class="go">
+{% macro go(label, primary=false, danger=false, disabled=false, why=none) %}<div class="go">
       {# the dry run comes first, so Enter in a field only ever starts a dry run #}
       <button class="btn small" type="submit" {% if disabled %}disabled{% endif %}>{{ _('Dry run') }}</button>
       <button class="btn small {{ 'primary' if primary }}{{ 'danger' if danger }}" type="submit" name="live" value="1"
         {% if disabled %}disabled title="{{ why or _('Settings are read-only') }}"{% endif %}
-        {% if danger %}onclick='return confirm({{ _("Really run it? Check first with a dry run what would happen.")|tojson }})'{% endif %}>{{ _('Run') }}</button>
+        {% if danger %}onclick='return confirm({{ _("Really run it? Check first with a dry run what would happen.")|tojson }})'{% endif %}>{{ label }}</button>
     </div>{% endmacro %}
 
 <section class="card stack">
-  <div class="group-head"><h2>{{ _('Sorting') }}</h2>
-    <p class="muted hint">{{ _('Uses the model, costs about $0.01 per 100 mails. A dry run shows in the log what would happen and changes nothing.') }}</p></div>
+  <div class="group-head"><h2>{{ _('Sort with the model') }}</h2>
+    <p class="muted hint">{{ _('Uses the model, costs about $0.01 per 100 mails.') }}</p></div>
   <div class="tasks">
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/run">{{ hidden() }}
       <div class="about"><h3>{{ _('Start a run now') }}</h3>
         <p>{{ _('The same run as the scheduled one: new mails of the last %(days)s days that are older than the waiting time.', days=box.cfg.lookback_days) }}</p></div>
-      <div class="fields"><label class="f">{{ _('Max. mails') }} <input type="number" name="limit" min="1" max="100000" step="1" placeholder="{{ box.cfg.max_per_run }}"></label></div>
-      {{ go(primary=true) }}
+      <div class="fields"><label class="f">{{ _('Max. mails') }} <input type="number" name="limit" min="1" max="100000" step="1" placeholder="{{ _('default: %(n)s', n=box.cfg.max_per_run) }}"></label></div>
+      {{ go(_('Sort now'), primary=true) }}
     </form>
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/backfill">{{ hidden() }}
       <div class="about"><h3>{{ _('Backfill') }}</h3>
         <p>{{ _('Sorts older mails in the inbox from a date on, month by month. Mails already processed are skipped.') }}</p></div>
       <div class="fields"><label class="f">{{ _('From date') }} <input type="date" name="since" max="{{ today }}" required></label>
-        <label class="f">{{ _('Max. mails') }} <input type="number" name="limit" min="1" max="100000" step="1" placeholder="{{ _('all') }}"></label></div>
-      {{ go() }}
+        <label class="f">{{ _('Max. mails') }} <input type="number" name="limit" min="1" max="100000" step="1" placeholder="{{ _('empty = all') }}"></label></div>
+      {{ go(_('Sort older mails')) }}
     </form>
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/resort">{{ hidden() }}
       <div class="about"><h3>{{ _('Re-sort a folder') }}</h3>
@@ -63,20 +65,20 @@
             <option value="{{ box.cfg.source_folder }}">{{ _('Inbox') }}</option>
             {% for f in folders %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
           </select></label>
-        <label class="f">{{ _('Max. mails') }} <input type="number" name="limit" min="1" max="100000" step="1" placeholder="{{ _('all') }}"></label></div>
-      {{ go() }}
+        <label class="f">{{ _('Max. mails') }} <input type="number" name="limit" min="1" max="100000" step="1" placeholder="{{ _('empty = all') }}"></label></div>
+      {{ go(_('Re-sort folder')) }}
     </form>
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/recheck">{{ hidden() }}
       <div class="about"><h3>{{ _('Check expiry dates') }}</h3>
         <p>{{ _('Looks for an expiry date in already sorted mails of categories with "Track expiry date" that were never checked.') }}</p></div>
       <div class="fields"></div>
-      {{ go() }}
+      {{ go(_('Check dates')) }}
     </form>
   </div>
 </section>
 
 <section class="card stack">
-  <div class="group-head"><h2>{{ _('Reconcile') }}</h2>
+  <div class="group-head"><h2>{{ _('Look after the mailbox') }}</h2>
     <p class="muted hint">{{ _('Without the model, free of charge.') }}</p></div>
   <div class="tasks">
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/reconcile">{{ hidden() }}
@@ -84,14 +86,14 @@
         <p>{{ _('Reads all folders (except trash, spam, sent and drafts) and marks mails you deleted as "no longer in the mailbox" – they then disappear from "To review". Uncertain mails you filed by hand get their folder. Changes nothing on the server.') }}</p>
         <p class="muted">{% if box.cfg.reconcile_enabled %}{{ ngettext('Runs by itself every %(num)s hour (Settings → Schedule).', 'Runs by itself every %(num)s hours (Settings → Schedule).', box.cfg.reconcile_hours) }}{% else %}{{ _('Does not run by itself (Settings → Schedule).') }}{% endif %}</p></div>
       <div class="fields"></div>
-      {{ go() }}
+      {{ go(_('Reconcile now')) }}
     </form>
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/cleanup">{{ hidden() }}
       <div class="about"><h3>{{ _('Apply the deletion rules') }}</h3>
         <p>{{ _('Moves mail older than its rule allows into the trash of the mailbox (Rules → Deletion rules). The dry run lists what would go.') }}</p>
-        <p class="muted">{% if box.cfg.delete_rules %}{{ ngettext('%(num)s rule · runs by itself once a day.', '%(num)s rules · run by themselves once a day.', box.cfg.delete_rules|length) }}{% else %}{{ _('No deletion rules yet.') }} <a href="/ui/m/{{ box.id }}/settings#loeschregeln">{{ _('Set them up') }}</a>{% endif %}</p></div>
+        <p class="muted">{% if box.cfg.delete_rules %}{{ ngettext('%(num)s rule · runs by itself once a day.', '%(num)s rules · run by themselves once a day.', box.cfg.delete_rules|length) }}{% else %}{{ _('No deletion rules yet.') }} <a href="/ui/m/{{ box.id }}/rules#deletion-rules">{{ _('Set them up') }}</a>{% endif %}</p></div>
       <div class="fields"></div>
-      {{ go(disabled=not box.cfg.delete_rules, why=_('No deletion rules yet')) }}
+      {{ go(_('Apply rules'), disabled=not box.cfg.delete_rules, why=_('No deletion rules yet')) }}
     </form>
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/relocate">{{ hidden() }}
       <div class="about"><h3>{{ _('Move a category into its folder') }}</h3>
@@ -100,7 +102,7 @@
           <select name="category" required>
             {% for key, c in box.cfg.categories.items() if c.folder %}<option value="{{ key }}">{{ c.label }} → {{ c.folder }}</option>{% endfor %}
           </select></label></div>
-      {{ go() }}
+      {{ go(_('Move mails')) }}
     </form>
     {# undoing happens on the run's own page, which lists its mails #}
     <form class="task" id="undo" method="get" action="/ui/m/{{ box.id }}/undo">
@@ -123,10 +125,10 @@
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/rename_folder">{{ hidden() }}
       <div class="about"><h3>{{ _('Rename a folder') }}</h3>
         <p>{{ _('Renames the folder and its subfolders on the server, updates the log and adjusts the target folders of the categories.') }}</p></div>
-      <div class="fields"><label class="f">{{ _('Old name') }} <input type="text" name="old" list="folders" required placeholder="INBOX/…"></label>
-        <label class="f">{{ _('New name') }} <input type="text" name="new" required placeholder="INBOX/…"></label>
+      <div class="fields"><label class="f">{{ _('Old name') }} <input type="text" name="old" list="folders" required placeholder="INBOX/Promotions"></label>
+        <label class="f">{{ _('New name') }} <input type="text" name="new" required placeholder="INBOX/Offers"></label>
         <datalist id="folders">{% for f in folders %}<option value="{{ f }}">{% endfor %}</datalist></div>
-      {{ go(danger=true, disabled=not editable) }}
+      {{ go(_('Rename folder'), danger=true, disabled=not editable) }}
     </form>
     <form class="task" id="rename-category" method="post" action="/ui/m/{{ box.id }}/maintenance/rename_category">{{ hidden() }}
       <div class="about"><h3>{{ _('Rename a category key') }}</h3>
@@ -134,7 +136,7 @@
       <div class="fields"><label class="f">{{ _('Category') }}
           <select name="old" required>{% for key, c in box.cfg.categories.items() %}<option value="{{ key }}" {% if key == rename_category %}selected{% endif %}>{{ c.label }} ({{ key }})</option>{% endfor %}</select></label>
         <label class="f">{{ _('New key') }} <input type="text" name="new" required pattern="[a-z0-9_]{1,40}"></label></div>
-      {{ go(danger=true, disabled=not editable) }}
+      {{ go(_('Rename key'), danger=true, disabled=not editable) }}
     </form>
   </div>
 </section>
