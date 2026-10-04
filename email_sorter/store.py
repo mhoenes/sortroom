@@ -232,6 +232,11 @@ class Store:
         row = cur.fetchone()
         return dict(zip([c[0] for c in cur.description], row, strict=True)) if row else None
 
+    def set_flagged(self, key: str, flagged: bool) -> None:
+        """The star set or removed by hand in the UI."""
+        self.db.execute("UPDATE processed SET flagged = ? WHERE message_key = ?", (int(flagged), key))
+        self.db.commit()
+
     def set_manual(self, key: str, category: str, moved_to: str | None) -> None:
         """A category set by hand in the UI: certain by definition, so it leaves the review list."""
         self.db.execute("UPDATE processed SET category = ?, moved_to = ?, confidence = 1.0, source = 'manual' "

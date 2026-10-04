@@ -241,6 +241,15 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 .detail-from { font-size: 13px; overflow-wrap: anywhere; margin-top: -4px; }
 .detail-status { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .star-pill { display: inline-flex; align-items: center; gap: 4px; }
+/* the star of an open mail: a small toggle like a pill; filled when set */
+.star-form { display: contents; }
+.star-toggle { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border: 1px solid var(--line-strong);
+  border-radius: 999px; background: var(--surface); color: var(--muted); font: inherit; font-size: 12px; font-weight: 500;
+  cursor: pointer; }
+.star-toggle svg.star { fill: none; stroke: currentColor; stroke-width: 2; }
+.star-toggle:hover { border-color: var(--star); color: var(--ink); }
+.star-toggle[aria-pressed="true"] { border-color: transparent; background: var(--neutral-bg); color: var(--ink); }
+.star-toggle[aria-pressed="true"] svg.star { fill: var(--star); stroke: var(--star); }
 .detail .decision { margin: 2px 0 0; font-size: 14px; }
 .detail .more-info dl { margin-top: 2px; }
 .maillist td { white-space: nowrap; padding-top: 8px; padding-bottom: 8px; }

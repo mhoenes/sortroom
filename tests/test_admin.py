@@ -210,6 +210,17 @@ def test_mail_actions(client, setup, monkeypatch):
     r = client.post("/ui/m/privat/mails/action", data={"csrf": token, "key": "<m1@x>", "action": "move",
                                                        "category": "", "back": "period=all"})
     assert "Bitte eine Kategorie wählen." in r.text and len(moves) == 1  # "Correct" with nothing chosen
+    # the star, and the way to the sender's other mails
+    stars = []
+    monkeypatch.setattr(admin, "set_star", lambda cfg, creds, ws, key, on: stars.append((key, on)))
+    assert 'name="starred" value="1"' in html and 'aria-pressed="false"' in html
+    assert 'href="/ui/m/privat/mails?q=Shop%40Example.de&amp;period=all">alle von diesem Absender</a>' in html
+    r = client.post("/ui/m/privat/mails/action", data={"csrf": token, "key": "<m1@x>", "action": "star",
+                                                       "starred": "1", "back": "period=all&key=%3Cm1%40x%3E"})
+    assert "Stern gesetzt." in r.text and stars == [("<m1@x>", True)] and "<h2>Unsicher</h2>" in r.text
+    r = client.post("/ui/m/privat/mails/action", data={"csrf": token, "key": "<m1@x>", "action": "star",
+                                                       "starred": "", "back": "period=all&key=%3Cm1%40x%3E"})
+    assert "Stern entfernt." in r.text and stars[-1] == ("<m1@x>", False)
     r = client.post("/ui/m/privat/mails/action", data={"csrf": token, "key": "<m1@x>", "action": "rule",
                                                        "match": "@example.de", "category": "werbung"})
     assert "Absender-Regel für @example.de gespeichert" in r.text and len(moves) == 1
