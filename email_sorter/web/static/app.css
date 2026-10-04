@@ -506,6 +506,8 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
 .runmails .pick input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
 .runmails td.route { color: var(--muted); }
 .runmails .pick-all-label { display: none; }
+/* a mail that can't go back any more: faint, with why */
+.runmails tr.blocked td.mail, .runmails tr.blocked td.route, .runmails tr.blocked td.date { opacity: .55; }
 .runmails td.route b { font-weight: 500; color: var(--ink); }
 .runmails .unstar { white-space: nowrap; }
 /* choosing the mails of a run by where it put them */
