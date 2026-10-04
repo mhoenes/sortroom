@@ -15,10 +15,11 @@
 
 {% if busy %}<div class="banner" role="status">{{ _('A run is in progress for this mailbox. New jobs wait until it is done.') }}</div>{% endif %}
 
-{# only once there is something to show: an empty card at the top would push the tasks down #}
-{% if jobs %}
+{# the jobs of this mailbox: on top while one is running, below the tasks otherwise #}
+{% macro recent_jobs() %}
 <section class="card stack">
     <h2>{{ _('Recent jobs') }}</h2>
+    <p class="muted hint">{{ _('Jobs are kept until the next restart.') }}</p>
     <div class="scroll-x"><table>
       <thead><tr><th scope="col">{{ _('Start') }}</th><th scope="col">{{ _('Task') }}</th><th scope="col">{{ _('Status') }}</th></tr></thead>
       <tbody>
@@ -30,7 +31,8 @@
       </tbody>
     </table></div>
 </section>
-{% endif %}
+{% endmacro %}
+{% set running_job = jobs|selectattr('status', 'equalto', 'running')|list %}
 
 {% set sort_ask = _('Sort for real now? The mails are moved into their folders and the model costs money. A dry run shows first what would happen.') %}
 {% macro go(label, primary=false, danger=false, disabled=false, why=none, ask=none) %}<div class="go">
@@ -40,6 +42,8 @@
         {% if disabled %}disabled title="{{ why or _('Settings are read-only') }}"{% endif %}
         {% if ask or danger %}onclick='return confirm({{ (ask or _("Really run it? Check first with a dry run what would happen."))|tojson }})'{% endif %}>{{ label }}</button>
     </div>{% endmacro %}
+
+{% if running_job %}{{ recent_jobs() }}{% endif %}
 
 <section class="card stack">
   <div class="group-head"><h2>{{ _('Sort with the model') }}</h2>
@@ -58,24 +62,21 @@
         <label class="f">{{ _('Max. mails') }} <input type="number" name="limit" min="1" max="100000" step="1" placeholder="{{ _('empty = all') }}"></label></div>
       {{ go(_('Sort older mails'), ask=sort_ask) }}
     </form>
-    <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/resort">{{ hidden() }}
-      <div class="about"><h3>{{ _('Re-sort a folder') }}</h3>
-        <p>{{ _('Files all mails of a folder again with the current descriptions and moves those that belong elsewhere – e.g. after a changed description.') }}</p></div>
-      <div class="fields"><label class="f">{{ _('Folder') }}
-          <select name="folder" required>
-            <option value="{{ box.cfg.source_folder }}">{{ _('Inbox') }}</option>
-            {% for f in folders %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
-          </select></label>
-        <label class="f">{{ _('Max. mails') }} <input type="number" name="limit" min="1" max="100000" step="1" placeholder="{{ _('empty = all') }}"></label></div>
-      {{ go(_('Re-sort folder'), ask=sort_ask) }}
-    </form>
-    <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/recheck">{{ hidden() }}
-      <div class="about"><h3>{{ _('Check expiry dates') }}</h3>
-        <p>{{ _('Looks for an expiry date in already sorted mails of categories with "Track expiry date" that were never checked.') }}</p></div>
-      <div class="fields"></div>
-      {{ go(_('Check dates'), ask=_('Check the expiry dates for real? Expired offers are moved. A dry run shows first which.')) }}
-    </form>
   </div>
+</section>
+
+{# undoing happens on the run's own page, which lists its mails #}
+<section class="card stack" id="undo">
+  <div class="group-head"><h2>{{ _('Undo a run') }}</h2>
+    <p class="muted hint">{{ _('Moves the mails a run sorted back to where they came from and removes the stars it set. Mails you moved, deleted or corrected since stay as they are; expired offers are not brought back.') }}</p></div>
+  <form class="task single" method="get" action="/ui/m/{{ box.id }}/undo">
+    <div class="fields stacked">{% if undoable %}<label class="f">{{ _('Run') }}
+        <select name="run" required>
+          {% for r in undoable %}<option value="{{ r.started }}">{{ r.started|dt }} · {{ run_kind(r.kind) }}{% if r.detail %} {{ r.detail }}{% endif %} · {{ ngettext('%(num)s mail', '%(num)s mails', r.mails, num=r.mails|num) }}</option>{% endfor %}
+        </select></label>
+      {% else %}<p class="muted">{{ _('No run to undo. A run can be undone as long as it is in the run log.') }}</p>{% endif %}</div>
+    <div class="go"><button class="btn small" type="submit" {% if not undoable %}disabled title="{{ _('No run to undo') }}"{% endif %}>{{ _('Show its mails') }}</button></div>
+  </form>
 </section>
 
 <section class="card stack">
@@ -96,6 +97,32 @@
       <div class="fields"></div>
       {{ go(_('Apply rules'), ask=_('Move the mails the deletion rules name into the trash now? A dry run shows first which.'), disabled=not box.cfg.delete_rules, why=_('No deletion rules yet')) }}
     </form>
+    {# undoing happens on the run's own page, which lists its mails #}
+  </div>
+</section>
+
+<section class="card">
+  <details class="more" id="more-tasks" {% if rename_category %}open{% endif %}>
+    <summary>{{ _('More tasks') }}<span class="muted summary-note">{{ _('Re-sort a folder, check expiry dates, move a category, rename') }}</span></summary>
+    <p class="muted hint">{{ _('Seldom needed. Re-sorting uses the model; renaming changes folders on the server and the settings – do a dry run first and read the log.') }}</p>
+    <div class="tasks">
+    <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/resort">{{ hidden() }}
+      <div class="about"><h3>{{ _('Re-sort a folder') }}</h3>
+        <p>{{ _('Files all mails of a folder again with the current descriptions and moves those that belong elsewhere – e.g. after a changed description.') }}</p></div>
+      <div class="fields"><label class="f">{{ _('Folder') }}
+          <select name="folder" required>
+            <option value="{{ box.cfg.source_folder }}">{{ _('Inbox') }}</option>
+            {% for f in folders %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
+          </select></label>
+        <label class="f">{{ _('Max. mails') }} <input type="number" name="limit" min="1" max="100000" step="1" placeholder="{{ _('empty = all') }}"></label></div>
+      {{ go(_('Re-sort folder'), ask=sort_ask) }}
+    </form>
+    <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/recheck">{{ hidden() }}
+      <div class="about"><h3>{{ _('Check expiry dates') }}</h3>
+        <p>{{ _('Looks for an expiry date in already sorted mails of categories with "Track expiry date" that were never checked.') }}</p></div>
+      <div class="fields"></div>
+      {{ go(_('Check dates'), ask=_('Check the expiry dates for real? Expired offers are moved. A dry run shows first which.')) }}
+    </form>
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/relocate">{{ hidden() }}
       <div class="about"><h3>{{ _('Move a category into its folder') }}</h3>
         <p>{{ _('After a changed target folder: moves the already sorted mails of the category into the new folder, according to the log.') }}</p></div>
@@ -105,24 +132,6 @@
           </select></label></div>
       {{ go(_('Move mails'), ask=_('Move the sorted mails of this category into its folder now? A dry run shows first which.')) }}
     </form>
-    {# undoing happens on the run's own page, which lists its mails #}
-    <form class="task" id="undo" method="get" action="/ui/m/{{ box.id }}/undo">
-      <div class="about"><h3>{{ _('Undo a run') }}</h3>
-        <p>{{ _('Moves the mails a run sorted back to where they came from and removes the stars it set. Mails you moved, deleted or corrected since stay as they are; expired offers are not brought back.') }}</p></div>
-      <div class="fields stacked">{% if undoable %}<label class="f">{{ _('Run') }}
-          <select name="run" required>
-            {% for r in undoable %}<option value="{{ r.started }}">{{ r.started|dt }} · {{ run_kind(r.kind) }}{% if r.detail %} {{ r.detail }}{% endif %} · {{ ngettext('%(num)s mail', '%(num)s mails', r.mails, num=r.mails|num) }}</option>{% endfor %}
-          </select></label>
-        {% else %}<p class="muted">{{ _('No run to undo. A run can be undone as long as it is in the run log.') }}</p>{% endif %}</div>
-      <div class="go"><button class="btn small" type="submit" {% if not undoable %}disabled title="{{ _('No run to undo') }}"{% endif %}>{{ _('Show its mails') }}</button></div>
-    </form>
-  </div>
-</section>
-
-<section class="card stack">
-  <div class="group-head"><h2>{{ _('Rename') }}</h2>
-    <p class="muted hint">{{ _('Changes folders on the server and the settings. Do a dry run first and read the log.') }}</p></div>
-  <div class="tasks">
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/rename_folder">{{ hidden() }}
       <div class="about"><h3>{{ _('Rename a folder') }}</h3>
         <p>{{ _('Renames the folder and its subfolders on the server, updates the log and adjusts the target folders of the categories.') }}</p></div>
@@ -139,6 +148,20 @@
         <label class="f">{{ _('New key') }} <input type="text" name="new" required pattern="[a-z0-9_]{1,40}"></label></div>
       {{ go(_('Rename key'), danger=true, disabled=not editable) }}
     </form>
-  </div>
+    </div>
+  </details>
 </section>
+
+<script>
+  // a link to a task inside "More tasks" (e.g. #rename-category from the Categories page) opens it
+  const openMore = () => {
+    const target = location.hash && document.getElementById(location.hash.slice(1));
+    const details = target && target.closest('details');
+    if (details && !details.open) { details.open = true; target.scrollIntoView(); }
+  };
+  openMore();
+  addEventListener('hashchange', openMore);
+</script>
+
+{% if jobs and not running_job %}{{ recent_jobs() }}{% endif %}
 {% endblock %}
