@@ -177,8 +177,15 @@ def test_mails_page_filters_and_detail(client):
     c = _login(client)
     html = c.get("/ui/m/privat/mails?period=all").text
     assert "4 Einträge" in html and "Ihre Rechnung Nr. 4711" in html
+    # the location shows only where it isn't the category's folder: here, the uncertain mail in the inbox
+    assert html.count('class="where-note"') == 1 and '<span class="where-note">in Posteingang</span>' in html
+    assert html.count('tabindex="-1"') == 4  # one tab stop per row: the subject, not the date
+    assert '<span class="count">1</span>' in html and "Filter zurücksetzen" in html  # "all": not the default 7 days
+    html = c.get("/ui/m/privat/mails").text
+    assert "Filter zurücksetzen" not in html and '<span class="count">' not in html
     html = c.get("/ui/m/privat/mails?period=all&uncertain=1").text
     assert "1 Eintrag" in html and "Ein Vertrag bucht im Juli" in html and "Ihre Rechnung" not in html
+    assert 'href="/ui/m/privat/mails">Filter zurücksetzen</a>' in html and '<span class="count">2</span>' in html
     html = c.get("/ui/m/privat/mails?period=all&q=lieferando").text
     assert "1 Eintrag" in html and "Regel" in html
     html = c.get("/ui/m/privat/mails?period=all&folder=inbox").text

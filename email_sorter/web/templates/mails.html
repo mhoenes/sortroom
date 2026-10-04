@@ -9,9 +9,15 @@
   </div>
 </div>
 
-<form class="filters" method="get" action="/ui/m/{{ box.id }}/mails">
+{# the filters; on a phone folded into "Filters" (the script below), with the number of those set #}
+{% set active = [f.q, f.category, f.folder, f.period != '7d', f.uncertain, f.flagged, f.show_gone]|select|list|length %}
+<form method="get" action="/ui/m/{{ box.id }}/mails">
+<details class="filter-box" open>
+  <summary>{{ _('Filters') }}{% if active %} <span class="count">{{ active }}</span>{% endif %}</summary>
+  <div class="filters">
   <div class="f search"><label for="q">{{ _('Search') }}</label>
-    <span><input type="search" id="q" name="q" value="{{ f.q }}" placeholder="{{ _('Sender or subject') }}"><button class="btn" type="submit">{{ _('Search') }}</button></span>
+    <span class="search-field"><input type="search" id="q" name="q" value="{{ f.q }}" placeholder="{{ _('Sender or subject') }}">
+      <button class="search-go" type="submit" aria-label="{{ _('Search') }}" title="{{ _('Search') }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button></span>
   </div>
   <label class="f sel">{{ _('Category') }}
     <select name="category" onchange="this.form.submit()">
@@ -36,7 +42,10 @@
     <label class="check small"><input type="checkbox" name="uncertain" value="1" {% if f.uncertain %}checked{% endif %} onchange="this.form.submit()">{{ _('Uncertain only') }}</label>
     <label class="check small"><input type="checkbox" name="flagged" value="1" {% if f.flagged %}checked{% endif %} onchange="this.form.submit()">{{ _('Starred') }}</label>
     <label class="check small"><input type="checkbox" name="gone" value="1" {% if f.show_gone %}checked{% endif %} onchange="this.form.submit()">{{ _('Show deleted') }}</label>
+    {% if active %}<a class="reset" href="/ui/m/{{ box.id }}/mails">{{ _('Reset filters') }}</a>{% endif %}
   </div>
+  </div>
+</details>
 </form>
 
 {% set list_href = '/ui/m/' ~ box.id ~ '/mails?' ~ query ~ ('&' if query else '') ~ 'page=' ~ f.page %}
@@ -44,20 +53,24 @@
   <section class="card" style="padding:6px 12px">
     {% if rows %}
     <div class="scroll-x"><table class="maillist">
-      <thead><tr><th scope="col" class="star-col"><span class="sr-only">{{ _('Star') }}</span></th><th scope="col" class="date">{{ _('Received') }}</th><th scope="col">{{ _('Mail') }}</th><th scope="col">{{ _('Category') }}</th><th scope="col" class="conf">{{ _('Confidence') }}</th><th scope="col" class="where">{{ _('Location') }}</th></tr></thead>
+      <thead><tr><th scope="col" class="star-col"><span class="sr-only">{{ _('Star') }}</span></th><th scope="col" class="date">{{ _('Received') }}</th><th scope="col">{{ _('Mail') }}</th><th scope="col">{{ _('Category') }}</th><th scope="col" class="conf">{{ _('Confidence') }}</th></tr></thead>
       <tbody>
       {% for m in rows %}
         {% set href = list_href ~ '&key=' ~ link_key(m.message_key) %}
         {% set low = m.confidence < min_conf %}
         <tr class="link {% if selected and selected.message_key == m.message_key %}sel{% endif %}">
           <td class="star-col">{% if m.flagged %}<svg class="star" viewBox="0 0 24 24" role="img" aria-label="{{ _('starred') }}"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z"/></svg>{% endif %}</td>
-          <td class="date"><a class="rowlink" href="{{ href }}">{{ m.received|dt }}</a></td>
+          {# the whole row opens the mail (script below); one tab stop per row, on the subject #}
+          <td class="date"><a class="rowlink" href="{{ href }}" tabindex="-1">{{ m.received|dt }}</a></td>
           <td class="clip mail"><a class="rowlink" href="{{ href }}">
             <span class="subj">{{ m.subject or _('(no subject)') }}</span>
             <span class="meta"><span class="date-inline">{{ m.received|dt }} · </span>{{ m.sender }}{% if m.expires %} · <span class="{{ 'expired' if m.expires < today }}" {% if m.expires < today %}title="{{ _('expired') }}"{% endif %}>{{ _('valid until %(date)s', date=m.expires|date) }}</span>{% endif %}</span></a></td>
-          <td><span class="pill {% if danger(m.category) %}err{% endif %}">{{ label(m.category) }}</span></td>
+          {# where the mail is, only when that is not its category's folder: in the inbox, elsewhere, deleted #}
+          {% set home = (box.cfg.categories[m.category].folder or '') if m.category in box.cfg.categories else (m.moved_to or '') %}
+          <td class="cat"><span class="pill {% if danger(m.category) %}err{% endif %}">{{ label(m.category) }}</span>
+            {%- if m.gone %}<span class="where-note">{{ _('deleted') }}</span>
+            {%- elif (m.moved_to or '').strip('/') != home.strip('/') %}<span class="where-note">{{ _('in %(folder)s', folder=m.moved_to|folder_label) }}</span>{% endif %}</td>
           <td class="conf">{% if m.source == 'rule' %}<span class="muted">{{ _('Rule') }}</span>{% elif m.source == 'manual' %}<span class="muted">{{ _('by hand') }}</span>{% else %}<span class="meter" {% if low %}title="{{ _('below the minimum confidence %(min)s', min=min_conf|conf) }}"{% endif %}><span class="track"><span class="fill {% if low %}low{% endif %}" style="width:{{ (m.confidence * 100)|round|int }}%"></span></span><span>{{ m.confidence|conf }}</span></span>{% endif %}</td>
-          <td class="where">{% if m.gone %}<span class="pill">{{ _('deleted') }}</span>{% elif m.moved_to %}{{ m.moved_to|folder_label }}{% else %}<span class="muted">{{ _('Inbox') }}</span>{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>
@@ -194,6 +207,16 @@
         if (r.top < 0 || r.bottom > innerHeight) open.scrollIntoView({ block: 'center' });
       }
     }
+    // a click anywhere in a row opens its mail, like a click on its subject
+    const list = document.querySelector('.maillist');
+    if (list) list.addEventListener('click', e => {
+      if (e.target.closest('a, button, input, select, label')) return;
+      const link = e.target.closest('tr.link')?.querySelector('td.mail a.rowlink');
+      if (link) link.click();
+    });
+    // on a phone the filters fold into "Filters", so the list comes first
+    const box = document.querySelector('.filter-box');
+    if (box && matchMedia('(max-width: 760px)').matches) box.open = false;
     const close = document.querySelector('.detail a.close');
     document.addEventListener('keydown', e => {
       const target = e.target instanceof Element ? e.target : document.body;
