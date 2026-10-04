@@ -409,6 +409,9 @@ def test_senders_page_and_unsubscribe(client, setup, monkeypatch):
     # one Unsubscribe per sender: here the mail, then noting it
     assert 'href="mailto:off@verein.example" data-unsub' in html and "Als abgemeldet markieren" in html
     assert '<option value="" selected>Zu erledigen (2)</option>' in html and "Abgemeldet (0)" in html
+    # what Unsubscribe does: a tip at its column, no paragraph below the list; on a phone "1 Mail", not "1"
+    assert 'data-tip="Bietet der Absender die One-Click-Abmeldung an' in html and "RFC 8058" not in html
+    assert '<span class="num-long">1 Mail</span>' in html and "Wird abgemeldet" in html
     assert "Kein Absender mit diesem Status" in client.get("/ui/m/privat/subscriptions?status=done").text
     token = _csrf(html)
     r = client.post("/ui/m/privat/subscriptions/action", data={"csrf": token, "address": "news@shop.example",

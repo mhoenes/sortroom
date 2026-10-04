@@ -551,7 +551,9 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
   table.senders tr:last-child { border-bottom: 0; }
   table.senders td { border-bottom: 0; }
   table.senders td.addr { grid-row: 1; grid-column: 1; }
-  table.senders td.num { grid-row: 1; grid-column: 2; }
+  table.senders td.num { grid-row: 1; grid-column: 2; font-size: 13px; color: var(--muted); white-space: nowrap; }
+  table.senders .num-short { display: none; }
+  table.senders .num-long { display: inline; }
   table.senders td:last-child, table.senders td.status, table.senders td.cat { grid-column: 1 / -1; padding-top: 0; }
   /* the category in one small line below the address: "Promotions · Create a rule" */
   table.senders td.cat { font-size: 13px; color: var(--muted); }
@@ -578,6 +580,8 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
 .unsub .text-btn, .unsub-alt { font-size: 13px; }
 .senders td.status .pill { margin: 2px 4px 2px 0; white-space: nowrap; }
 /* below the category: the sender rule, or one to create */
+.senders .num-long { display: none; }
+.unsub-go.busy { opacity: .7; cursor: progress; }
 .senders .cat-note { display: block; margin-top: 2px; font-size: 12px; white-space: nowrap; }
 /* "⋯": the rarely needed actions, folded beside the Unsubscribe button */
 .more-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0;
