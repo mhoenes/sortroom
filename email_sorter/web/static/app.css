@@ -331,6 +331,8 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 .task .fields input, .task .fields select { width: 100%; height: 36px; }
 .task .fields.stacked { flex-direction: column; gap: 8px; }
 .task .go { display: flex; gap: 8px; }
+/* a task of its own card: the card says what it is, so no text column */
+.task.single { grid-template-columns: minmax(0, 1fr) auto; border-top: 0; padding: 0; }
 @media (pointer: coarse) { .task .go .btn.small { height: 44px; } }
 
 /* job page: start a finished dry run for real */
@@ -477,6 +479,12 @@ pre.log { margin: 0; max-height: 520px; overflow: auto; padding: 14px 16px; bord
 .stack.tight { gap: 10px; }
 details.more summary { cursor: pointer; color: var(--accent); font-weight: 500; min-height: 32px; display: flex; align-items: center; }
 details.more[open] summary { margin-bottom: 10px; }
+details.more summary .summary-note { font-weight: 400; font-size: 13px; margin-left: 10px; }
+@media (max-width: 760px) {
+  details.more summary { flex-wrap: wrap; }
+  details.more summary .summary-note { flex-basis: 100%; margin: 0 0 6px; }
+}
+details.more > .hint { margin: 0 0 6px; }
 .btn[disabled] { opacity: .5; cursor: not-allowed; }
 .hint.unsaved { color: var(--warn); font-weight: 600; }
 /* a * after the label of a field that is required (now: the page's script sets "required" by the chosen method) */
@@ -580,7 +588,7 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
     width: min(400px, calc(100vw - 32px)); overflow-y: auto; box-shadow: 0 12px 40px var(--shadow); }
   /* … over the dimmed list, which closes it on a click */
   .detail-backdrop { display: block; position: fixed; inset: 0; z-index: 39; background: var(--shadow); }
-  .task { grid-template-columns: minmax(0, 1fr) auto; }
+  .task, .task.single { grid-template-columns: minmax(0, 1fr) auto; }
   .task .about { grid-column: 1 / -1; }
   .has-detail .maillist .conf { display: table-cell; }
 }
@@ -643,7 +651,7 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
   table.runmails td.clip { max-width: none; }  /* the table's clipping would leave the grid cell no width */
   table.runmails td.date { display: none; }
   table.runmails td.route, table.runmails td.state { padding-top: 0; padding-bottom: 4px; white-space: normal; font-size: 13px; }
-  .task { grid-template-columns: minmax(0, 1fr); }
+  .task, .task.single { grid-template-columns: minmax(0, 1fr); }
   .task .fields { flex-wrap: wrap; }
   .task .fields .f { flex-basis: 140px; }
   .task .fields.stacked .f { flex-basis: auto; }

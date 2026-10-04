@@ -147,6 +147,34 @@ def test_maintenance_page_names_its_buttons_after_the_task_and_points_to_the_rul
     assert "confirm(" not in reconcile
 
 
+def test_maintenance_page_puts_the_everyday_tasks_first_and_folds_the_rest(client, monkeypatch):
+    import re
+    html = client.get("/ui/m/privat/maintenance").text
+    fold = html.index('id="more-tasks"')
+    # everyday: sorting, undo (a card of its own, close to the top), looking after the mailbox
+    for action in ("maintenance/run", "maintenance/backfill", "maintenance/reconcile", "maintenance/cleanup"):
+        assert html.index(f'action="/ui/m/privat/{action}"') < fold, action
+    assert html.index('id="undo"') < html.index("Postfach pflegen") < fold
+    # seldom: re-sorting a folder, expiry dates, moving a category and the renames are folded, closed
+    for action in ("resort", "recheck", "relocate", "rename_folder", "rename_category"):
+        assert html.index(f'action="/ui/m/privat/maintenance/{action}"') > fold, action
+    assert re.search(r'<details class="more" id="more-tasks" >', html) and "Weitere Aufgaben" in html
+    assert 'id="rename-category"' in html  # the Categories page links to it; the script opens the fold for the anchor
+    # a link with a category (from the Categories page) comes with the fold open, without needing the script
+    assert re.search(r'<details class="more" id="more-tasks" open>', client.get("/ui/m/privat/maintenance?category=werbung").text)
+
+    # recent jobs: below the tasks, with the note that they are kept until the restart; on top while one runs
+    job = {"id": "a1", "started": "2026-10-04T10:00:00", "label": "Probe-Job", "status": "done",
+           "result": {"ok": True, "live": False}}
+    with monkeypatch.context() as m:
+        m.setattr(admin.jobs, "recent", lambda box_id, n: [job])
+        html = client.get("/ui/m/privat/maintenance").text
+        assert html.index("Letzte Jobs") > html.index('id="more-tasks"') and "bis zum nächsten Neustart" in html
+        m.setattr(admin.jobs, "recent", lambda box_id, n: [{**job, "id": "a2", "label": "Läuft-Job", "status": "running"}, job])
+        html = client.get("/ui/m/privat/maintenance").text
+        assert html.index("Letzte Jobs") < html.index('action="/ui/m/privat/maintenance/run"')
+
+
 def test_maintenance_page_and_run_job(client, monkeypatch):
     calls = []
 
