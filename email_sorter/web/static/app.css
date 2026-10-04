@@ -469,6 +469,9 @@ details.more summary { cursor: pointer; color: var(--accent); font-weight: 500; 
 details.more[open] summary { margin-bottom: 10px; }
 .btn[disabled] { opacity: .5; cursor: not-allowed; }
 .hint.unsaved { color: var(--warn); font-weight: 600; }
+/* a * after the label of a field that is required (now: the page's script sets "required" by the chosen method) */
+.f .req { display: none; color: var(--err); font-weight: 600; }
+.f:has(input[required]) .req { display: inline; }
 /* the test at the foot of a Global settings card, its result below it */
 .test-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding-top: 16px;
   border-top: 1px solid var(--line-soft); }

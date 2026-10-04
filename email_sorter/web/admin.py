@@ -33,7 +33,8 @@ from ..mail import MailError, MailSettings, mail_settings, send, smtp_password
 from ..undo import changed_since, run_undo
 from ..store import Store
 from . import _box, _boxes, _sidebar, queries, require_login, router
-from .editing import (EditError, add_sender_rule, can_add_mailbox, classifier_from_form, create_mailbox,
+from .editing import (EditError, add_sender_rule, can_add_mailbox, classifier_from_form, connection_for_new,
+                      create_mailbox,
                       mail_from_form, rename_category_key, rename_folder_refs, reserved_key_text, save_shared,
                       secrets_writable, shared_writable, with_kind, writable)
 from .editor import _flash, _form, _page, _shared_path, form_number, without_secrets
@@ -386,13 +387,20 @@ def _set_expiry(box: Mailbox, key: str, form: dict) -> str:
 
 # ---------------------------------------------------------------- new mailbox
 
-def _new_mailbox_page(request: Request, form: dict | None = None, error: str | None = None, status: int = 200,
-                      retype: bool = False, retype_secret: bool = False):
+# the fields of "Add mailbox" that show their own error; an error about anything else shows on top
+NEW_MAILBOX_FIELDS = {"name", "imap_host", "imap_port", "source_folder", "imap_user", "imap_password",
+                      "oauth_client_id", "oauth_client_secret", "oauth_tenant"}
+
+
+def _new_mailbox_page(request: Request, form: dict | None = None, error: EditError | None = None, status: int = 200,
+                      retype: bool = False, retype_secret: bool = False,
+                      tested: tuple[str, str, str, str] | None = None):
     boxes = _boxes(request)
     blocked = can_add_mailbox(request.app.state.base_dir)
     root = request.app.state.base_dir / "mailboxes"
     return _page(request, "mailbox_new.html", {
-        **_sidebar(request, boxes, None, "all"), "boxes": boxes, "blocked": blocked, "error": error,
+        **_sidebar(request, boxes, None, "all"), "boxes": boxes, "blocked": blocked, "error": error and str(error),
+        "error_field": error.field if error and error.field in NEW_MAILBOX_FIELDS else None, "tested": tested,
         "example_categories": {code: len(tomllib.loads(path.read_text(encoding="utf-8"))["categories"])
                                for code, path in EXAMPLE_MAILBOXES.items()},
         "languages": i18n.LANGUAGES, "retype": retype, "retype_secret": retype_secret, "secrets_file": SECRETS_FILE,
@@ -411,6 +419,31 @@ def _new_mailbox_page(request: Request, form: dict | None = None, error: str | N
 @router.get("/ui/mailboxes/new", response_class=HTMLResponse, dependencies=[Depends(require_login)])
 def mailbox_new(request: Request):
     return _new_mailbox_page(request)
+
+
+@router.post("/ui/mailboxes/new/test", response_class=HTMLResponse, dependencies=[Depends(require_login)])
+async def mailbox_new_test(request: Request):
+    """Check connection on "Add mailbox": log in with the server and login in the form, create nothing. The
+    page's script asks for JSON and shows the result below the button; without JavaScript the page comes back."""
+    form = await _form(request)
+    lines: list[str] = []
+    field = None
+    try:
+        cfg, creds = connection_for_new(_shared_path(request), form)
+        ok = await run_in_threadpool(check_imap, cfg, creds, lines.append)
+        failure = next((line.split("FAILED: ", 1)[1] for line in lines if "FAILED: " in line), "")
+        tone, text = ("ok", _("Connection works.")) if ok else ("err", _("Connection failed: %(e)s", e=failure))
+    except (EditError, ConfigError) as e:
+        tone, text, field = "err", str(e), getattr(e, "field", None)
+    # the server and the inbox; not the target folders, which belong to the categories chosen further down
+    details = "\n".join(line for line in lines[:lines.index("  target folders:")] if "FAILED: " not in line) \
+        if "  target folders:" in lines else "\n".join(line for line in lines if "FAILED: " not in line)
+    if "application/json" in request.headers.get("accept", ""):
+        return JSONResponse({"tone": tone, "text": text, "field": field, "details": details})
+    form, retype = without_secrets(form, "imap_password")
+    form, retype_secret = without_secrets(form, "oauth_client_secret")
+    return _new_mailbox_page(request, form=form, retype=retype, retype_secret=retype_secret,
+                             tested=("connection", tone, text, details))
 
 
 @router.post("/ui/mailboxes/new", response_class=HTMLResponse, dependencies=[Depends(require_login)])
@@ -440,7 +473,7 @@ async def mailbox_create(request: Request):
     except EditError as e:
         form, retype = without_secrets(form, "imap_password")
         form, retype_secret = without_secrets(form, "oauth_client_secret")
-        return _new_mailbox_page(request, form=form, error=str(e), status=422, retype=retype,
+        return _new_mailbox_page(request, form=form, error=e, status=422, retype=retype,
                                  retype_secret=retype_secret)
     if str(form.get("imap_auth") or "password") != "password":  # next: the sign-in with the account
         _flash(request, _("Mailbox created. Now sign in with your account."))

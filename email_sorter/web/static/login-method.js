@@ -22,6 +22,10 @@
         const wanted = el.dataset.auth.split(' ');
         el.hidden = !value || !(wanted.includes(value) || (wanted.includes('oauth') && value !== 'password'));
       });
+      // fields a method needs are required, but only while shown (a hidden required field blocks the submit)
+      scope.querySelectorAll('[data-require]').forEach(el => {
+        el.required = !!value && el.dataset.require.split(' ').includes(value) && el.offsetParent !== null;
+      });
       // Microsoft: an empty client ID means Sortroom's own app
       scope.querySelectorAll('[data-ms-placeholder]').forEach(el => {
         el.placeholder = value === 'microsoft' ? el.dataset.msPlaceholder : '';
