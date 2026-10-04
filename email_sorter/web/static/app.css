@@ -708,6 +708,7 @@ table.senders tr.row-notice .banner { padding: 10px 14px; font-size: 13px; }
 table.senders tr[id] { scroll-margin-top: 80px; }
 /* a rule added from another page, not saved yet */
 table.rules tr.rule-new > td { background: var(--accent-soft); }
+.dry-nudge[hidden] { display: none; }
 /* the error of a rule's field, in its cell */
 table.rules .field-error { display: block; margin-top: 4px; }
 /* under a sender rule: what it matches, what it catches in the log, or that a rule above takes it all */

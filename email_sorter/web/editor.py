@@ -29,7 +29,7 @@ from ..classifier import ClassifierAuthError
 from ..i18n import _
 from ..removal import MailboxBusy, delete_mailbox
 from ..trial import OTHER_SAMPLE, OWN_SAMPLE, run_trial
-from . import _box, _sidebar, queries, require_login, router, rulecheck, templates
+from . import _box, _sidebar, queries, require_login, router, rulecheck, run_problem, templates
 from .editing import (EditError, category_view, config_with_delete_rules, connection_from_form, delete_category,
                       key_from_label, move_category, save_category, save_rules, save_settings, secrets_writable,
                       writable)
@@ -529,7 +529,8 @@ async def rules_dry_run(request: Request, box_id: str):
     except EditError as e:
         tone, text, field = "err", str(e), e.field  # the page's script goes to the row's field
     except Exception as e:  # the server is not reachable, the login fails …
-        tone, text = "err", _("The dry run failed: %(e)s", e=e)
+        tone, text = "err", (_("The mailbox can't be reached, or its login failed (%(e)s). Check the connection under Settings.", e=e)
+                             if run_problem({"error": str(e)}) == "imap" else _("The dry run failed: %(e)s", e=e))
     if "application/json" in request.headers.get("accept", ""):
         return JSONResponse({"tone": tone, "text": text, "field": field, "details": details})
     return _rules_page(request, box_id, sender_rules=[r for r in sender_rules if r[0].strip()],
