@@ -206,14 +206,14 @@ def test_overview_page(client):
     assert 'class="card kpi link" href="/ui/m/privat/maintenance"' in html and "Mit Stern · 7 Tage" in html
     assert 'href="/ui/m/privat/mails?flagged=1&amp;period=7d"' in html and 'href="/ui/settings#model"' in html
     assert "abgelaufene Angebote" in html  # werbung tracks expiry dates
-    assert "Backfill" in html and "Abgebrochen" in html          # run log with the failed backfill
+    assert "Nachsortieren" in html and "Abgebrochen" in html          # run log with the failed backfill
     assert "1 Lauf mit Fehlern heute" in html
     # the runs: today in one line, the failed backfill worth a look with its message, the rest folded
     assert "Heute 2 Läufe · 3 Mails verschoben ·" in html and "1 mit Fehlern" in html
     assert '<ul class="notable-runs">' in html and "<code>socket error</code>" in html
     assert '<details class="more all-runs">' in html
     # the banner: what the error said, and what to do about it (a network error: the connection)
-    assert "Backfill um " in html and 'href="/ui/m/privat/settings#connection">Verbindung prüfen</a>' in html
+    assert "Nachsortieren um " in html and 'href="/ui/m/privat/settings#connection">Verbindung prüfen</a>' in html
     assert "Ein Vertrag bucht im Juli" in html                    # "zur Prüfung"
     assert '<span class="from-name">Max Mustermann</span> <span class="from-addr">dein@finanzguru.de</span>' in html
 

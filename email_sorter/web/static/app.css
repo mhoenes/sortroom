@@ -331,6 +331,7 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 .task .fields input, .task .fields select { width: 100%; height: 36px; }
 .task .fields.stacked { flex-direction: column; gap: 8px; }
 .task .go { display: flex; gap: 8px; }
+@media (pointer: coarse) { .task .go .btn.small { height: 44px; } }
 
 /* job page: start a finished dry run for real */
 .rerun { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; border-color: var(--accent-line); background: var(--accent-soft); }
