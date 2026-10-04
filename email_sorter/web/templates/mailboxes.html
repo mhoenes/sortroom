@@ -15,14 +15,9 @@
         {%- else %}{{ _('Schedule off') }}{% endif %}
       {%- endif %}
       {%- endif %}</div>
+    {% if cards|length > 1 %}<div class="sub totals-line">{{ _('%(n)s sorted today', n=totals.today|num) }} · {{ _('%(n)s to review', n=totals.uncertain|num) }} · {{ _('%(cost)s this month', cost=totals.cost|usd) }}</div>{% endif %}
   </div>
   <a class="btn" href="/ui/mailboxes/new">{{ _('Add mailbox') }}</a>
-</div>
-
-<div class="grid totals">
-  <div class="card kpi"><span class="k">{{ _('Sorted today') }}</span><span class="v">{{ totals.today|num }}</span></div>
-  <div class="card kpi"><span class="k">{{ _('To review') }}</span><span class="v">{{ totals.uncertain|num }}</span><span class="d">{{ _('uncertain, last 30 days') }}</span></div>
-  <div class="card kpi"><span class="k">{{ _('Cost this month, total') }}</span><span class="v">{{ totals.cost|usd }}</span></div>
 </div>
 
 <div class="grid boxes">
@@ -32,7 +27,7 @@
     <div class="row" style="align-items:center">
       <div class="grow" style="display:flex;flex-direction:column;gap:2px">
         <h2 style="font-size:18px"><a class="boxname" href="/ui/m/{{ c.box.id }}">{{ c.box.name }}</a></h2>
-        <span class="muted" style="font-size:13px">{{ c.box.cfg.imap_host }}</span>
+        {% if '@' not in c.box.name %}<span class="muted" style="font-size:13px">{{ c.box.cfg.imap_host }}</span>{% endif %}
       </div>
       {% set last = st.last_run %}
       {% set when = _('Last run: %(when)s', when=last.started|dt(true)) if last else '' %}
@@ -60,18 +55,23 @@
     {# linked figures open exactly the list they count; "today" counts sorting, the list filters by arrival #}
     <div class="stats">
       <div><span>{{ _('Today') }}</span><b>{{ st.sorted_today|num }}</b></div>
-      <a class="stat" href="/ui/m/{{ c.box.id }}/mails?uncertain=1&amp;period=30d"><span>{{ _('To review') }}</span><b>{{ st.uncertain|num }}</b></a>
+      <a class="stat {{ 'needs-review' if st.uncertain }}" href="/ui/m/{{ c.box.id }}/mails?uncertain=1&amp;period=30d"><span>{{ _('To review') }}</span><b>{{ st.uncertain|num }}</b></a>
       <a class="stat" href="/ui/m/{{ c.box.id }}/mails?flagged=1&amp;period=7d"><span>{{ _('Starred (7 days)') }}</span><b>{{ st.flagged_7d|num }}</b></a>
-      <div><span>{{ _('Cost this month') }}</span><b>{{ st.cost_month|usd }}</b></div>
+      <a class="stat" href="/ui/m/{{ c.box.id }}"><span>{{ _('Cost this month') }}</span><b>{{ st.cost_month|usd }}</b></a>
     </div>
     {% set s = c.schedule %}
+    {% if s.running or not (s.enabled and s.active) or status.mixed_intervals or (s.enabled and s.active and not s.next) %}
     <div class="muted" style="font-size:13px">{% if s.running %}{{ _('A run is in progress') }}
       {% elif s.enabled and s.active and s.next %}{{ _('Next run %(time)s · every %(minutes)s min', time=s.next.strftime('%H:%M'), minutes=s.minutes) }}
       {% elif s.enabled and s.active %}{{ _('Schedule starts shortly') }}
       {% elif s.enabled %}{{ _('Schedule switched off in this process') }}
       {% else %}{{ _('Schedule off') }}{% endif %}</div>
+    {% endif %}
+    {# 7: no login saved: nothing can run, whatever the pill says #}
+    {% if c.login_missing %}<div class="login-note">{{ _("No login saved yet – this mailbox can't be sorted.") }} <a href="/ui/m/{{ c.box.id }}/settings#connection">{{ _('Add the login') }}</a></div>{% endif %}
     <div class="actions">
-      <a class="btn" href="/ui/m/{{ c.box.id }}">{{ _('Open') }}</a>
+      {% if st.uncertain and c.first_review %}<a class="btn primary" href="/ui/m/{{ c.box.id }}/mails?uncertain=1&amp;period=30d&amp;key={{ c.first_review|urlencode }}">{{ _('Review (%(n)s)', n=st.uncertain|num) }}</a>
+      {% else %}<a class="btn" href="/ui/m/{{ c.box.id }}">{{ _('Open') }}</a>{% endif %}
     </div>
   </section>
 {% else %}
