@@ -289,7 +289,15 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 /* overview: uncertain mails to review */
 .review { border: 1px solid var(--line-soft); border-radius: 10px; }
 .review a { display: flex; align-items: center; gap: 14px; padding: 10px 14px; color: inherit; text-decoration: none; }
-.review a + a { border-top: 1px solid var(--line-soft); }
+.review a + a, .review .rv + .rv { border-top: 1px solid var(--line-soft); }
+/* a mail to review: the row opens it, "Accept" beside it takes the suggestion */
+.review .rv { display: flex; align-items: center; }
+.review .rv > a { flex-grow: 1; min-width: 0; }
+.review .rv:hover { background: var(--row-hover); }
+.review .rv-accept { flex-shrink: 0; width: 130px; padding-right: 14px; display: flex; justify-content: flex-end; }
+.review-head { align-items: center; gap: 14px; }
+.review-done { display: flex; align-items: center; gap: 10px; padding: 14px 18px; color: var(--ok); }
+.review-done .muted { font-size: 13px; }
 .review a:hover { background: var(--row-hover); }
 .review .what, .review .guess { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .review .what { flex-grow: 1; }
@@ -596,6 +604,10 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
   table.senders td.status:empty { display: none; }
   table.senders .addr { max-width: none; }
   .review a { flex-direction: column; align-items: stretch; gap: 6px; }
+  .review .rv { flex-direction: column; align-items: stretch; }
+  .review .rv-accept { width: auto; padding: 0 14px 10px; justify-content: flex-start; }
+  .review .rv-accept:empty { display: none; }
+  .review-head { flex-wrap: wrap; }
   .review .what, .review .guess { width: auto; }
   .review .guess { flex-direction: row; gap: 6px; }
   .tips .tip { flex-direction: column; align-items: stretch; gap: 8px; }

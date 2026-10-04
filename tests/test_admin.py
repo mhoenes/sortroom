@@ -1,7 +1,7 @@
 import logging
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import tomllib
 from types import SimpleNamespace
 
@@ -225,6 +225,31 @@ def test_mail_actions(client, setup, monkeypatch):
                                                        "match": "@example.de", "category": "werbung"})
     assert "Absender-Regel für @example.de gespeichert" in r.text and len(moves) == 1
     assert [(x.match, x.action) for x in _box(setup).cfg.sender_rules][-1] == ("@example.de", "werbung")
+
+
+def test_reviewing_from_the_overview(client, setup, monkeypatch):
+    moves = []
+    monkeypatch.setattr(admin, "move_mail", lambda cfg, creds, ws, key, cat: moves.append((key, cat)) or "INBOX/Werbung")
+    store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
+    now = datetime.now().astimezone()
+    store.record_run("run", None, now.replace(tzinfo=None), now.replace(tzinfo=None), RunResult(exit_code=0, live=True))
+    store.set_gone(["<m1@x>"], True)  # the fixture's uncertain mail, deleted
+    store.db.commit()
+    html = client.get("/ui/m/privat").text
+    assert "Nichts zu prüfen." in html  # runs, but nothing uncertain
+    for key, cat, hours in (("<u1@x>", "werbung", 1), ("<u2@x>", "inbox_only", 2)):
+        store.record(SimpleNamespace(key=key, received=(now - timedelta(hours=hours)).isoformat(timespec="minutes"),
+                                     sender="shop@example.de", subject=key, decision=Decision(cat, 0.4, {cat: 0.4}, 0.1, 0.0),
+                                     folder=None, flag=False, expires=None, source="classifier"))
+    store.close()
+    html = client.get("/ui/m/privat").text
+    # going through them starts at the newest; a suggestion with a folder can be accepted right here
+    assert 'class="btn small primary" href="/ui/m/privat/mails?uncertain=1&amp;period=30d&amp;key=%3Cu1%40x%3E">Prüfung starten' in html
+    assert html.count('class="rv-accept"') == 1 and 'name="to" value="overview"' in html
+    r = client.post("/ui/m/privat/mails/action", follow_redirects=False, data={
+        "csrf": _csrf(html), "key": "<u1@x>", "action": "accept", "category": "werbung", "to": "overview"})
+    assert r.headers["location"] == "/ui/m/privat" and moves == [("<u1@x>", "werbung")]
+    assert "„&lt;u1@x&gt;“: Verschoben nach INBOX/Werbung." in client.get(r.headers["location"]).text
 
 
 def test_accepting_a_mail_opens_the_next_one(client, setup, monkeypatch):
