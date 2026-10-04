@@ -6,7 +6,8 @@ import logging
 import time
 import tomllib
 from pathlib import Path
-from datetime import date
+from collections import Counter
+from datetime import date, datetime, timedelta
 from urllib.parse import quote
 
 from fastapi import Depends, HTTPException, Request
@@ -83,9 +84,26 @@ def undo_page(request: Request, box_id: str, run: str = ""):
         return RedirectResponse(f"/ui/m/{box.id}/maintenance", status_code=303)
     for m in mails:
         m["blocked"] = changed_since(m if m["known"] else None, bool(m["later"]), m["run_moved_to"])
+    open_ = [m for m in mails if not m["blocked"]]
+    # where the run put its mails: all of them for the subtitle, those that can go back to choose them by
+    done = Counter(m["run_moved_to"] or "" for m in mails).most_common()
+    targets = Counter(m["run_moved_to"] or "" for m in open_).most_common()
+    # sorting them again only picks up mail of the last lookback_days days: the older ones stay in the inbox
+    since = datetime.now().astimezone() - timedelta(days=box.cfg.lookback_days)
+    older = sum(1 for m in open_ if _received(m["received"]) < since)
     return _page(request, "undo.html", {
         **_sidebar(request, boxes, box, "maintenance"), "box": box, "run": info, "mails": mails,
-        "undoable": sum(1 for m in mails if not m["blocked"]), "busy": request.app.state.is_busy(box)})
+        "undoable": len(open_), "done": done, "targets": targets, "older": older,
+        "busy": request.app.state.is_busy(box)})
+
+
+def _received(value: str | None) -> datetime:
+    """A mail's Date as the log keeps it, as an aware time; unreadable ones count as new."""
+    try:
+        stamp = datetime.fromisoformat(value or "")
+    except ValueError:
+        return datetime.now().astimezone()
+    return stamp if stamp.tzinfo else stamp.astimezone()
 
 
 def _flag(form: dict, name: str) -> bool:
