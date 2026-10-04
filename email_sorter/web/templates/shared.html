@@ -110,6 +110,8 @@
 <form method="post" action="/ui/sessions/end" class="card stack" style="margin-top:16px">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <h2>{{ _('Sessions') }}</h2>
+  {# the lock after failed logins counts by address; behind a proxy whose headers aren't trusted that is the proxy's #}
+  {% if proxy %}<div class="banner" role="status">{{ _('Sortroom sees only your reverse proxy (%(address)s) as the sender of every login, so the lock after failed logins counts everybody as one: a few wrong passwords from anywhere lock you out too. Set FORWARDED_ALLOW_IPS=%(address)s in .env and restart the container.', address=proxy) }}</div>{% endif %}
   <p class="muted" style="margin:0">{{ _('Logs out every browser that is logged in, this one too – e.g. after using someone else\'s computer, or if a login may have been copied. A logout only ends the session of its own browser.') }}</p>
   <div class="actions"><button class="btn danger" type="submit" {% if not key_writable %}disabled title="{{ _('%(file)s is read-only.', file=secrets_file) }}"{% endif %}
     onclick='return confirm({{ _("Log out every browser, this one too?")|tojson }})'>{{ _('Log out everywhere') }}</button></div>

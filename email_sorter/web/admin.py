@@ -32,7 +32,7 @@ from ..cleanup import run_cleanup
 from ..mail import MailError, MailSettings, mail_settings, send, smtp_password
 from ..undo import changed_since, run_undo
 from ..store import Store
-from . import _box, _boxes, _sidebar, queries, require_login, router, run_problem
+from . import _box, _boxes, _sidebar, behind_untrusted_proxy, queries, require_login, router, run_problem
 from .editing import (EditError, add_sender_rule, can_add_mailbox, classifier_from_form, connection_for_new,
                       create_mailbox,
                       mail_from_form, rename_category_key, rename_folder_refs, reserved_key_text, save_shared,
@@ -573,6 +573,7 @@ def _shared_page(request: Request, form: dict | None = None, error: EditError | 
                      "digest_time": mail.digest_time})
     return _page(request, "shared.html", {
         **_sidebar(request, boxes, None, "shared"), "form": form, "editable": shared_writable(path),
+        "proxy": behind_untrusted_proxy(request),
         "config_name": path.name, "languages": i18n.LANGUAGES, "secrets_file": SECRETS_FILE, "retype": retype,
         "key_set": key_set, "key_error": key_error, "smtp_password_set": bool(smtp_password(path)),
         "retype_smtp": retype_smtp, "key_writable": secrets_writable(secrets),

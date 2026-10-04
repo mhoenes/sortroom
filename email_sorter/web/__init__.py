@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import math
 import os
 import secrets
@@ -43,6 +44,8 @@ MAX_FAILED_PER_ADDRESS = 5
 MAX_FAILED_TOTAL = 50
 _failed_logins: dict[str, list[float]] = {}  # address -> times of its recent failed logins
 _failed_lock = threading.Lock()
+log = logging.getLogger(__name__)
+_proxy_warned = False
 _clock = time.monotonic
 
 
@@ -93,6 +96,18 @@ def require_login(request: Request) -> None:
     if request.session.get("since", 0) < sessions_ended(request):  # the cookie is signed, but ended
         request.session.clear()
         raise LoginRequired(here)
+
+
+def behind_untrusted_proxy(request: Request) -> str:
+    """The address a reverse proxy connects from when its headers aren't trusted, "" otherwise.
+
+    The lock after failed logins counts by the client's address. uvicorn takes it from X-Forwarded-For only for
+    proxies listed in FORWARDED_ALLOW_IPS (by default 127.0.0.1); behind any other proxy, e.g. one in another
+    container, every login seems to come from the proxy and everybody shares one count. A request that carries
+    the header but whose client address isn't in it was not rewritten: the proxy isn't trusted."""
+    forwarded = request.headers.get("x-forwarded-for", "")
+    host = request.client.host if request.client else ""
+    return host if forwarded and host and host not in [a.strip() for a in forwarded.split(",")] else ""
 
 
 def _locked_for(ip: str) -> float:
@@ -147,6 +162,13 @@ def login(request: Request, password: str = Form(""), next: str = Form("/ui")):
         return RedirectResponse(_safe_next(next), status_code=303)
     with _failed_lock:
         _failed_logins.setdefault(ip, []).append(_clock())
+    proxy = behind_untrusted_proxy(request)
+    global _proxy_warned
+    if proxy and not _proxy_warned:  # once: the log is where somebody who runs the container looks
+        _proxy_warned = True
+        log.warning("logins reach Sortroom through %s, a reverse proxy whose X-Forwarded-For is not trusted: the lock "
+                    "after failed logins counts that one address for everybody. Set FORWARDED_ALLOW_IPS=%s in .env "
+                    "and restart the container.", proxy, proxy)
     return templates.TemplateResponse(request, "login.html", {
         "next": _safe_next(next), "configured": configured,
         "error": _("Wrong password.") if configured else None}, status_code=401)
