@@ -372,6 +372,10 @@
  "More details": "Mehr Details",
  "Move": "Verschieben",
  "Move %(category)s into %(folder)s": "%(category)s nach %(folder)s nachziehen",
+ "Move %(num)s mail back to where it came from now? Undoing cannot itself be undone.": [
+  "%(num)s Mail jetzt dorthin zurückverschieben, wo sie herkam? Das lässt sich selbst nicht rückgängig machen.",
+  "%(num)s Mails jetzt dorthin zurückverschieben, wo sie herkamen? Das lässt sich selbst nicht rückgängig machen."
+ ],
  "Move a category into its folder": "Kategorie in ihren Ordner nachziehen",
  "Move down": "Nach unten",
  "Move down – the order of the lists": "Nach unten – die Reihenfolge der Listen",

@@ -23,8 +23,10 @@
   <section class="card" style="padding:6px 12px">
     <div class="scroll-x"><table class="maillist runmails">
       <thead><tr>
-        <th scope="col" class="pick">{% if undoable %}<input type="checkbox" class="pick-all" checked aria-label="{{ _('Choose all that can be undone') }}">{% endif %}</th>
-        <th scope="col" class="date">{{ _('Received') }}</th><th scope="col">{{ _('Mail') }}</th>
+        <th scope="col" class="pick">{% if undoable %}<input type="checkbox" class="pick-all" id="pick-all" checked aria-label="{{ _('Choose all that can be undone') }}">{% endif %}</th>
+        <th scope="col" class="date">{{ _('Received') }}</th>
+        {# on a phone only this title stays: "All" beside the box that chooses them all #}
+        <th scope="col" class="mailcol">{% if undoable %}<label for="pick-all" class="pick-all-label">{{ _('All') }}</label>{% endif %}<span class="mail-title">{{ _('Mail') }}</span></th>
         <th scope="col">{{ _('Sorted from → to') }}</th><th scope="col">{{ _('Undo') }}</th></tr></thead>
       <tbody>
       {% for m in mails %}
@@ -37,7 +39,7 @@
             <span class="meta"><span class="date-inline">{{ m.received|dt }} · </span>{{ sender(m.sender_name, m.sender) }}</span></a>
             {% else %}<span class="muted">{{ m.key }}</span>{% endif %}</td>
           <td class="route">{{ m.origin|folder_label if m.origin else _('Inbox') }} → {{ m.run_moved_to|folder_label if m.run_moved_to else _('Inbox') }}{% if m.starred %} <svg class="star inline" viewBox="0 0 24 24" role="img" aria-label="{{ _('starred') }}"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z"/></svg>{% endif %}</td>
-          <td>{% if m.blocked %}<span class="muted">{{ reasons[m.blocked] }}</span>{% else %}<span class="pill ok">{{ _('Possible') }}</span>{% endif %}</td>
+          <td class="state">{% if m.blocked %}<span class="muted">{{ reasons[m.blocked] }}</span>{% else %}<span class="pill ok">{{ _('Possible') }}</span>{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>
@@ -50,9 +52,10 @@
     <label class="check small"><input type="checkbox" name="sort_again" value="1">{{ _('Sort them again at the next run') }}
       {{ help(_('Otherwise they stay in the inbox and are not sorted again. The next run only picks up mails of the last %(days)s days; older ones need a backfill.', days=box.cfg.lookback_days)) }}</label>
     <div class="actions">
-      {# the dry run comes first, so Enter only ever starts a dry run #}
+      {# the dry run comes first, so Enter only ever starts a dry run; for real the script asks first, with how many #}
       <button class="btn" type="submit">{{ _('Dry run') }}</button>
-      <button class="btn primary" type="submit" name="live" value="1">{{ _('Undo the chosen mails') }}</button>
+      <button class="btn primary" type="submit" name="live" value="1" data-confirm-one="{{ ngettext('Move %(num)s mail back to where it came from now? Undoing cannot itself be undone.', 'Move %(num)s mails back to where they came from now? Undoing cannot itself be undone.', 1, num='{n}') }}"
+        data-confirm-many="{{ ngettext('Move %(num)s mail back to where it came from now? Undoing cannot itself be undone.', 'Move %(num)s mails back to where they came from now? Undoing cannot itself be undone.', 2, num='{n}') }}">{{ _('Undo the chosen mails') }}</button>
       <span class="muted hint picked" aria-live="polite"></span>
     </div>
   </section>
@@ -72,6 +75,13 @@
     all.addEventListener('change', () => { boxes.forEach(b => { b.checked = all.checked; }); show(); });
     boxes.forEach(b => b.addEventListener('change', show));
     show();
+    // for real only after a question that says how many mails move
+    all.form.addEventListener('submit', e => {
+      const go = e.submitter;
+      if (!go || go.name !== 'live') return;
+      const n = boxes.filter(b => b.checked).length;
+      if (!confirm((n === 1 ? go.dataset.confirmOne : go.dataset.confirmMany).replace('{n}', n))) e.preventDefault();
+    });
   })();
 </script>
 {% endblock %}
