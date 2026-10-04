@@ -139,7 +139,7 @@ def _category_page(request: Request, box_id: str, cat: str = "", new: bool = Fal
     return _page(request, "categories.html", {
         **_sidebar(request, boxes, box, "categories"), "box": box, "cat": cat, "new": new, "form": form,
         "counts": counts, "rates": rates, "error": error, "editable": writable(box), "rules_using": rules_using,
-        "sample": (OWN_SAMPLE, OTHER_SAMPLE), "dirty": dirty}, status)
+        "sample": (OWN_SAMPLE, OTHER_SAMPLE), "dirty": dirty, "folders": _known_folders(box)}, status)
 
 
 @router.get("/ui/m/{box_id}/categories", response_class=HTMLResponse, dependencies=[Depends(require_login)])

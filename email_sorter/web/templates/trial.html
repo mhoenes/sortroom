@@ -9,7 +9,7 @@
     <div class="sub">{{ _('The model files already sorted mails with the new description · nothing is moved or saved') }}</div>
   </div>
   {# back to the form as it was sent to the test: every field, not saved yet #}
-  {% set back = '/ui/m/' ~ box.id ~ '/categories?' ~ ('new=1&' if job.new else '') ~ 'cat=' ~ job.key|urlencode ~ '&draft=' ~ job.id %}
+  {% set back = '/ui/m/' ~ box.id ~ '/categories?' ~ ('new=1&' if job.new else '') ~ 'cat=' ~ job.key|urlencode ~ '&draft=' ~ job.id ~ '#edit' %}
   <a class="btn" href="{{ back }}">{{ _('Back to the form') }}</a>
 </div>
 

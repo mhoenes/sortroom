@@ -1,7 +1,6 @@
 {
  "\"%(name)s\" is too long (max. %(n)s characters).": "„%(name)s“ ist zu lang (max. %(n)s Zeichen).",
  "\"%(subject)s\": %(result)s": "„%(subject)s“: %(result)s",
- "\"Test with the model\" files the last %(own)s mails of this category and %(other)s others again with the description from the field – without moving or saving anything (about %(cost)s).": "„Mit dem Modell testen“ ordnet die letzten %(own)s Mails dieser Kategorie und %(other)s andere mit der Beschreibung aus dem Feld neu ein – ohne etwas zu verschieben oder zu speichern (ca. %(cost)s).",
  "\"When action is needed\": when the model thinks you need to do something (threshold in the settings) – usually not for promotions and updates. \"Always\": every mail of this category, e.g. security.": "„Bei Handlungsbedarf“: wenn das Modell meint, dass du etwas tun musst (Schwelle in den Einstellungen) – meist nicht für Werbung und Neuigkeiten. „Immer“: jede Mail dieser Kategorie, z. B. Sicherheit.",
  "\"inbox\" is reserved: sender rules use it for leaving mail in the inbox. Please choose another key.": "„inbox“ ist reserviert: Absenderregeln verwenden es für „im Posteingang lassen“. Bitte einen anderen Schlüssel wählen.",
  "%(away)s of %(filed)s mails the model filed here were put elsewhere by hand": "%(away)s von %(filed)s Mails, die das Modell hier einsortiert hat, kamen von Hand woandershin",
@@ -119,6 +118,7 @@
   "<strong style=\"color:var(--ink)\">%(num)s</strong> abgelaufene Angebote verschoben"
  ],
  "A mail is moved only when the model is at least this sure (0 to 1). Uncertain mails stay in the inbox and show up under \"To review\".": "Nur wenn das Modell mindestens so sicher ist (0 bis 1), wird verschoben. Unsichere Mails bleiben im Posteingang und erscheinen unter „Zur Prüfung“.",
+ "A new folder – created on the server with the first run.": "Neuer Ordner – wird beim ersten Lauf auf dem Server angelegt.",
  "A new rule for %(sender)s at the end of the sender rules: check the target, then save.": "Neue Regel für %(sender)s am Ende der Absender-Regeln: Ziel prüfen, dann speichern.",
  "A normal run only looks at mails from this many days. A backfill fetches older ones.": "Ein normaler Lauf schaut nur auf Mails der letzten so vielen Tage. Ältere holt ein Backfill.",
  "A run is in progress": "Lauf läuft gerade",
@@ -247,6 +247,7 @@
  "Expiry date removed.": "Ablaufdatum entfernt.",
  "Failed: %(e)s": "Fehlgeschlagen: %(e)s",
  "Files all mails of a folder again with the current descriptions and moves those that belong elsewhere – e.g. after a changed description.": "Ordnet alle Mails eines Ordners mit den aktuellen Beschreibungen neu ein und verschiebt die, die woanders hingehören – z. B. nach einer geänderten Beschreibung.",
+ "Files the last %(own)s mails of this category and %(other)s others again with the description above. Moves nothing, saves nothing (about %(cost)s).": "Ordnet die letzten %(own)s Mails dieser Kategorie und %(other)s andere mit der Beschreibung oben neu ein. Verschiebt nichts, speichert nichts (ca. %(cost)s).",
  "Filters": "Filter",
  "Fine-tuning": "Feinabstimmung",
  "Finish sign-in": "Anmeldung abschließen",
@@ -760,6 +761,8 @@
  "dry run": "Probelauf",
  "dry run, nothing changed": "Probelauf, nichts geändert",
  "e.g. Clubs": "z. B. Vereine",
+ "empty: %(folder)s": "leer: %(folder)s",
+ "empty: stays in the inbox": "leer: bleibt im Posteingang",
  "every": "alle",
  "everything from @%(domain)s": "alle von @%(domain)s",
  "exactly %(addr)s": "genau %(addr)s",

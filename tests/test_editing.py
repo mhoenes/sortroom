@@ -257,6 +257,21 @@ def test_category_form_name_first_key_from_the_name_one_star_choice(client, setu
     assert 'id="rename-category"' in html and '<option value="werbung" selected>' in html
 
 
+def test_categories_page_links_folders_and_the_test(client, setup):
+    html = client.get("/ui/m/privat/categories?cat=finanzen").text
+    # a click in the list goes on to the editor where it is below the list (#edit, the page's script)
+    assert 'href="/ui/m/privat/categories?cat=werbung#edit"' in html and "?new=1#edit" in html
+    # the folders known offered, a new one noted (by the script); empty: the inbox
+    assert '<datalist id="known-folders">' in html and '<option value="INBOX/Finanzen">' in html
+    assert html.count('list="known-folders"') == 2 and 'placeholder="leer: bleibt im Posteingang"' in html
+    assert "Neuer Ordner – wird beim ersten Lauf auf dem Server angelegt." in html
+    # the model test like the other tests, right below the description
+    test = html.index('formaction="/ui/m/privat/categories/test"')
+    assert html.index("desc-count") < test < html.index('name="folder"')
+    assert 'class="btn tonal" type="submit" formaction="/ui/m/privat/categories/test"' in html
+    assert "Verschiebt nichts, speichert nichts" in html
+
+
 def test_forms_need_csrf_token(client, setup):
     r = client.post("/ui/m/privat/categories", data={"csrf": "falsch", "key": "finanzen", "description": "x"})
     assert r.status_code == 403
@@ -381,7 +396,8 @@ def test_trial_job_page(client, setup, monkeypatch):
     html = client.get(r.headers["location"]).text
     assert "Kämen neu dazu" in html and "Rechnung" in html and "nicht mehr im Ordner" in html
     back = f"/ui/m/privat/categories?cat=werbung&amp;draft={job}"
-    assert html.count(f'href="{back}"') == 2  # "Back to the form" and "Put the draft into the form"
+    # "Back to the form" and "Put the draft into the form"; on a tablet or phone on to the editor (#edit)
+    assert html.count(f'href="{back}#edit"') == 2
     # back in the form: every field as sent to the test, marked as not saved
     html = client.get(back.replace("&amp;", "&")).text
     assert ">Entwurf</textarea>" in html and 'value="Angebote"' in html and 'value="INBOX/Angebote"' in html
