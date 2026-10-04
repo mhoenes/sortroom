@@ -210,6 +210,7 @@
  "Check the AI service": "KI-Dienst prüfen",
  "Check the connection": "Verbindung prüfen",
  "Check the description": "Beschreibung prüfen",
+ "Check the expiry dates for real? Expired offers are moved. A dry run shows first which.": "Ablaufdaten jetzt echt prüfen? Abgelaufene Angebote werden verschoben. Ein Probelauf zeigt vorher, welche.",
  "Choose Google or Microsoft as the sign-in method and enter the client ID first.": "Wähle zuerst Google oder Microsoft als Anmeldung und trage die Client-ID ein.",
  "Choose a category …": "Kategorie wählen …",
  "Choose all that can be undone": "Alle auswählen, die sich rückgängig machen lassen",
@@ -412,9 +413,21 @@
  "More details": "Mehr Details",
  "Move": "Verschieben",
  "Move %(category)s into %(folder)s": "%(category)s nach %(folder)s nachziehen",
+ "Move %(num)s expired mail now?": [
+  "Soll %(num)s abgelaufene Mail jetzt verschoben werden?",
+  "Sollen %(num)s abgelaufene Mails jetzt verschoben werden?"
+ ],
  "Move %(num)s mail back to where it came from now? Undoing cannot itself be undone.": [
   "%(num)s Mail jetzt dorthin zurückverschieben, wo sie herkam? Das lässt sich selbst nicht rückgängig machen.",
   "%(num)s Mails jetzt dorthin zurückverschieben, wo sie herkamen? Das lässt sich selbst nicht rückgängig machen."
+ ],
+ "Move %(num)s mail now?": [
+  "Soll %(num)s Mail jetzt verschoben werden?",
+  "Sollen %(num)s Mails jetzt verschoben werden?"
+ ],
+ "Move %(num)s mail to the trash now?": [
+  "Soll %(num)s Mail jetzt in den Papierkorb verschoben werden?",
+  "Sollen %(num)s Mails jetzt in den Papierkorb verschoben werden?"
  ],
  "Move a category into its folder": "Kategorie in ihren Ordner nachziehen",
  "Move down": "Nach unten",
@@ -423,6 +436,8 @@
  "Move or remove": "Verschieben oder entfernen",
  "Move rule down": "Regel nach unten",
  "Move rule up": "Regel nach oben",
+ "Move the mails the deletion rules name into the trash now? A dry run shows first which.": "Die Mails, die die Lösch-Regeln nennen, jetzt in den Papierkorb verschieben? Ein Probelauf zeigt vorher, welche.",
+ "Move the sorted mails of this category into its folder now? A dry run shows first which.": "Die einsortierten Mails dieser Kategorie jetzt in ihren Ordner verschieben? Ein Probelauf zeigt vorher, welche.",
  "Move this mail right away": "Diese Mail gleich mit verschieben",
  "Move up": "Nach oben",
  "Move up – the order of the lists": "Nach oben – die Reihenfolge der Listen",
@@ -638,6 +653,7 @@
  "So far": "Bisher",
  "Something is running for this mailbox. Please wait until it is done.": "Für dieses Postfach läuft gerade etwas. Bitte warten, bis es fertig ist.",
  "Sort automatically": "Automatisch einsortieren",
+ "Sort for real now? The mails are moved into their folders and the model costs money. A dry run shows first what would happen.": "Jetzt echt einsortieren? Die Mails werden in ihre Ordner verschoben, und das Modell kostet Geld. Ein Probelauf zeigt vorher, was passieren würde.",
  "Sort now": "Jetzt sortieren",
  "Sort older mails": "Ältere Mails sortieren",
  "Sort read mails at once": "Gelesene sofort einsortieren",
