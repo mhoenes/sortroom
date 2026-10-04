@@ -464,7 +464,11 @@ def test_schedule_settings_saved(client, setup):
     assert not cfg.reconcile_enabled and cfg.reconcile_hours == 12
     assert _raw(setup)["schedule"] == {"enabled": False, "interval_minutes": 30, "reconcile_enabled": False,
                                        "reconcile_hours": 12}
-    assert "Zeitplan aus" in client.get("/ui/m/privat").text
+    html = client.get("/ui/m/privat").text  # the Overview says so below its title, with the way to switch it on
+    sub = html.split('<div class="sub">')[1].split("</div>")[0]
+    assert sub.startswith("Zeitplan aus (<a href=\"/ui/m/privat/settings#schedule\">einschalten</a>)")
+    assert "imap.example.de" not in sub and "24 Stunden nach Eingang" in sub
+    assert 'id="schedule"' in client.get("/ui/m/privat/settings").text
 
 
 # ---------------------------------------------------------------- the folder name (id) of a mailbox

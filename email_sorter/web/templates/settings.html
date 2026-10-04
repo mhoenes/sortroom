@@ -137,7 +137,7 @@
     </section>
     {# one line per task, read as a sentence, in columns; the interval fades while its task is off (app.css) #}
     {% macro sched_status(text) %}<span class="muted sched-status">{{ text }}</span>{% endmacro %}
-    <section class="card stack">
+    <section class="card stack" id="schedule">
       <h2>{{ _('Schedule') }}</h2>
       <div class="sched">
         <div class="sched-line">
