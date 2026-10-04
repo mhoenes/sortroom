@@ -325,19 +325,24 @@ def all_mailboxes(request: Request):
         db = queries.connect(b.workspace)
         try:
             st = queries.stats(db, b.cfg.min_confidence)
+            failure = queries.last_failure(db)
         finally:
             if db:
                 db.close()
+        # an error of today that no later run of its kind made good: what the card is about
+        open_failure = failure if failure and not failure["recovered"] else None
         cards.append({"box": b, "stats": st, "busy": request.app.state.is_busy(b),
                       "schedule": request.app.state.scheduler.status(b),
-                      "categories": len(b.cfg.categories)})
+                      "categories": len(b.cfg.categories), "failure": failure, "open_failure": open_failure})
         totals["today"] += st.sorted_today
         totals["uncertain"] += st.uncertain
         totals["cost"] += st.cost_month
+    cards.sort(key=lambda c: c["open_failure"] is None)  # mailboxes with a problem first, otherwise as they are
     schedules = [c["schedule"] for c in cards]
     status = {  # the page's subtitle: what is going on across all mailboxes
         "running": [c["box"].name for c in cards if c["busy"] or c["schedule"]["running"]],
-        "errors": sum(1 for c in cards if c["stats"].errors_today),
+        "errors": sum(1 for c in cards if c["open_failure"]),
+        "first_problem": next((c["box"].id for c in cards if c["open_failure"]), ""),
         "next": min((s["next"] for s in schedules if s["enabled"] and s["active"] and s["next"]), default=None),
         "scheduled": any(s["enabled"] and s["active"] for s in schedules),
         "process_off": bool(schedules) and not any(s["active"] for s in schedules),

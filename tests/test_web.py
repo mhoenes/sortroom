@@ -347,13 +347,31 @@ def test_small_costs_keep_two_significant_digits():
 def test_all_mailboxes_subtitle_says_what_is_going_on(client, monkeypatch):
     c = _login(client)
     html = c.get("/ui").text  # privat's backfill failed today; the schedule is off in tests
-    assert '<span class="sub-warn">1 Postfach mit Fehlern heute</span> · Zeitplan in diesem Prozess abgeschaltet' in html
+    assert ('<a class="sub-warn" href="#box-privat">1 Postfach mit Fehlern heute</a> · Zeitplan in diesem Prozess '
+            'abgeschaltet') in html
     status = {"enabled": True, "active": True, "running": False, "minutes": 10, "next": datetime(2026, 9, 27, 17, 45)}
     monkeypatch.setattr(api.app.state.scheduler, "status", lambda box: dict(status))
     assert "Nächster Lauf 17:45" in c.get("/ui").text
     monkeypatch.setattr(api.app.state, "is_busy", lambda box: box.id == "privat")
     html = c.get("/ui").text
     assert "Läuft gerade: Privat" in html and "Nächster Lauf" not in html.split('class="sub"')[1].split("</div>")[0]
+
+
+def test_all_mailboxes_an_error_is_shown_with_its_way_out_and_comes_first(client, tmp_path):
+    c = _login(client)
+    html = c.get("/ui").text
+    # privat's failed backfill (a network error) is still open: its card first, with what it said and the way out
+    assert html.index('id="box-privat"') < html.index('id="box-gmail"')
+    assert 'class="card boxcard problem" id="box-privat"' in html and "<code>socket error</code>" in html
+    assert 'href="/ui/m/privat/settings#connection">Verbindung prüfen</a>' in html
+    # once a later run of the same kind went through, the card only notes it, and the order is as it was
+    store = Store(tmp_path / "privat" / "data" / "state.db")
+    later = datetime.now() + timedelta(minutes=1)
+    store.record_run("backfill", "since 2025-01-01", later, later, RunResult(exit_code=0, live=True, classified=1))
+    store.close()
+    html = c.get("/ui").text
+    assert "Heute ein Fehler, aber der nächste Lauf lief wieder durch." in html and "Verbindung prüfen" not in html
+    assert 'class="card boxcard problem"' not in html and "Postfach mit Fehlern heute" not in html
 
 
 def test_sidebar_lists_the_mailboxes(client):

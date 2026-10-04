@@ -7,7 +7,7 @@
     <div class="sub">{% if not cards %}{{ _('Every mailbox has its own categories, rules and log') }}
       {%- else %}
       {%- if status.running %}{{ _('Running: %(names)s', names=status.running|join(', ')) }}{% endif %}
-      {%- if status.errors %}{% if status.running %} · {% endif %}<span class="sub-warn">{{ ngettext('%(num)s mailbox with errors today', '%(num)s mailboxes with errors today', status.errors) }}</span>{% endif %}
+      {%- if status.errors %}{% if status.running %} · {% endif %}<a class="sub-warn" href="#box-{{ status.first_problem }}">{{ ngettext('%(num)s mailbox with errors today', '%(num)s mailboxes with errors today', status.errors) }}</a>{% endif %}
       {%- if not status.running %}{% if status.errors %} · {% endif %}
         {%- if status.next %}{{ _('Next run %(time)s', time=status.next.strftime('%H:%M')) }}
         {%- elif status.scheduled %}{{ _('Schedule starts shortly') }}
@@ -28,7 +28,7 @@
 <div class="grid boxes">
 {% for c in cards %}
   {% set st = c.stats %}
-  <section class="card boxcard">
+  <section class="card boxcard {{ 'problem' if c.open_failure }}" id="box-{{ c.box.id }}">
     <div class="row" style="align-items:center">
       <div class="grow" style="display:flex;flex-direction:column;gap:2px">
         <h2 style="font-size:18px"><a class="boxname" href="/ui/m/{{ c.box.id }}">{{ c.box.name }}</a></h2>
@@ -37,11 +37,26 @@
       {% set last = st.last_run %}
       {% set when = _('Last run: %(when)s', when=last.started|dt(true)) if last else '' %}
       {% if c.busy %}<span class="pill info">{{ _('Running') }}</span>
-      {% elif st.errors_today %}<span class="pill warn" title="{{ when }}">{{ ngettext('%(num)s failed run today', '%(num)s failed runs today', st.errors_today) }}</span>
+      {% elif c.open_failure %}<span class="pill err" title="{{ when }}">{{ ngettext('%(num)s failed run today', '%(num)s failed runs today', st.errors_today) }}</span>
       {% elif last and last.exit_code %}<span class="pill warn" title="{{ when }}">{{ _('Errors · %(when)s', when=last.started|ago) }}</span>
       {% elif last %}<span class="pill ok" title="{{ when }}">{{ _('OK · %(when)s', when=last.started|ago) }}</span>
       {% else %}<span class="pill">{{ _('No run yet') }}</span>{% endif %}
     </div>
+    {# an error that is still open: what it said, what it means, and the way out (as on the Overview) #}
+    {% if c.open_failure %}
+    {% set f = c.open_failure %}{% set problem = run_problem(f) %}
+    <div class="run-problem-box" role="alert">
+      <div>{% if problem == 'model' %}{{ _('The AI service refused or did not answer – runs stop until it works again.') }}
+        {% elif problem == 'imap' %}{{ _('Sortroom could not sign in to the mailbox or reach it – runs stop until it works again.') }}
+        {% elif problem == 'mails' %}{{ _('Single mails failed; they are retried in the next run.') }}
+        {% else %}{{ _('The run stopped with an error.') }}{% endif %}</div>
+      {% if f.error %}<div class="run-error">{{ _('%(kind)s at %(time)s:', kind=run_kind(f.kind), time=f.started|dt) }} <code>{{ f.error|run_error|truncate(160) }}</code></div>{% endif %}
+      {% if problem == 'imap' %}<a class="btn small" href="/ui/m/{{ c.box.id }}/settings#connection">{{ _('Check the connection') }}</a>
+      {% elif problem == 'model' %}<a class="btn small" href="/ui/settings#model">{{ _('Check the AI service') }}</a>{% endif %}
+    </div>
+    {% elif c.failure and not c.busy %}
+    <div class="muted" style="font-size:13px">{{ _('An error today, but the next run went through again.') }}</div>
+    {% endif %}
     {# linked figures open exactly the list they count; "today" counts sorting, the list filters by arrival #}
     <div class="stats">
       <div><span>{{ _('Today') }}</span><b>{{ st.sorted_today|num }}</b></div>
