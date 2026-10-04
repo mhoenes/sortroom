@@ -531,7 +531,8 @@ async def rules_dry_run(request: Request, box_id: str):
     except Exception as e:  # the server is not reachable, the login fails …
         tone = "err"
         if run_problem({"error": str(e)}) == "imap":
-            text = _("The mailbox can't be reached, or its login failed (%(e)s). Check the connection under Settings.", e=e)
+            text = _("The mailbox can't be reached, or its login failed (%(e)s). "
+                     "Check the connection under Settings.", e=e)
         else:
             text = _("The dry run failed: %(e)s", e=e)
     if "application/json" in request.headers.get("accept", ""):
