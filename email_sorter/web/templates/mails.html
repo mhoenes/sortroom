@@ -84,6 +84,8 @@
   </section>
 
   {% if selected %}
+  {# tablets: the details lie over the list; the dimmed list behind them closes them on a click #}
+  <a class="detail-backdrop" href="{{ list_href }}" tabindex="-1" aria-hidden="true"></a>
   <aside class="card detail" aria-label="{{ _('Details') }}">
       {% set m = selected %}
       {# what the last action did – also when it was the mail before, and this one opened next #}
@@ -201,7 +203,7 @@
   (() => {
     const key = 'mails-scroll:' + location.pathname;
     const keep = () => { try { sessionStorage.setItem(key, String(scrollY)); } catch (e) {} };
-    document.querySelectorAll('.maillist a.rowlink, .detail a.close, .detail a.navbtn').forEach(a => a.addEventListener('click', keep));
+    document.querySelectorAll('.maillist a.rowlink, .detail a.close, .detail a.navbtn, a.detail-backdrop').forEach(a => a.addEventListener('click', keep));
     document.querySelectorAll('.detail form').forEach(form => form.addEventListener('submit', keep));
     let y = null;
     try { y = sessionStorage.getItem(key); sessionStorage.removeItem(key); } catch (e) {}
