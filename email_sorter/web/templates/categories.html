@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ _('Categories') }} · {{ box.name }}{% endblock %}
 {# translations count as safe HTML, so the tip is escaped by force: a quote would end the attribute #}
+{% from "_test.html" import eye_icon %}
 {% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text|forceescape }}" data-tip="{{ text|forceescape }}">?</span>{% endmacro %}
 {% block content %}
 <div class="head">
@@ -9,13 +10,14 @@
     <h1>{{ _('Categories') }}</h1>
     <div class="sub">{{ _('The model files every mail by these descriptions alone') }} · {{ ngettext('%(num)s category', '%(num)s categories', box.cfg.categories|length) }}</div>
   </div>
-  {% if editable %}<a class="btn" href="/ui/m/{{ box.id }}/categories?new=1">{{ _('New category') }}</a>{% endif %}
+  {% if editable %}<a class="btn" href="/ui/m/{{ box.id }}/categories?new=1#edit">{{ _('New category') }}</a>{% endif %}
 </div>
 
 {% if not editable %}
 <div class="banner" role="status">{{ _('Read only: %(file)s is mounted read-only. Please make changes in the file.', file=box.config_file.name if box.config_file else _('the configuration')) }}</div>
 {% endif %}
 
+<datalist id="known-folders">{% for f in folders %}<option value="{{ f }}">{% endfor %}</datalist>
 <div class="grid catgrid">
   <section class="card cats-card" style="padding:6px 12px" aria-label="{{ _('All categories') }}">
     <div class="scroll-x"><table class="cats">
@@ -24,9 +26,9 @@
       <tbody>
       {% for key, c in box.cfg.categories.items() %}
         <tr class="link {% if key == cat and not new %}sel{% endif %}">
-          <td class="name"><a class="rowlink" href="/ui/m/{{ box.id }}/categories?cat={{ key }}"><b>{{ c.label }}</b>
+          <td class="name"><a class="rowlink" href="/ui/m/{{ box.id }}/categories?cat={{ key }}#edit"><b>{{ c.label }}</b>
             {% if c.flag %} <span class="pill info">{{ _('Star') }}</span>{% endif %}{% if c.track_expiry %} <span class="pill">{{ _('Expiry') }}</span>{% endif %}</a></td>
-          <td class="clip folder"><a class="rowlink" href="/ui/m/{{ box.id }}/categories?cat={{ key }}">{{ c.folder|folder_label if c.folder else _('stays in the inbox') }}</a></td>
+          <td class="clip folder"><a class="rowlink" href="/ui/m/{{ box.id }}/categories?cat={{ key }}#edit">{{ c.folder|folder_label if c.folder else _('stays in the inbox') }}</a></td>
           <td class="num">{{ (counts.get(key) or 0)|num }}</td>
           {% set r = rates.get(key) %}
           {# none corrected is the normal case: shown faintly, so the categories with corrections stand out #}
@@ -37,7 +39,7 @@
     </table></div>
   </section>
 
-  <section class="card editor stack" aria-label="{{ _('New category') if new else _('Edit category') }}">
+  <section class="card editor stack" data-editor aria-label="{{ _('New category') if new else _('Edit category') }}">
     <h2>{{ _('New category') if new else form.label or form.key }}</h2>
     {% set r = rates.get(cat) if not new else none %}
     {% if r and r[0] %}<p class="muted" style="margin:0">{{ ngettext('In the last 30 days the model filed %(num)s mail here; %(corrected)s of them (%(pct)s) were put elsewhere by hand.', 'In the last 30 days the model filed %(num)s mails here; %(corrected)s of them (%(pct)s) were put elsewhere by hand.', r[0], corrected=r[1]|num, pct=percent(r[1], r[0])) }}</p>{% endif %}
@@ -71,8 +73,16 @@
             placeholder="{{ _('Belongs here: …') }}&#10;{{ _('Does not belong here: …') }}&#10;{{ _('Typical senders: …') }}">{{ form.description }}</textarea>
           <span class="char-count" id="desc-count" aria-live="polite">{{ _('%(used)s of %(max)s characters', used=form.description|length, max=4000) }}</span>
         </label>
+        {% if editable %}
+        <div class="test-row near">
+          <button class="btn tonal" type="submit" formaction="/ui/m/{{ box.id }}/categories/test">{{ eye_icon|safe }}<span>{{ _('Test with the model') }}</span></button>
+          <span class="muted hint">{{ _('Files the last %(own)s mails of this category and %(other)s others again with the description above. Moves nothing, saves nothing (about %(cost)s).', own=sample[0], other=sample[1], cost=((sample[0] + sample[1]) * 0.0001)|usd(3)) }}</span>
+        </div>
+        {% endif %}
         <label class="f"><span class="lt">{{ _('Target folder') }} {{ help(_('IMAP folder that confident mails of this category are moved to, e.g. INBOX/Finance. Empty: the mail stays in the inbox.')) }}</span>
-          <input type="text" name="folder" value="{{ form.folder }}" placeholder="INBOX/…">
+          <input type="text" name="folder" value="{{ form.folder }}" list="known-folders" spellcheck="false" data-folder
+            placeholder="{{ _('empty: stays in the inbox') }}">
+          <span class="field-note" hidden>{{ _('A new folder – created on the server with the first run.') }}</span>
         </label>
         {# the star: one choice, not two boxes of which "always" makes the other one pointless #}
         {% set star = 'always' if form.flag else ('action' if form.flag_on_action else 'never') %}
@@ -89,12 +99,13 @@
             {{ help(_('The model recognises time-limited offers. After the last valid day the mail is moved to the folder for expired mail.')) }}</label>
         </div>
         <label class="f expiry-folder"><span class="lt">{{ _('Target folder for expired mail') }} {{ help(_('Only for this category. Empty: the default folder from the settings (%(folder)s).', folder=box.cfg.expired_folder) if box.cfg.expired_folder else _('Only for this category. Empty: the default folder from the settings.')) }}</span>
-          <input type="text" name="expired_folder" value="{{ form.expired_folder }}" placeholder="{{ box.cfg.expired_folder or 'INBOX/…/' ~ _('Expired') }}">
+          <input type="text" name="expired_folder" value="{{ form.expired_folder }}" list="known-folders" spellcheck="false" data-folder
+            placeholder="{{ _('empty: %(folder)s', folder=box.cfg.expired_folder) if box.cfg.expired_folder else 'INBOX/…/' ~ _('Expired') }}">
+          <span class="field-note" hidden>{{ _('A new folder – created on the server with the first run.') }}</span>
         </label>
         {% if editable %}
         <div class="actions">
           <button class="btn primary" type="submit">{{ _('Create') if new else _('Save') }}</button>
-          <button class="btn" type="submit" formaction="/ui/m/{{ box.id }}/categories/test">{{ _('Test with the model') }}</button>
           <span class="hint unsaved" hidden>{{ _('Not saved yet') }}</span>
           {% if not new %}
             {% if form.key in rules_using %}
@@ -105,7 +116,6 @@
             {% endif %}
           {% endif %}
         </div>
-        <p class="muted hint">{{ _('"Test with the model" files the last %(own)s mails of this category and %(other)s others again with the description from the field – without moving or saving anything (about %(cost)s).', own=sample[0], other=sample[1], cost=((sample[0] + sample[1]) * 0.0001)|usd(3)) }}</p>
         {% endif %}
       </fieldset>
     </form>
@@ -113,6 +123,20 @@
 </div>
 
 <script>
+  // on a tablet or phone the editor is below the list: coming from a click in it, go on to the editor
+  if (location.hash === '#edit' && matchMedia('(max-width: 1100px)').matches)
+    document.querySelector('[data-editor]').scrollIntoView();
+  // a folder that isn't known yet (not in the list of suggestions): say that it will be created
+  const known = new Set([...document.querySelectorAll('#known-folders option')].map(o => o.value.toLowerCase()));
+  document.querySelectorAll('input[data-folder]').forEach(input => {
+    const note = input.parentElement.querySelector('.field-note');
+    const check = () => {
+      const value = input.value.trim().replace(/\/+$/, '').toLowerCase();
+      note.hidden = !value || known.has(value);
+    };
+    input.addEventListener('input', check);
+    check();
+  });
   // the description grows with its text (up to most of the window) and counts its characters
   document.querySelectorAll('textarea[data-grow]').forEach(area => {
     const count = document.getElementById(area.dataset.count);

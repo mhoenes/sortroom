@@ -409,6 +409,8 @@ table.cats td.rate { font-weight: 600; }
 .star-choice legend { padding: 0; margin-bottom: 2px; }
 /* "Track expiry date" right below the star: both are lines of choices, without the gap between fields */
 .star-choice + .toggles { margin-top: -12px; }
+.field-note { font-size: 12px; font-weight: 400; color: var(--warn); }
+.editor[data-editor] { scroll-margin-top: 16px; }
 .quote { margin: 0; white-space: pre-wrap; color: var(--muted); }
 tr.changed td { background: var(--row-changed); }
 table.rules input[type=text], table.rules select { width: 100%; }
@@ -434,6 +436,8 @@ details.more[open] summary { margin-bottom: 10px; }
 .test-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding-top: 16px;
   border-top: 1px solid var(--line-soft); }
 .test-result { flex-basis: 100%; }
+/* a test right below the field it tries (the description of a category): no line above it */
+.test-row.near { padding-top: 0; border-top: 0; }
 .test-result:empty { display: none; }
 /* a group of fields within a card, e.g. "Fine-tuning" */
 .subhead { margin-bottom: -6px; font-size: 13px; font-weight: 600; color: var(--muted); }
