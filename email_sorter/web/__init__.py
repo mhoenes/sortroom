@@ -370,7 +370,7 @@ def overview(request: Request, box_id: str):
             db.close()
     total_7d = sum(n for _c, n in dist)
     top = max((n for _c, n in dist), default=0)
-    bars = [{"label": _label(box, c), "n": n, "pct": round(100 * n / top, 1) if top else 0,
+    bars = [{"key": c, "label": _label(box, c), "n": n, "pct": round(100 * n / top, 1) if top else 0,
              "tone": "inbox" if c == "" else ("danger" if c in DANGER_CATEGORIES else "")} for c, n in dist]
     return templates.TemplateResponse(request, "overview.html", {
         **_sidebar(request, boxes, box, "overview"), "box": box, "stats": st, "bars": bars,

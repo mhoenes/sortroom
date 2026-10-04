@@ -169,6 +169,13 @@ def test_overview_page(client):
     assert "<title>Übersicht · Privat · Sortroom</title>" in html          # the tab names the mailbox
     assert '<span class="eyebrow">Privat</span>\n    <h1>Übersicht</h1>' in html  # the page: above its title
     assert "Werbung" in html and "Finanzen" in html              # distribution bars
+    # each bar opens its mails of the 7 days; left in the inbox: the inbox
+    assert 'href="/ui/m/privat/mails?category=werbung&amp;period=7d"' in html
+    assert 'href="/ui/m/privat/mails?folder=inbox&amp;period=7d"' in html
+    # the figures: each a way to what is behind it, one period each
+    assert 'class="card kpi link" href="/ui/m/privat/maintenance"' in html and "Mit Stern · 7 Tage" in html
+    assert 'href="/ui/m/privat/mails?flagged=1&amp;period=7d"' in html and 'href="/ui/settings#model"' in html
+    assert "abgelaufene Angebote" in html  # werbung tracks expiry dates
     assert "Backfill" in html and "Abgebrochen" in html          # run log with the failed backfill
     assert "1 Lauf mit Fehlern heute" in html
     # the runs: today in one line, the failed backfill worth a look with its message, the rest folded

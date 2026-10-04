@@ -32,37 +32,37 @@
 </div>
 {% endif %}
 
+{# the key figures: each one period, named in its title, and a way to what is behind it #}
 <div class="grid cols-4">
-  <div class="card kpi">
+  <a class="card kpi link" href="/ui/m/{{ box.id }}/maintenance" title="{{ _('Start a run by hand, and the other tasks') }}">
     <span class="k">{{ _('Last run') }}</span>
     {% if stats.last_run %}
       <span class="v">{{ stats.last_run.started|ago }}</span>
-      <span class="d">{{ ngettext('%(num)s mail', '%(num)s mails', stats.last_run.classified, num=stats.last_run.classified|num) }} · {{ _('%(moved)s moved', moved=stats.last_run.moved|num) }} · {{ ngettext('%(num)s error', '%(num)s errors', stats.last_run.failed or 0) }}</span>
+      <span class="d">{{ ngettext('%(num)s mail', '%(num)s mails', stats.last_run.classified, num=stats.last_run.classified|num) }} · {{ _('%(moved)s moved', moved=stats.last_run.moved|num) }}{% if stats.last_run.failed %} · {{ ngettext('%(num)s error', '%(num)s errors', stats.last_run.failed) }}{% endif %}</span>
     {% else %}
       <span class="v">–</span><span class="d">{{ _('No run logged yet') }}</span>
     {% endif %}
     <span class="d">{% if schedule.running %}{{ _('A run is in progress') }}
-      {% elif schedule.enabled and schedule.active and schedule.next %}{{ _('Next run %(time)s · every %(minutes)s min', time=schedule.next.strftime('%H:%M'), minutes=schedule.minutes) }}
+      {% elif schedule.enabled and schedule.active and schedule.next %}{{ _('Next %(time)s · every %(minutes)s min', time=schedule.next.strftime('%H:%M'), minutes=schedule.minutes) }}
       {% elif schedule.enabled and schedule.active %}{{ _('Schedule starts shortly') }}
       {% elif schedule.enabled %}{{ _('Schedule switched off in this process') }}
       {% else %}{{ _('Schedule off') }}{% endif %}</span>
-  </div>
-  <div class="card kpi">
-    <span class="k">{{ _('Sorted today') }}</span>
-    <span class="v">{{ stats.sorted_today|num }}</span>
-    <span class="d">{{ _('%(n)s starred in 7 days', n=stats.flagged_7d|num) }}</span>
-    {% if filed_30d %}<span class="d">{{ _('%(pct)s corrected by hand in 30 days', pct=percent(corrected_30d, filed_30d)) }}</span>{% endif %}
-  </div>
-  <a class="card kpi link" href="/ui/m/{{ box.id }}/mails?uncertain=1&amp;period=30d">
-    <span class="k">{{ _('To review') }}</span>
-    <span class="v">{{ stats.uncertain|num }} <small>{{ _('uncertain') }}</small></span>
-    <span class="d">{{ _('Confidence below %(min)s, received in the last 30 days', min=cfg.min_confidence|conf) }}</span>
   </a>
-  <div class="card kpi">
-    <span class="k">{{ _('Cost this month') }}</span>
+  <a class="card kpi link" href="/ui/m/{{ box.id }}/mails?flagged=1&amp;period=7d">
+    <span class="k">{{ _('Starred · 7 days') }}</span>
+    <span class="v">{{ stats.flagged_7d|num }}</span>
+    <span class="d">{{ _('mails with a star') }}</span>
+  </a>
+  <a class="card kpi link" href="/ui/m/{{ box.id }}/categories" title="{{ _('By category on the Categories page') }}">
+    <span class="k">{{ _('Corrected · 30 days') }}</span>
+    <span class="v">{{ percent(corrected_30d, filed_30d) if filed_30d else '–' }}</span>
+    <span class="d">{{ ngettext('of %(num)s mail of the model', 'of %(num)s mails of the model', filed_30d, num=filed_30d|num) if filed_30d else _('no decisions of the model yet') }}</span>
+  </a>
+  <a class="card kpi link" href="/ui/settings#model" title="{{ _('The AI service and its model') }}">
+    <span class="k">{{ _('Cost · this month') }}</span>
     <span class="v">{{ stats.cost_month|usd }}</span>
-    <span class="d">{{ _('Ø %(cost)s per mail', cost=stats.cost_per_mail|usd(5)) }} · {{ ngettext('%(num)s mail', '%(num)s mails', stats.classified_mails_month, num=stats.classified_mails_month|num) }}</span>
-  </div>
+    <span class="d">{{ ngettext('for %(num)s mail', 'for %(num)s mails', stats.classified_mails_month, num=stats.classified_mails_month|num) }}</span>
+  </a>
 </div>
 
 {# the uncertain mails: start going through them (the Mails page goes on to the next one after each), or
@@ -139,13 +139,15 @@
     {% if bars %}
     <div class="bars">
       {% for b in bars %}
-      <div class="bar"><span>{{ b.label }}</span><span class="track"><span class="fill {{ b.tone }}" style="width:{{ b.pct }}%"></span></span><span class="n">{{ b.n|num }}</span></div>
+      <a class="bar" href="/ui/m/{{ box.id }}/mails?{{ 'folder=inbox' if not b.key else 'category=' ~ b.key|urlencode }}&amp;period=7d"><span>{{ b.label }}</span><span class="track"><span class="fill {{ b.tone }}" style="width:{{ b.pct }}%"></span></span><span class="n">{{ b.n|num }}</span></a>
       {% endfor %}
     </div>
     {% else %}<div class="empty">{{ _('No processed mails from the last 7 days.') }}</div>{% endif %}
+    {% if cfg.categories.values()|selectattr('track_expiry')|list %}
     <div class="muted" style="margin-top:auto;padding-top:14px;border-top:1px solid var(--line-soft);font-size:13px">
       {{ ngettext('<strong style="color:var(--ink)">%(num)s</strong> expired offer moved', '<strong style="color:var(--ink)">%(num)s</strong> expired offers moved', expired_7d) }}
     </div>
+    {% endif %}
   </section>
 
   {# the runs: today in one line, the ones worth a look, the latest ones folded #}

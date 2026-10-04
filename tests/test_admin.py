@@ -560,7 +560,9 @@ def test_correction_rate_on_categories_and_overview(client, setup):
     html = client.get("/ui/m/privat/categories?cat=werbung").text
     assert 'title="1 von 4 korrigiert">25 %</td>' in html
     assert "In den letzten 30 Tagen hat das Modell 4 Mails hier einsortiert; 1 davon (25 %)" in html
-    assert "25 % in 30 Tagen von Hand korrigiert" in client.get("/ui/m/privat").text
+    html = client.get("/ui/m/privat").text  # the Overview's figure, a way to the categories
+    assert '<span class="k">Korrigiert · 30 Tage</span>\n    <span class="v">25 %</span>' in html
+    assert "von 4 Mails des Modells" in html
 
 
 def test_a_broken_mailbox_is_shown_and_the_rest_works(client, setup):
