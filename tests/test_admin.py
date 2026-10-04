@@ -213,6 +213,34 @@ def test_mail_actions(client, setup, monkeypatch):
     assert [(x.match, x.action) for x in _box(setup).cfg.sender_rules][-1] == ("@example.de", "werbung")
 
 
+def test_accepting_a_mail_opens_the_next_one(client, setup, monkeypatch):
+    monkeypatch.setattr(admin, "move_mail", lambda cfg, creds, ws, key, cat: "INBOX/Werbung")
+    store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
+    for key, received in (("<m2@x>", "2026-09-19T10:00+02:00"), ("<m3@x>", "2026-09-18T10:00+02:00")):
+        store.record(SimpleNamespace(key=key, received=received, sender="shop@example.de", subject=key,
+                                     decision=Decision("werbung", 0.4, {"werbung": 0.4}, 0.1, 0.0001),
+                                     folder=None, flag=False, expires=None, source="classifier"))
+    store.close()
+    html = client.get("/ui/m/privat/mails?uncertain=1&period=all&key=%3Cm2%40x%3E").text  # the middle one
+    assert 'data-nav="prev" href="/ui/m/privat/mails?period=all&amp;uncertain=1&amp;page=1&amp;key=%3Cm1%40x%3E"' in html
+    assert 'data-nav="next" href="/ui/m/privat/mails?period=all&amp;uncertain=1&amp;page=1&amp;key=%3Cm3%40x%3E"' in html
+    then = re.search(r'name="then" value="([^"]+)"', html).group(1).replace("&amp;", "&")
+    assert then.endswith("key=%3Cm3%40x%3E")  # accepting goes on to the next one
+    r = client.post("/ui/m/privat/mails/action", follow_redirects=False, data={
+        "csrf": _csrf(html), "key": "<m2@x>", "action": "accept", "category": "werbung", "then": then,
+        "back": "uncertain=1&period=all&page=1&key=%3Cm2%40x%3E"})
+    assert r.headers["location"] == f"/ui/m/privat/mails?{then}"
+    html = client.get(r.headers["location"]).text
+    # what happened shows in the details of the mail that is open now, not at the top of the page
+    notice = re.search(r'<div class="banner ok notice" role="status">([^<]+)</div>', html)
+    assert notice and notice.group(1) == "„&lt;m2@x&gt;“: Verschoben nach INBOX/Werbung."
+    assert html.count("Verschoben nach") == 1 and "<h2>&lt;m3@x&gt;</h2>" in html
+    # the last one in the list has no next: accepting it goes back to the one before
+    html = client.get("/ui/m/privat/mails?uncertain=1&period=all&key=%3Cm3%40x%3E").text
+    assert 'data-nav="next"' not in html
+    assert re.search(r'name="then" value="([^"]+)"', html).group(1).endswith("key=%3Cm2%40x%3E")
+
+
 def test_add_mailbox(client, setup):
     html = client.get("/ui/mailboxes/new").text
     form = {"csrf": _csrf(html), "name": "Gmail", "imap_host": "imap.gmail.com", "imap_port": "993",

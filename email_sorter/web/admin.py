@@ -264,6 +264,7 @@ async def mail_action(request: Request, box_id: str):
     back = str(form.get("back") or "")
     back = f"/ui/m/{box.id}/mails?{back}" if back and not back.startswith(("/", "http")) else \
         f"/ui/m/{box.id}/mails?period=all&key={quote(key, safe='')}"
+    then = str(form.get("then") or "")  # the list with the next mail open: where accepting it goes on to
     category = str(form.get("category") or "")
 
     if action == "expiry":  # only the log changes, no IMAP and no lock needed
@@ -297,15 +298,30 @@ async def mail_action(request: Request, box_id: str):
             return act()
 
     try:
-        _flash(request, await run_in_threadpool(locked))
+        text = await run_in_threadpool(locked)
         if action == "move":  # corrected by hand: offer a rule, so the sender's next mails go there too
             back += f"&rule={quote(category, safe='')}"
+        elif then and not then.startswith(("/", "http")):  # done with this one: on to the next mail
+            text = _("\"%(subject)s\": %(result)s", subject=_subject(box, key), result=text)
+            back = f"/ui/m/{box.id}/mails?{then}"
+        _flash(request, text)
     except (EditError, ManualError, ConfigError) as e:
         _flash(request, str(e), "err")
     except Exception as e:
         log.exception("[%s] mail action failed", box.id)
         _flash(request, _("Failed: %(e)s", e=e), "err")
     return RedirectResponse(back, status_code=303)
+
+
+def _subject(box: Mailbox, key: str) -> str:
+    """The subject of a mail in the log, for a message about it shown with another mail open."""
+    db = queries.connect(box.workspace)
+    try:
+        m = queries.mail(db, key)
+    finally:
+        if db:
+            db.close()
+    return (m and m["subject"]) or _("(no subject)")
 
 
 def _set_expiry(box: Mailbox, key: str, form: dict) -> str:

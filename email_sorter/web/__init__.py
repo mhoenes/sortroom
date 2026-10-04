@@ -370,6 +370,16 @@ def mails(request: Request, box_id: str, q: str = "", category: str = "", folder
                                 "uncertain": "1" if f.uncertain else "", "flagged": "1" if f.flagged else "",
                                 "gone": "1" if f.show_gone else ""}.items() if v}
     pages = max(1, -(-total // queries.PAGE_SIZE))
+    # the mails before and after the open one in the list: the arrows in its details, and where accepting it
+    # goes on to (the next one, else the one before)
+    keys = [r["message_key"] for r in rows]
+    prev_key = next_key = None
+    if selected and selected["message_key"] in keys:
+        i = keys.index(selected["message_key"])
+        prev_key = keys[i - 1] if i else None
+        next_key = keys[i + 1] if i + 1 < len(keys) else None
+    # with a mail open, what an action did shows in its details instead of at the top of the page
+    notice = request.session.pop("flash", None) if selected else None
     return templates.TemplateResponse(request, "mails.html", {
         **_sidebar(request, boxes, box, "mails"), "box": box, "f": f, "rows": rows, "total": total,
         "selected": selected, "folders": folder_list, "pages": pages, "periods": queries.PERIODS,
@@ -377,7 +387,8 @@ def mails(request: Request, box_id: str, q: str = "", category: str = "", folder
         "link_key": lambda k: quote(k, safe=""), "min_conf": box.cfg.min_confidence,
         "today": datetime.now().date().isoformat(), "offer_rule": rule if rule in box.cfg.categories
         or rule == INBOX_ACTION else "",
-        "expired_to": lambda cat: expired_target(box.cfg, cat)})
+        "expired_to": lambda cat: expired_target(box.cfg, cat), "prev_key": prev_key, "next_key": next_key,
+        "notice": notice})
 
 
 from . import admin, editor, senders, suggestions  # noqa: E402,F401  (register their pages on router)
