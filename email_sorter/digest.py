@@ -81,6 +81,9 @@ def section(box: Mailbox, db: sqlite3.Connection, settings: MailSettings, now: d
     def subject(m: dict) -> str:
         return m["subject"] or _("(no subject)")
 
+    def sender(m: dict) -> str:  # "Shop News <news@shop.example>", the address alone without a name
+        return f"{m['sender_name']} <{m['sender']}>" if m["sender_name"] else (m["sender"] or "")
+
     def open_mail(list_query: str, m: dict) -> str:  # the list with the mail open beside it
         return settings.link(f"/ui/m/{box.id}/mails?{list_query}&key={quote(m['message_key'], safe='')}")
 
@@ -92,25 +95,25 @@ def section(box: Mailbox, db: sqlite3.Connection, settings: MailSettings, now: d
     if review_total:
         review = queries.uncertain_mails(db, cfg.min_confidence, LIST_MAX, days=30, now=now)
         groups.append(Group(_("To review"), review_total, [
-            Item(subject(m), f"{m['sender']} · {i18n.dt(m['received'])}",
+            Item(subject(m), f"{sender(m)} · {i18n.dt(m['received'])}",
                  _("suggestion: %(category)s", category=label(m["category"])),
                  url=open_mail("uncertain=1&period=30d", m)) for m in review],
             settings.link(f"/ui/m/{box.id}/mails?uncertain=1&period=30d")))
 
     starred = [dict(r) for r in db.execute(
-        "SELECT message_key, received, sender, subject FROM processed WHERE flagged = 1 AND gone = 0 "
+        "SELECT message_key, received, sender, sender_name, subject FROM processed WHERE flagged = 1 AND gone = 0 "
         "AND processed_at >= ? ORDER BY processed_at DESC", (day_ago,))]
     if starred:
         groups.append(Group(_("Starred in the last 24 hours"), len(starred), [
-            Item(subject(m), f"{m['sender']} · {i18n.dt(m['received'])}", url=open_mail("flagged=1&period=7d", m))
+            Item(subject(m), f"{sender(m)} · {i18n.dt(m['received'])}", url=open_mail("flagged=1&period=7d", m))
             for m in starred[:LIST_MAX]], settings.link(f"/ui/m/{box.id}/mails?flagged=1&period=7d")))
 
     expiring = [dict(r) for r in db.execute(
-        "SELECT message_key, expires, sender, subject FROM processed WHERE expires IN (?, ?) "
+        "SELECT message_key, expires, sender, sender_name, subject FROM processed WHERE expires IN (?, ?) "
         "AND expired_tagged = 0 AND gone = 0 ORDER BY expires, received", (today, tomorrow))]
     if expiring:
         groups.append(Group(_("Offers that expire today or tomorrow"), len(expiring), [
-            Item(subject(m), m["sender"], _("expires today") if m["expires"] == today else _("expires tomorrow"),
+            Item(subject(m), sender(m), _("expires today") if m["expires"] == today else _("expires tomorrow"),
                  "warn" if m["expires"] == today else "", open_mail("period=30d", m))
             for m in expiring[:LIST_MAX]]))
 

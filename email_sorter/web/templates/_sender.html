@@ -1,0 +1,6 @@
+{# a mail's sender: its display name, then the address. The address always shows: a name can say anything,
+   only the address tells who really sent the mail. #}
+{% macro sender(name, address) -%}
+{%- if name %}<span class="from-name">{{ name }}</span> <span class="from-addr">{{ address }}</span>
+{%- else %}{{ address }}{% endif -%}
+{%- endmacro %}

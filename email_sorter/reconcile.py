@@ -3,8 +3,9 @@
 Mails you deleted (or that sit in the trash) are marked `gone`: they stay in the log, so cost and
 history are kept and nothing is classified twice, but they no longer show up for review. Mails the
 sorter left in the inbox and you filed by hand get the folder they are in now. The unsubscribe links
-of logged mails are noted for the senders page. A mail the model filed that you moved into the folder of
-another category, or back into the inbox, counts as corrected for the Categories page.
+of logged mails are noted for the senders page, and their senders' display names. A mail the model
+filed that you moved into the folder of another category, or back into the inbox, counts as corrected
+for the Categories page.
 
 Reads a few header lines of every mail in every folder; changes nothing on the server.
 """
@@ -18,7 +19,7 @@ from imap_tools import MailBox
 
 from .config import Config, Credentials
 from .i18n import _
-from .mailtext import message_key, received_of, unsubscribe_links
+from .mailtext import message_key, received_of, sender_name, unsubscribe_links
 from .imap import connect, delimiter, header_fields
 from .store import Store
 
@@ -86,6 +87,7 @@ def run_reconcile(cfg: Config, creds: Credentials, base_dir: Path, live: bool) -
             source = cfg.source_folder.strip("/")
             found: dict[str, str | None] = {}  # message key -> folder (config notation); None: only in a view
             links: dict[str, tuple] = {}  # message key -> (sender, links, one-click?, date), for the senders list
+            names: dict[str, str] = {}    # message key -> the sender's display name
             folders, views = mail_folders(mb)
             for name in folders + views:  # real folders first, so they win as a mail's place
                 path = name.replace(delim, "/") if delim else name
@@ -94,6 +96,7 @@ def run_reconcile(cfg: Config, creds: Credentials, base_dir: Path, live: bool) -
                 for head in header_fields(mb):
                     key = message_key(head)
                     found.setdefault(key, None if name in views else path)
+                    names.setdefault(key, sender_name(head))
                     unsubscribe = unsubscribe_links(head)
                     if unsubscribe:
                         links[key] = (head.from_, *unsubscribe, received_of(head))
@@ -124,6 +127,7 @@ def run_reconcile(cfg: Config, creds: Credentials, base_dir: Path, live: bool) -
             for key, where in filed.items():
                 store.set_moved_to([key], where)
             store.note_unsubscribe(v for k, v in links.items() if k in logged)
+            store.set_sender_names({k: v for k, v in names.items() if k in logged})
             for key, category, corrected_to in corrected:
                 store.set_correction(key, category, corrected_to, "reconcile")
             store.set_meta("last_reconcile", datetime.now().isoformat(timespec="seconds"))

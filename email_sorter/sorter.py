@@ -15,7 +15,7 @@ from imap_tools import AND, MailBox, MailMessage, MailMessageFlags
 from .config import INBOX_ACTION, Config, Credentials, SenderRule
 from .expiry import resolve_expiry
 from .classifier import Decision, ClassifierAuthError, ClassifierClient, ClassifierError, ClassifierOutage
-from .mailtext import build_state, full_text, message_key, received_of, sent_date, unsubscribe_links
+from .mailtext import build_state, full_text, message_key, received_of, sender_name, sent_date, unsubscribe_links
 from .store import GONE, MOVED, Store
 from .imap import (BODY_CHUNK, UID_CHUNK, chunks, connect, delimiter, ensure_folder, find_uids, group_by_folder,
                    move_uids, received_times, seen_uids, server_folder)
@@ -39,6 +39,7 @@ class Outcome:
     expires: date | None = None  # last valid day of a time-limited offer
     source: str = "classifier"   # "classifier" or "rule" (sender rule, no model request)
     unsubscribe: tuple[list[str], bool] | None = None  # List-Unsubscribe links, one-click offered
+    sender_name: str = ""        # the sender's display name, empty = none
 
 
 def rule_outcome(cfg: Config, rule: SenderRule, uid: str, key: str, msg: MailMessage,
@@ -48,7 +49,8 @@ def rule_outcome(cfg: Config, rule: SenderRule, uid: str, key: str, msg: MailMes
     folder = cfg.categories[rule.action].folder if where is None else where
     return Outcome(key=key, uid=uid, received=received_of(msg),
                    sender=msg.from_, subject=msg.subject, decision=decision, folder=folder, flag=False,
-                   note=f"sender rule: {rule.match}", source="rule", unsubscribe=unsubscribe_links(msg))
+                   note=f"sender rule: {rule.match}", source="rule", unsubscribe=unsubscribe_links(msg),
+                   sender_name=sender_name(msg))
 
 
 def plan(decision: Decision, cfg: Config) -> tuple[str | None, bool, str]:
@@ -190,6 +192,7 @@ def classify_new(
                 note=note,
                 expires=expiry_for(decision, cfg, msg),
                 unsubscribe=unsubscribe_links(msg),
+                sender_name=sender_name(msg),
             )
         except ClassifierAuthError:
             raise

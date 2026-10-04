@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_sender.html" import sender %}
 {% block title %}{{ _('Overview') }} · {{ box.name }}{% endblock %}
 {% block content %}
 {% set cfg = box.cfg %}
@@ -56,7 +57,7 @@
   <div class="review">
     {% for m in review %}
     <a href="/ui/m/{{ box.id }}/mails?uncertain=1&amp;period=30d&amp;key={{ m.message_key|urlencode }}">
-      <span class="what"><b>{{ m.subject or _('(no subject)') }}</b><span class="muted">{{ m.received|dt }} · {{ m.sender }}</span></span>
+      <span class="what"><b>{{ m.subject or _('(no subject)') }}</b><span class="muted">{{ m.received|dt }} · {{ sender(m.sender_name, m.sender) }}</span></span>
       <span class="guess"><span class="muted">{{ _('Suggestion') }}</span><b>{{ label(m.category) }} <span class="muted">{{ m.confidence|conf }}</span></b></span>
     </a>
     {% endfor %}

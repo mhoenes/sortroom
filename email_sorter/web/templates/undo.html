@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_sender.html" import sender %}
 {% block title %}{{ _('Undo a run') }} · {{ box.name }}{% endblock %}
 {% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text|forceescape }}" data-tip="{{ text|forceescape }}">?</span>{% endmacro %}
 {% block content %}
@@ -33,7 +34,7 @@
           <td class="date">{{ m.received|dt if m.received else '–' }}</td>
           <td class="clip mail">{% if m.known %}<a class="rowlink" href="/ui/m/{{ box.id }}/mails?period=all&amp;key={{ m.key|urlencode }}">
             <span class="subj">{{ m.subject or _('(no subject)') }}</span>
-            <span class="meta"><span class="date-inline">{{ m.received|dt }} · </span>{{ m.sender }}</span></a>
+            <span class="meta"><span class="date-inline">{{ m.received|dt }} · </span>{{ sender(m.sender_name, m.sender) }}</span></a>
             {% else %}<span class="muted">{{ m.key }}</span>{% endif %}</td>
           <td class="route">{{ m.origin|folder_label if m.origin else _('Inbox') }} → {{ m.run_moved_to|folder_label if m.run_moved_to else _('Inbox') }}{% if m.starred %} <svg class="star inline" viewBox="0 0 24 24" role="img" aria-label="{{ _('starred') }}"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z"/></svg>{% endif %}</td>
           <td>{% if m.blocked %}<span class="muted">{{ reasons[m.blocked] }}</span>{% else %}<span class="pill ok">{{ _('Possible') }}</span>{% endif %}</td>

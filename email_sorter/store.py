@@ -87,6 +87,8 @@ MIGRATIONS: tuple[str, ...] = (
     # step 3: suggestions you dismissed (web/suggestions.py), so they don't come back
     "CREATE TABLE IF NOT EXISTS dismissed (kind TEXT NOT NULL, subject TEXT NOT NULL, target TEXT NOT NULL, "
     "at TEXT NOT NULL, PRIMARY KEY (kind, subject, target));",
+    # step 4: the sender's display name ("Shop News" of "Shop News <news@shop.example>"), NULL = none known
+    "ALTER TABLE processed ADD COLUMN sender_name TEXT;",
 )
 
 
@@ -145,14 +147,15 @@ class Store:
             self.note_unsubscribe([(outcome.sender, *outcome.unsubscribe, outcome.received)], commit=False)
         self.db.execute(
             """INSERT OR REPLACE INTO processed
-               (message_key, processed_at, received, sender, subject, category, confidence,
+               (message_key, processed_at, received, sender, sender_name, subject, category, confidence,
                 needs_action, moved_to, flagged, cost_usd, expires, expiry_checked, expired_tagged, source)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,0,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,0,?)""",
             (
                 outcome.key,
                 datetime.now().isoformat(timespec="seconds"),
                 outcome.received,
                 outcome.sender,
+                getattr(outcome, "sender_name", None) or None,
                 outcome.subject,
                 d.category,
                 d.confidence,
@@ -352,6 +355,12 @@ class Store:
              for address, links, one_click, seen in found if address])
         if commit:
             self.db.commit()
+
+    def set_sender_names(self, names: dict[str, str]) -> None:
+        """The display names of logged mails, {message key: name}, as a reconcile reads them."""
+        self.db.executemany("UPDATE processed SET sender_name = ? WHERE message_key = ?",
+                            [(name or None, key) for key, name in names.items()])
+        self.db.commit()
 
     def sender(self, address: str) -> dict | None:
         cur = self.db.execute("SELECT * FROM senders WHERE address = ?", (address.lower(),))

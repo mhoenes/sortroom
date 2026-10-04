@@ -274,6 +274,22 @@ def test_the_log_is_migrated_once_and_in_order(tmp_path, monkeypatch):
     db.close()
 
 
+def test_the_pages_bring_an_old_log_up_to_date(tmp_path):
+    import sqlite3
+    from email_sorter.store import MIGRATIONS
+    from email_sorter.web import queries
+    path = tmp_path / "data" / "state.db"
+    path.parent.mkdir()
+    db = sqlite3.connect(path)  # a log of the last version, no run since the update
+    for number, step in enumerate(MIGRATIONS[:-1], start=1):
+        db.executescript(f"{step}\nPRAGMA user_version = {number};")
+    db.close()
+    db = queries.connect(tmp_path)
+    assert db.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS)
+    assert "sender_name" in {r[1] for r in db.execute("PRAGMA table_info(processed)")}
+    db.close()
+
+
 def test_a_failing_step_changes_nothing_and_a_newer_log_is_refused(tmp_path, monkeypatch):
     import sqlite3
     from email_sorter import store as store_mod

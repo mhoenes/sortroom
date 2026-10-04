@@ -9,16 +9,23 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from ..store import MIGRATIONS, Store
+
 PAGE_SIZE = 50
 PERIODS = {"24h": timedelta(hours=24), "7d": timedelta(days=7), "30d": timedelta(days=30), "all": None}
 
 
 def connect(workspace: Path) -> sqlite3.Connection | None:
-    """The mailbox's log, opened read-only; None before its first run."""
+    """The mailbox's log, opened read-only; None before its first run. A log not yet brought up to date
+    after an update (no run since) is migrated first, so the pages find its new columns."""
     path = workspace / "data" / "state.db"
     if not path.exists():
         return None
     db = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
+    if db.execute("PRAGMA user_version").fetchone()[0] < len(MIGRATIONS):
+        db.close()
+        Store(path).close()
+        db = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
     db.row_factory = sqlite3.Row
     return db
 
@@ -163,7 +170,8 @@ def run_mails(db: sqlite3.Connection | None, run: str) -> list[dict]:
     for r in db.execute(
             "SELECT u.message_key AS key, u.origin, u.moved_to AS run_moved_to, u.before, "
             "EXISTS (SELECT 1 FROM undo l WHERE l.message_key = u.message_key AND l.run > u.run) AS later, "
-            "p.message_key IS NOT NULL AS known, p.received, p.sender, p.subject, p.category, p.moved_to, "
+            "p.message_key IS NOT NULL AS known, p.received, p.sender, p.sender_name, p.subject, p.category, "
+            "p.moved_to, "
             "p.flagged, p.gone, p.expired_tagged, p.source "
             f"FROM undo u LEFT JOIN processed p ON p.message_key = u.message_key WHERE u.run = ? "
             f"ORDER BY {RECEIVED} DESC", (run,)):
@@ -202,18 +210,21 @@ def senders(db: sqlite3.Connection | None, category: str = "", now: datetime | N
     known = {r["address"]: dict(r) for r in db.execute("SELECT * FROM senders WHERE unsubscribe IS NOT NULL")}
     suspicious = suspicious_senders(db, danger)
     rows = db.execute(
-        f"SELECT lower(sender) AS address, category, received, {RECEIVED} AS jd FROM processed "
+        f"SELECT lower(sender) AS address, sender_name, category, received, {RECEIVED} AS jd FROM processed "
         f"WHERE {RECEIVED} >= julianday(?)" + (" AND category = ?" if category else ""),
         [_received_since(now or datetime.now(), timedelta(days=SENDER_DAYS))] + ([category] if category else []))
     stats: dict[str, dict] = {}
     for r in rows:
         if r["address"] not in known:
             continue
-        s = stats.setdefault(r["address"], {"mails": 0, "jd": 0.0, "last": None, "categories": Counter()})
+        s = stats.setdefault(r["address"], {"mails": 0, "jd": 0.0, "last": None, "name": None,
+                                            "categories": Counter()})
         s["mails"] += 1
         s["categories"][r["category"]] += 1
         if (r["jd"] or 0) >= s["jd"]:
             s["jd"], s["last"] = r["jd"] or 0, r["received"]
+        if r["sender_name"] and (r["jd"] or 0) >= s.get("name_jd", -1):  # the name of the newest mail with one
+            s["name"], s["name_jd"] = r["sender_name"], r["jd"] or 0
     out = []
     for address, info in known.items():
         got = stats.get(address)
@@ -225,6 +236,7 @@ def senders(db: sqlite3.Connection | None, category: str = "", now: datetime | N
                                (address, _iso(datetime.fromisoformat(info["unsubscribed"]).astimezone()))).fetchone()[0]
         out.append({**info, "links": json.loads(info["unsubscribe"]), "mails": got["mails"] if got else 0,
                     "last": got["last"] if got else None, "jd": got["jd"] if got else 0.0,
+                    "name": got["name"] if got else None,
                     "category": got["categories"].most_common(1)[0][0] if got else None, "since": since,
                     "suspicious": suspicious.get(address, 0)})
     out.sort(key=lambda s: (-s["mails"], -s["jd"], s["address"]))
@@ -267,9 +279,9 @@ def mails(db: sqlite3.Connection | None, f: MailFilter, min_confidence: float,
         where.append(f"{RECEIVED} >= julianday(?)")
         args.append(_received_since(now or datetime.now(), span))
     if f.q:
-        where.append("(sender LIKE ? ESCAPE '!' OR subject LIKE ? ESCAPE '!')")
+        where.append("(sender LIKE ? ESCAPE '!' OR sender_name LIKE ? ESCAPE '!' OR subject LIKE ? ESCAPE '!')")
         like = "%" + f.q.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
-        args += [like, like]
+        args += [like, like, like]
     if f.category:
         where.append("category = ?")
         args.append(f.category)

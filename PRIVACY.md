@@ -88,9 +88,9 @@ provider and the recipient's provider handle these mails like any other mail.
 
 All of it stays on the machine that runs Sortroom, in its folders:
 
-- `mailboxes/<id>/data/state.db` – a log of every processed mail: sender, subject,
-  date, category, confidence, target folder, expiry date and cost; which of the model's
-  decisions you corrected and to what; for undoing a run, where its mails came from and
+- `mailboxes/<id>/data/state.db` – a log of every processed mail: sender (address and
+  display name), subject, date, category, confidence, target folder, expiry date and
+  cost; which of the model's decisions you corrected and to what; for undoing a run, where its mails came from and
   how their log entries looked before; the unsubscribe links of senders and when you
   unsubscribed; suggestions you dismissed; when tasks last ran and whether a failure was
   already reported; and a log of the runs. Mail text is not stored.

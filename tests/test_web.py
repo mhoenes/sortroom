@@ -19,10 +19,10 @@ PASSWORD = "richtig-geheim"
 
 
 def _mail(store, key, category, conf, moved_to, subject, sender="shop@example.de", flagged=False,
-          source="classifier", expires=None):
+          source="classifier", expires=None, name=""):
     store.record(SimpleNamespace(
         key=key, received=(datetime.now().astimezone() - timedelta(days=2)).isoformat(timespec="minutes"),
-        sender=sender, subject=subject,
+        sender=sender, sender_name=name, subject=subject,
         decision=Decision(category, conf, {category: conf}, 0.9 if flagged else 0.1, 0.0001),
         folder=moved_to, flag=flagged, expires=expires, source=source))
 
@@ -36,7 +36,8 @@ def client(tmp_path, monkeypatch):
     store = Store(tmp_path / "privat" / "data" / "state.db")
     _mail(store, "<r1@x>", "finanzen", 0.97, "INBOX/Finanzen", "Ihre Rechnung Nr. 4711", flagged=True)
     _mail(store, "<r2@x>", "werbung", 1.0, "INBOX/Werbung", "20 % Rabatt nur heute", expires=date(2026, 9, 24))
-    _mail(store, "<r3@x>", "finanzen", 0.45, None, "Ein Vertrag bucht im Juli 11,75 € ab", sender="dein@finanzguru.de")
+    _mail(store, "<r3@x>", "finanzen", 0.45, None, "Ein Vertrag bucht im Juli 11,75 € ab", sender="dein@finanzguru.de",
+          name="Max Mustermann")
     _mail(store, "<r4@x>", "werbung", 1.0, "INBOX/Werbung", "Lieferando Gutschein", source="rule")
     now = datetime.now()
     store.record_run("run", None, now, now,  # "now": stays "today" even right after midnight
@@ -171,6 +172,7 @@ def test_overview_page(client):
     assert "Backfill" in html and "Abgebrochen" in html          # run log with the failed backfill
     assert "1 Lauf mit Fehlern heute" in html
     assert "Ein Vertrag bucht im Juli" in html                    # "zur Prüfung"
+    assert '<span class="from-name">Max Mustermann</span> <span class="from-addr">dein@finanzguru.de</span>' in html
 
 
 def test_mails_page_filters_and_detail(client):
@@ -188,6 +190,9 @@ def test_mails_page_filters_and_detail(client):
     assert 'href="/ui/m/privat/mails">Filter zurücksetzen</a>' in html and '<span class="count">2</span>' in html
     html = c.get("/ui/m/privat/mails?period=all&q=lieferando").text
     assert "1 Eintrag" in html and "Regel" in html
+    html = c.get("/ui/m/privat/mails?period=all&q=mustermann").text  # the display name is searched too
+    assert "1 Eintrag" in html and '<span class="from-name">Max Mustermann</span>' in html
+    assert '<span class="from-name">' not in c.get("/ui/m/privat/mails?period=all&q=lieferando").text  # none known
     html = c.get("/ui/m/privat/mails?period=all&folder=inbox").text
     assert "1 Eintrag" in html
     html = c.get("/ui/m/privat/mails?period=all&key=%3Cr2%40x%3E").text
@@ -196,6 +201,8 @@ def test_mails_page_filters_and_detail(client):
     assert "Ablaufdatum setzen" not in html  # a mail with a date: the field is open
     html = c.get("/ui/m/privat/mails?period=all&key=%3Cr3%40x%3E").text  # uncertain: why, and no date yet
     assert "Modell: Finanzen · Sicherheit 0,45" in html and "(mindestens 0,70 nötig)" in html
+    assert ('<div class="muted detail-from"><span class="from-name">Max Mustermann</span> '
+            '<span class="from-addr">dein@finanzguru.de</span> · <a href="/ui/m/privat/mails?q=dein%40finanzguru.de') in html
     assert "<summary>Ablaufdatum setzen</summary>" in html and "<summary>Mehr Details</summary>" in html
     # on a tablet the details lie over the list; the dimmed list behind them closes them
     assert '<a class="detail-backdrop" href="/ui/m/privat/mails?period=all&amp;page=1" tabindex="-1"' in html
