@@ -141,6 +141,12 @@ a.source-login:hover { color: var(--ink); text-decoration: underline; }
 .kpi .d { font-size: 13px; color: var(--muted); }
 a.card.link { color: inherit; text-decoration: none; }
 a.card.link:hover { border-color: var(--line-strong); }
+/* a figure that opens what is behind it: an arrow after its title */
+.kpi.link .k::after { content: " →"; color: var(--faint); }
+.kpi.link:hover .k::after { color: var(--accent); }
+/* a bar of the Overview opens the mails of its category */
+a.bar { color: inherit; text-decoration: none; border-radius: 6px; }
+a.bar:hover > span:first-child { color: var(--accent); text-decoration: underline; }
 .row { display: flex; align-items: baseline; gap: 8px; }
 .row .grow { flex-grow: 1; }
 .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-weight: 500; font-size: 12px; white-space: nowrap;
@@ -567,6 +573,8 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
   .kpi .v { font-size: 22px; }
   .kpi .v small { font-size: 13px; }
   .kpi .k, .kpi .d { font-size: 12px; }
+  /* one line each on a phone: the second detail (e.g. the next run) only where there is room */
+  .kpi .d { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .head { flex-wrap: wrap; align-items: flex-start; }
   .filters .sel { max-width: none; }
   .maillist .date { display: none; }
