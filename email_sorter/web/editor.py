@@ -30,8 +30,8 @@ from ..i18n import _
 from ..removal import MailboxBusy, delete_mailbox
 from ..trial import OTHER_SAMPLE, OWN_SAMPLE, run_trial
 from . import _box, _sidebar, queries, require_login, router, templates
-from .editing import (EditError, config_with_delete_rules, connection_from_form, delete_category, save_category,
-                      save_rules, save_settings, secrets_writable, writable)
+from .editing import (EditError, category_view, config_with_delete_rules, connection_from_form, delete_category,
+                      key_from_label, save_category, save_rules, save_settings, secrets_writable, writable)
 
 log = logging.getLogger(__name__)
 
@@ -153,6 +153,8 @@ async def categories_save(request: Request, box_id: str):
     _all_boxes, box = _box(request, box_id)
     new = form.get("new") == "1"
     key = str(form.get("key") or "").strip().lower()
+    if new and not key:  # without the page's script: the key from the name
+        key = key_from_label(str(form.get("label") or ""))
     try:
         if form.get("delete") == "1":
             delete_category(box, _shared_path(request), key)
@@ -160,8 +162,7 @@ async def categories_save(request: Request, box_id: str):
             return RedirectResponse(f"/ui/m/{box.id}/categories", status_code=303)
         key = save_category(box, _shared_path(request), key, form, create=new)
     except EditError as e:
-        view = {**form, **{k: form.get(k) == "on" for k in ("flag", "flag_on_action", "track_expiry")}}
-        return _category_page(request, box_id, cat=key, new=new, form=view, error=str(e), status=422)
+        return _category_page(request, box_id, cat=key, new=new, form=category_view(form), error=str(e), status=422)
     _flash(request, _("Saved. Applies from the next run."))
     return RedirectResponse(f"/ui/m/{box.id}/categories?cat={quote(key)}", status_code=303)
 
@@ -175,7 +176,9 @@ async def categories_test(request: Request, box_id: str):
     key = str(form.get("key") or "").strip().lower()
     description = str(form.get("description") or "").strip()
     new = form.get("new") == "1"
-    view = {**form, **{k: form.get(k) == "on" for k in ("flag", "flag_on_action", "track_expiry")}}
+    if new and not key:
+        key = key_from_label(str(form.get("label") or ""))
+    view = category_view({**form, "key": key})
     if not key or not description or len(description) > 4000:
         return _category_page(request, box_id, cat=key, new=new, form=view,
                               error=_("The test needs a key and a description."), status=422)
@@ -187,8 +190,7 @@ async def categories_test(request: Request, box_id: str):
     except ConfigError as e:
         raise HTTPException(500, str(e)) from None
     # the whole form goes along, so coming back from the test brings every field back, not just the description
-    entered = {**{k: str(form.get(k) or "") for k in ("label", "folder", "expired_folder")},
-               **{k: form.get(k) == "on" for k in ("flag", "flag_on_action", "track_expiry")}, "key": key}
+    entered = {k: v for k, v in view.items() if k != "description"}
     job: dict[str, Any] = {"id": uuid.uuid4().hex[:12], "box": box.id, "key": key, "new": new,
                            "description": description, "form": entered,
            "status": "running", "done": 0, "total": 0, "rows": [], "cost": 0.0, "error": None,

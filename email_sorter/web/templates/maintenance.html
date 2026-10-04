@@ -128,11 +128,11 @@
         <datalist id="folders">{% for f in folders %}<option value="{{ f }}">{% endfor %}</datalist></div>
       {{ go(danger=true, disabled=not editable) }}
     </form>
-    <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/rename_category">{{ hidden() }}
+    <form class="task" id="rename-category" method="post" action="/ui/m/{{ box.id }}/maintenance/rename_category">{{ hidden() }}
       <div class="about"><h3>{{ _('Rename a category key') }}</h3>
         <p>{{ _('Changes the internal key in the settings, the sender rules and the log. The display name stays; folders do not change.') }}</p></div>
       <div class="fields"><label class="f">{{ _('Category') }}
-          <select name="old" required>{% for key, c in box.cfg.categories.items() %}<option value="{{ key }}">{{ c.label }} ({{ key }})</option>{% endfor %}</select></label>
+          <select name="old" required>{% for key, c in box.cfg.categories.items() %}<option value="{{ key }}" {% if key == rename_category %}selected{% endif %}>{{ c.label }} ({{ key }})</option>{% endfor %}</select></label>
         <label class="f">{{ _('New key') }} <input type="text" name="new" required pattern="[a-z0-9_]{1,40}"></label></div>
       {{ go(danger=true, disabled=not editable) }}
     </form>
