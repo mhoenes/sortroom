@@ -114,7 +114,7 @@ def test_no_notification_when_switched_off_or_sending_fails(configured, smtp, mo
 
 def _record(store, key, received, **kw):
     store.record(SimpleNamespace(key=key, received=received.isoformat(timespec="minutes"), sender="s@shop.example",
-                                 subject=key, decision=Decision(kw.get("category", "werbung"), kw.get("conf", 0.9),
+                                 sender_name=kw.get("name", ""), subject=key, decision=Decision(kw.get("category", "werbung"), kw.get("conf", 0.9),
                                                                 {}, 0.0, 0.0),
                                  folder=None if kw.get("conf", 0.9) < 0.5 else "INBOX/Werbung",
                                  flag=kw.get("flag", False), expires=kw.get("expires"), source="classifier"))
@@ -126,7 +126,7 @@ def test_the_daily_summary(configured, smtp):
     now = datetime.now()
     _record(store, "unsure", now - timedelta(hours=3), conf=0.3)
     _record(store, "<b>x</b>", now - timedelta(hours=4), conf=0.3)            # a subject is text, never markup
-    _record(store, "bill", now - timedelta(hours=2), flag=True)
+    _record(store, "bill", now - timedelta(hours=2), flag=True, name="Shop News")
     _record(store, "offer", now - timedelta(days=3), expires=date.today() + timedelta(days=1))
     store.record_run("run", None, now - timedelta(hours=1), now, RunResult(exit_code=2, live=True, error="login failed"))
     store.close()
@@ -134,11 +134,12 @@ def test_the_daily_summary(configured, smtp):
     assert subject == "Sortroom: 2 zu prüfen, 1 mit Stern"
     assert "Zur Prüfung: 2 – http://nas:8765/ui/m/privat/mails?uncertain=1&period=30d" in body
     assert "  • unsure\n    s@shop.example · " in body and "Vorschlag: " in body
-    assert "bill" in body and "  • offer\n    s@shop.example · läuft morgen ab" in body and "login failed" in body
+    assert "  • bill\n    Shop News <s@shop.example> · " in body  # the display name, the address too
+    assert "  • offer\n    s@shop.example · läuft morgen ab" in body and "login failed" in body
     # the HTML part: the same, and each subject opens its mail in the admin UI
     assert ('<a class="link" href="http://nas:8765/ui/m/privat/mails?uncertain=1&amp;period=30d&amp;key=unsure"'
             in html)
-    assert "läuft morgen ab" in html and "login failed" in html and "Tägliche Zusammenfassung" in html
+    assert "Shop News &lt;s@shop.example&gt; · " in html and "läuft morgen ab" in html and "login failed" in html and "Tägliche Zusammenfassung" in html
     assert "<b>x</b>" not in html and "&lt;b&gt;x&lt;/b&gt;" in html and "key=%3Cb%3Ex%3C%2Fb%3E" in html
 
     sent_dir = configured.parent / "mailboxes"

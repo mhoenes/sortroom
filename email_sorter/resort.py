@@ -17,7 +17,7 @@ from imap_tools import AND, MailBox
 
 from .config import Config, Credentials
 from .classifier import ClassifierAuthError, ClassifierClient, ClassifierOutage
-from .mailtext import build_state, message_key, received_of, unsubscribe_links
+from .mailtext import build_state, message_key, received_of, sender_name, unsubscribe_links
 from datetime import datetime
 
 from .config import INBOX_ACTION
@@ -81,7 +81,7 @@ def resort_outcomes(mb: MailBox, cfg: Config, classifier: ClassifierClient, fold
                     key=key, uid=msg.uid, received=received_of(msg),
                     sender=msg.from_, subject=msg.subject, decision=decision,
                     folder=where, flag=False, note=note, expires=expiry_for(decision, cfg, msg),
-                    unsubscribe=unsubscribe_links(msg),
+                    unsubscribe=unsubscribe_links(msg), sender_name=sender_name(msg),
                 )
             except ClassifierAuthError:
                 raise

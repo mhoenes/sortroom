@@ -3,11 +3,12 @@ from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
+from imap_tools import MailMessage
 
 from email_sorter import imap, reconcile, unsubscribe
 from email_sorter.classifier import Decision
 from email_sorter.config import Credentials
-from email_sorter.mailtext import unsubscribe_links
+from email_sorter.mailtext import sender_name, unsubscribe_links
 from email_sorter.store import Store
 from email_sorter.web import queries
 from support import HeaderFetch, example_config, raw_headers
@@ -36,10 +37,19 @@ def test_unsubscribe_links_from_the_headers():
     assert unsubscribe_links(_msg("<http://list.example/u>", "List-Unsubscribe=One-Click"))[1] is False  # needs https
 
 
-def _record(store, key, sender, category="werbung", received="2026-09-20T10:00+02:00", unsub=None):
+def test_display_name_of_the_sender():
+    def name(sender):
+        return sender_name(MailMessage([(b"1 (UID 1 BODY[HEADER] {0}", raw_headers("<m@x>", sender))]))
+
+    assert name('"Shop  News" <news@shop.example>') == "Shop News"
+    assert name("=?utf-8?q?M=C3=BCller_GmbH?= <info@mueller.example>") == "Müller GmbH"
+    assert name("news@shop.example") == "" and name("news@shop.example <news@shop.example>") == ""
+
+
+def _record(store, key, sender, category="werbung", received="2026-09-20T10:00+02:00", unsub=None, name=""):
     store.record(SimpleNamespace(key=key, received=received, sender=sender, subject=key,
                                  decision=Decision(category, 0.9, {}, 0.0, 0.0), folder=None, flag=False,
-                                 expires=None, unsubscribe=unsub))
+                                 expires=None, unsubscribe=unsub, sender_name=name))
 
 
 def test_the_newest_mail_gives_the_links(tmp_path):
@@ -92,6 +102,7 @@ def test_reconcile_reads_the_links_of_logged_mails(tmp_path, monkeypatch):
     store = Store(tmp_path / "data" / "state.db")
     assert store.sender("news@shop.example")["unsubscribe"] == ["https://shop/u"]
     assert store.sender("other@x") is None  # not in the log
+    assert store.get("<a@x>")["sender_name"] == "News"  # a mail logged before names were kept gets its name
     store.close()
 
 
@@ -99,8 +110,8 @@ def test_senders_list(tmp_path):
     store = Store(tmp_path / "data" / "state.db")
     links = (["https://shop/u"], True)
     for i in range(3):
-        _record(store, f"s{i}", "news@shop.example", unsub=links)
-    _record(store, "s3", "news@shop.example", category="finanzen", received="2026-09-28T10:00+02:00")
+        _record(store, f"s{i}", "news@shop.example", unsub=links, name="Old" if i == 0 else "")
+    _record(store, "s3", "news@shop.example", category="finanzen", received="2026-09-28T10:00+02:00", name="Shop News")
     _record(store, "o1", "info@club.example", unsub=(["mailto:off@club"], False))
     _record(store, "n1", "friend@example.org")                                   # no link: not listed
     _record(store, "old", "gone@list.example", received="2026-01-01T10:00+01:00", unsub=links)  # too old
@@ -116,6 +127,7 @@ def test_senders_list(tmp_path):
         assert (shop["mails"], shop["category"], shop["last"], shop["one_click"]) == (4, "werbung", "2026-09-28T10:00+02:00", 1)
         assert rows["info@club.example"]["since"] == 1 and rows["info@club.example"]["links"] == ["mailto:off@club"]
         assert rows["gone@list.example"]["mails"] == 0 and rows["gone@list.example"]["since"] == 0
+        assert shop["name"] == "Shop News" and rows["info@club.example"]["name"] is None  # of the newest mail with one
         only = queries.senders(db, "finanzen", now=NOW)
         assert [(r["address"], r["mails"]) for r in only] == [("news@shop.example", 1)]
     finally:

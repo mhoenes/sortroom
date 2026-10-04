@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_sender.html" import sender %}
 {% block title %}{{ _('Mails') }} · {{ box.name }}{% endblock %}
 {% block content %}
 <div class="head">
@@ -64,7 +65,7 @@
           <td class="date"><a class="rowlink" href="{{ href }}" tabindex="-1">{{ m.received|dt }}</a></td>
           <td class="clip mail"><a class="rowlink" href="{{ href }}">
             <span class="subj">{{ m.subject or _('(no subject)') }}</span>
-            <span class="meta"><span class="date-inline">{{ m.received|dt }} · </span>{{ m.sender }}{% if m.expires %} · <span class="{{ 'expired' if m.expires < today }}" {% if m.expires < today %}title="{{ _('expired') }}"{% endif %}>{{ _('valid until %(date)s', date=m.expires|date) }}</span>{% endif %}</span></a></td>
+            <span class="meta"><span class="date-inline">{{ m.received|dt }} · </span>{{ sender(m.sender_name, m.sender) }}{% if m.expires %} · <span class="{{ 'expired' if m.expires < today }}" {% if m.expires < today %}title="{{ _('expired') }}"{% endif %}>{{ _('valid until %(date)s', date=m.expires|date) }}</span>{% endif %}</span></a></td>
           {# where the mail is, only when that is not its category's folder: in the inbox, elsewhere, deleted #}
           {% set home = (box.cfg.categories[m.category].folder or '') if m.category in box.cfg.categories else (m.moved_to or '') %}
           <td class="cat"><span class="pill {% if danger(m.category) %}err{% endif %}">{{ label(m.category) }}</span>
@@ -100,7 +101,7 @@
           {% if next_key %}<a class="navbtn" data-nav="next" href="{{ list_href }}&amp;key={{ link_key(next_key) }}" aria-label="{{ _('Next mail') }}" title="{{ _('Next mail') }} (j)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></a>{% endif %}
           <a class="close" href="{{ list_href }}" aria-label="{{ _('Close details') }}" title="{{ _('Close') }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></a>
         </div>
-        <div class="muted detail-from">{{ m.sender }}{% if m.sender %} · <a href="/ui/m/{{ box.id }}/mails?q={{ m.sender|urlencode }}&amp;period=all">{{ _('all from this sender') }}</a>{% endif %}</div>
+        <div class="muted detail-from">{{ sender(m.sender_name, m.sender) }}{% if m.sender %} · <a href="/ui/m/{{ box.id }}/mails?q={{ m.sender|urlencode }}&amp;period=all">{{ _('all from this sender') }}</a>{% endif %}</div>
         <h2>{{ m.subject or _('(no subject)') }}</h2>
         <div class="detail-status">
           {% if m.gone %}<span class="pill">{{ _('No longer in the mailbox') }}</span>

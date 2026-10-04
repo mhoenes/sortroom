@@ -34,7 +34,10 @@
     <tbody>
     {% for r in rows %}
       <tr>
-        <td class="clip addr" title="{{ r.address }}"><a href="/ui/m/{{ box.id }}/mails?period=all&amp;q={{ r.address|urlencode }}">{{ r.address }}</a></td>
+        {# the display name of its newest mail with one, the address below #}
+        <td class="clip addr" title="{{ r.name ~ ' <' ~ r.address ~ '>' if r.name else r.address }}">
+          {%- if r.name %}<span class="from-name">{{ r.name }}</span>{% endif -%}
+          <a href="/ui/m/{{ box.id }}/mails?period=all&amp;q={{ r.address|urlencode }}">{{ r.address }}</a></td>
         <td class="opt">{{ label(r.category) if r.category else '–' }}</td>
         <td class="num">{{ r.mails|num }}</td>
         <td class="opt" style="white-space:nowrap">{{ r.last|dt }}</td>

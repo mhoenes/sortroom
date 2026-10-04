@@ -36,7 +36,7 @@
     {% for r in rows %}
       <tr {% if r.after and r.after != r.before %}class="changed"{% endif %}>
         <td style="white-space:nowrap">{{ r.received|dt }}</td>
-        <td class="clip" style="width:20%">{{ r.sender }}</td>
+        <td class="clip" style="width:20%" title="{{ r.sender }}">{{ r.sender }}</td>
         <td class="clip" style="width:34%">{{ r.subject or _('(no subject)') }}</td>
         <td><span class="pill">{{ label(r.before) }}</span>{% if r.corrected %} <span class="muted" style="font-size:12px">{{ _('by hand') }}</span>{% endif %}</td>
         <td>{% if r.error %}<span class="muted">{{ r.error }}</span>

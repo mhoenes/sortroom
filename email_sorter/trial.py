@@ -50,12 +50,15 @@ def sample(db_path: Path, category: str, own: int = OWN_SAMPLE, other: int = OTH
     try:
         cols = {r[1] for r in db.execute("PRAGMA table_info(processed)")}
         classified_only = "AND source NOT IN ('rule', 'manual')" if "source" in cols else ""
-        sql = ("SELECT message_key, moved_to, received, sender, subject, category FROM processed "
+        # the sender as "Shop News <news@shop.example>" where its display name is known
+        sender = "COALESCE(sender_name || ' <' || sender || '>', sender)" if "sender_name" in cols else "sender"
+        sql = (f"SELECT message_key, moved_to, received, {sender}, subject, category FROM processed "
                f"WHERE category {{}} ? {classified_only} ORDER BY processed_at DESC LIMIT ?")
         fixed = []
         if db.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'corrections'").fetchone():
             fixed = db.execute(
-                "SELECT p.message_key, p.moved_to, p.received, p.sender, p.subject, c.corrected_to "
+                f"SELECT p.message_key, p.moved_to, p.received, {sender.replace('sender', 'p.sender')}, p.subject, "
+                "c.corrected_to "
                 "FROM corrections c JOIN processed p ON p.message_key = c.message_key "
                 "WHERE (c.category = ? OR c.corrected_to = ?) AND p.gone = 0 ORDER BY c.at DESC LIMIT ?",
                 (category, category, corrected)).fetchall()

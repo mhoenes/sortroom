@@ -239,6 +239,9 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 .detail-bar { align-items: center; font-size: 13px; }
 .detail-bar a.navbtn, .detail-bar a.close { margin-top: 0; }
 .detail-from { font-size: 13px; overflow-wrap: anywhere; margin-top: -4px; }
+/* a sender with a display name: the name stands out, the address next to it stays quieter */
+.from-name { color: var(--ink); }
+.from-addr { color: var(--muted); }
 .detail-status { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .star-pill { display: inline-flex; align-items: center; gap: 4px; }
 /* the star of an open mail: a small toggle like a pill; filled when set */
@@ -531,6 +534,8 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
     overflow-wrap: anywhere; }
   .maillist .meta { white-space: nowrap; }
   .maillist .date-inline { display: inline; }
+  /* the address on its own line, not cut off after the name: it is what shows who really sent a mail */
+  .maillist .meta .from-addr { display: block; overflow: hidden; text-overflow: ellipsis; }
   .maillist .pill { max-width: 110px; }
   .task { grid-template-columns: minmax(0, 1fr); }
   .task .fields { flex-wrap: wrap; }
@@ -550,6 +555,9 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
   .tips .tip { flex-direction: column; align-items: stretch; gap: 8px; }
 }
 .senders .addr { max-width: 320px; }
+.senders .addr .from-name, .senders .addr a { display: block; overflow: hidden; text-overflow: ellipsis; }
+.senders .addr .from-name { font-weight: 500; }
+.senders .addr .from-name + a { font-size: 13px; }
 .unsub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .unsub form { display: contents; }
 

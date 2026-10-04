@@ -84,6 +84,13 @@ def unsubscribe_links(msg: MailMessage) -> tuple[list[str], bool] | None:
     return links, one_click
 
 
+def sender_name(msg: MailMessage) -> str:
+    """The display name of the sender ("Shop News" of "Shop News <news@shop.example>"); empty without one,
+    or when it is only the address again."""
+    name = " ".join((msg.from_values.name if msg.from_values else "").split())
+    return "" if name.lower() == (msg.from_ or "").lower() else name
+
+
 def received_of(msg: MailMessage) -> str:
     """The mail's date as the log keeps it."""
     return msg.date.isoformat(timespec="minutes") if msg.date else msg.date_str
