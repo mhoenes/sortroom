@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from ..i18n import _
 from ..store import Store
 from ..unsubscribe import UnsubscribeError, one_click, one_click_link
-from . import _box, _label, _sidebar, queries, require_login, router
+from . import DANGER_CATEGORIES, _box, _label, _sidebar, queries, require_login, router
 from .editor import _flash, _form, _page
 
 log = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ def senders(request: Request, box_id: str, category: str = ""):
     category = category if category in box.cfg.categories else ""
     db = queries.connect(box.workspace)
     try:
-        rows = queries.senders(db, category)
+        rows = queries.senders(db, category, danger=DANGER_CATEGORIES)
     finally:
         if db:
             db.close()
@@ -57,7 +57,10 @@ async def sender_action(request: Request, box_id: str):
             _flash(request, _("Unknown sender."), "err")
         elif action == "unsubscribe":
             url = one_click_link(sender["unsubscribe"]) if sender["one_click"] else None
-            if not url:
+            if address in queries.suspicious_senders(store.db, DANGER_CATEGORIES):  # the page offers no button
+                _flash(request, _("%(sender)s sent suspicious mail – Sortroom does not unsubscribe from it.",
+                                  sender=address), "err")
+            elif not url:
                 _flash(request, _("%(sender)s offers no one-click unsubscribe.", sender=address), "err")
             else:
                 try:

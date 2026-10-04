@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -184,16 +185,30 @@ def run_mails(db: sqlite3.Connection | None, run: str) -> list[dict]:
 SENDER_DAYS = 90
 
 
-def senders(db: sqlite3.Connection | None, category: str = "", now: datetime | None = None) -> list[dict]:
+def suspicious_senders(db: sqlite3.Connection, danger: Iterable[str]) -> dict[str, int]:
+    """Senders with mail in one of the `danger` categories (suspicious, phishing): {address: mails}. Their
+    unsubscribe links are not to be followed – that only tells the sender the address is read."""
+    danger = sorted(danger)
+    if not danger:
+        return {}
+    return {address: n for address, n in db.execute(
+        "SELECT lower(sender), COUNT(*) FROM processed WHERE sender IS NOT NULL "
+        f"AND category IN ({', '.join('?' * len(danger))}) GROUP BY lower(sender)", danger)}
+
+
+def senders(db: sqlite3.Connection | None, category: str = "", now: datetime | None = None,
+            danger: Iterable[str] = ()) -> list[dict]:
     """Senders with an unsubscribe link, most mails in the last SENDER_DAYS days first.
 
     Each: address, mails, last (received), category (the most frequent), links, one_click, unsubscribed,
-    method and `since` (mails received after you unsubscribed). With `category` only mails of that
-    category count; without it, senders you unsubscribed from stay listed when no mail came since.
+    method, `since` (mails received after you unsubscribed) and `suspicious` (its mails in one of the
+    `danger` categories, ever). With `category` only mails of that category count; without it, senders
+    you unsubscribed from stay listed when no mail came since.
     """
     if db is None or not _has_table(db, "senders"):
         return []
     known = {r["address"]: dict(r) for r in db.execute("SELECT * FROM senders WHERE unsubscribe IS NOT NULL")}
+    suspicious = suspicious_senders(db, danger)
     rows = db.execute(
         f"SELECT lower(sender) AS address, sender_name, category, received, {RECEIVED} AS jd FROM processed "
         f"WHERE {RECEIVED} >= julianday(?)" + (" AND category = ?" if category else ""),
@@ -222,7 +237,8 @@ def senders(db: sqlite3.Connection | None, category: str = "", now: datetime | N
         out.append({**info, "links": json.loads(info["unsubscribe"]), "mails": got["mails"] if got else 0,
                     "last": got["last"] if got else None, "jd": got["jd"] if got else 0.0,
                     "name": got["name"] if got else None,
-                    "category": got["categories"].most_common(1)[0][0] if got else None, "since": since})
+                    "category": got["categories"].most_common(1)[0][0] if got else None, "since": since,
+                    "suspicious": suspicious.get(address, 0)})
     out.sort(key=lambda s: (-s["mails"], -s["jd"], s["address"]))
     return out
 

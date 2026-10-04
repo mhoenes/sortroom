@@ -118,16 +118,21 @@ def test_senders_list(tmp_path):
     store.set_unsubscribed("info@club.example", "manual")
     store.db.execute("UPDATE senders SET unsubscribed = '2026-09-10T00:00:00' WHERE address = 'info@club.example'")
     store.set_unsubscribed("gone@list.example", "one-click")  # unsubscribed, nothing since: stays listed
+    _record(store, "x1", "Alert@Bank-Check.example", category="verdaechtig", unsub=links)
+    _record(store, "x2", "info@club.example", category="verdaechtig", received="2026-01-01T10:00+01:00")  # once, long ago
     store.close()
     db = queries.connect(tmp_path)
     try:
-        rows = {r["address"]: r for r in queries.senders(db, now=NOW)}
-        assert list(rows) == ["news@shop.example", "info@club.example", "gone@list.example"]
+        rows = {r["address"]: r for r in queries.senders(db, now=NOW, danger={"verdaechtig", "suspicious"})}
+        assert list(rows) == ["news@shop.example", "alert@bank-check.example", "info@club.example", "gone@list.example"]
         shop = rows["news@shop.example"]
         assert (shop["mails"], shop["category"], shop["last"], shop["one_click"]) == (4, "werbung", "2026-09-28T10:00+02:00", 1)
         assert rows["info@club.example"]["since"] == 1 and rows["info@club.example"]["links"] == ["mailto:off@club"]
         assert rows["gone@list.example"]["mails"] == 0 and rows["gone@list.example"]["since"] == 0
         assert shop["name"] == "Shop News" and rows["info@club.example"]["name"] is None  # of the newest mail with one
+        assert {a: r["suspicious"] for a, r in rows.items()} == {
+            "news@shop.example": 0, "info@club.example": 1, "alert@bank-check.example": 1, "gone@list.example": 0}
+        assert queries.senders(db, now=NOW)[1]["suspicious"] == 0  # no dangerous categories given
         only = queries.senders(db, "finanzen", now=NOW)
         assert [(r["address"], r["mails"]) for r in only] == [("news@shop.example", 1)]
     finally:

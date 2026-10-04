@@ -59,6 +59,10 @@
   "%(num)s Mail",
   "%(num)s Mails"
  ],
+ "%(num)s mail of this sender was sorted as suspicious": [
+  "%(num)s Mail dieses Absenders wurde als verdächtig einsortiert",
+  "%(num)s Mails dieses Absenders wurden als verdächtig einsortiert"
+ ],
  "%(num)s mail since": [
   "%(num)s Mail seitdem",
   "%(num)s Mails seitdem"
@@ -94,6 +98,7 @@
  "%(sender)s marked as unsubscribed.": "%(sender)s als abgemeldet markiert.",
  "%(sender)s no longer marked as unsubscribed.": "%(sender)s nicht mehr als abgemeldet markiert.",
  "%(sender)s offers no one-click unsubscribe.": "%(sender)s bietet keine One-Click-Abmeldung an.",
+ "%(sender)s sent suspicious mail – Sortroom does not unsubscribe from it.": "%(sender)s hat verdächtige Mails geschickt – Sortroom meldet sich dort nicht ab.",
  "%(skipped)s rule(s) skipped, see the log": "%(skipped)s Regel(n) übersprungen, siehe Protokoll",
  "%(task)s of the mailbox %(mailbox)s failed at %(when)s:\n\n%(why)s\n\nYou get another mail when it works again.": "%(task)s des Postfachs %(mailbox)s ist am %(when)s fehlgeschlagen:\n\n%(why)s\n\nWenn es wieder geht, bekommst du noch eine Mail.",
  "%(task)s of the mailbox %(mailbox)s works again (failing since %(since)s).": "%(task)s des Postfachs %(mailbox)s geht wieder (fehlgeschlagen seit %(since)s).",
@@ -212,6 +217,7 @@
  "Details": "Details",
  "Dismiss": "Verwerfen",
  "Display name": "Anzeigename",
+ "Do not unsubscribe – that only tells the sender your address is read.": "Nicht abmelden – das verrät dem Absender nur, dass deine Adresse gelesen wird.",
  "Does not run by itself (Settings → Schedule).": "Läuft nicht von selbst (Einstellungen → Zeitplan).",
  "Dry run": "Probelauf",
  "Dry run finished – nothing was changed.": "Probelauf abgeschlossen – nichts wurde geändert.",
@@ -576,6 +582,7 @@
  "Subject": "Betreff",
  "Suggestion": "Vorschlag",
  "Suggestions": "Vorschläge",
+ "Suspicious": "Verdächtig",
  "Target": "Ziel",
  "Target folder": "Zielordner",
  "Target folder for expired mail": "Zielordner für Abgelaufenes",
