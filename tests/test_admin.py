@@ -140,6 +140,11 @@ def test_maintenance_page_names_its_buttons_after_the_task_and_points_to_the_rul
     # no deletion rule yet: the link goes to the rules page's card, not to a settings anchor that is gone
     assert 'href="/ui/m/privat/rules#deletion-rules"' in html and "#loeschregeln" not in html
     assert 'placeholder="leer = alle"' in html and 'placeholder="Standard: 200"' in html
+    # every task that moves mail asks before it runs for real (six, and the two renames); reconciling changes
+    # nothing on the server and doesn't
+    assert html.count("onclick='return confirm(") == 8
+    reconcile = html.split('action="/ui/m/privat/maintenance/reconcile"')[1].split("</form>")[0]
+    assert "confirm(" not in reconcile
 
 
 def test_maintenance_page_and_run_job(client, monkeypatch):
@@ -185,6 +190,7 @@ def test_dry_run_can_be_started_for_real_from_its_job_page(client, monkeypatch):
     html = client.get(r.headers["location"]).text
     assert "Probelauf abgeschlossen" in html and 'action="/ui/m/privat/maintenance/run"' in html
     assert '<input type="hidden" name="limit" value="20">' in html
+    assert "return confirm(\"Sollen 4 Mails jetzt verschoben werden?\")" in html  # the dry run counted four
     form = dict(re.findall(r'<input type="hidden" name="(\w+)" value="([^"]*)">', html.split('class="card rerun"')[1]))
     r = client.post("/ui/m/privat/maintenance/run", data={**form, "live": "1"}, follow_redirects=False)
     _wait(r.headers["location"].rsplit("/", 1)[1])

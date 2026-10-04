@@ -46,6 +46,7 @@ EXAMPLE = "_example_"  # template choice prefix: the built-in standard categorie
 TASKS = {"run", "backfill", "recheck", "resort", "relocate", "rename_folder", "rename_category", "reconcile", "check",
          "undo", "cleanup"}
 RISKY_TASKS = {"rename_folder", "rename_category"}  # change the server and the settings
+MOVING_TASKS = {"run", "backfill", "resort", "relocate", "cleanup", "recheck"}  # move mail when run for real
 
 
 # ---------------------------------------------------------------- maintenance
@@ -265,9 +266,23 @@ def job_page(request: Request, box_id: str, job_id: str):
         confirm_text = i18n.ngettext(
             "Move %(num)s mail back to where it came from now? Undoing cannot itself be undone.",
             "Move %(num)s mails back to where they came from now? Undoing cannot itself be undone.", n)
+    elif rerun is not None and job["kind"] in MOVING_TASKS:  # the dry run counted what would move: ask with it
+        result = job["result"]
+        n = int((result.get("expired_moved") if job["kind"] == "recheck" else result.get("moved")) or 0)
+        if n:
+            confirm_text = _confirm_moving(job["kind"], n)
     return _page(request, "job.html", {**_sidebar(request, boxes, box, "maintenance"), "box": box, "job": job,
                                        "rerun": rerun, "risky": job["kind"] in RISKY_TASKS,
                                        "editable": writable(box), "confirm_text": confirm_text})
+
+
+def _confirm_moving(kind: str, n: int) -> str:
+    """The question before a task moves `n` mails for real, after a dry run counted them."""
+    if kind == "cleanup":
+        return i18n.ngettext("Move %(num)s mail to the trash now?", "Move %(num)s mails to the trash now?", n)
+    if kind == "recheck":
+        return i18n.ngettext("Move %(num)s expired mail now?", "Move %(num)s expired mails now?", n)
+    return i18n.ngettext("Move %(num)s mail now?", "Move %(num)s mails now?", n)
 
 
 def _live_rerun(job: dict) -> dict | None:
