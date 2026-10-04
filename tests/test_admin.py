@@ -296,6 +296,47 @@ def test_add_mailbox(client, setup):
     assert r.status_code == 303 and r.headers["location"] == "/ui/m/gmail-2/settings"
 
 
+def test_add_mailbox_check_connection_without_creating_and_errors_at_their_fields(client, setup, monkeypatch):
+    seen = []
+
+    def fake_check(cfg, creds, out):
+        seen.append((cfg.imap_host, cfg.imap_port, cfg.source_folder, creds.imap_user, creds.imap_password))
+        for line in ("IMAP  imap.neu.example:993 as me@neu.example", "  OK - INBOX has 12 mails, folder separator is '/'",
+                     "  target folders:", "    finanzen             -> Finanzen  (will be created on first live run)"):
+            out(line)
+        return True
+
+    monkeypatch.setattr(admin, "check_imap", fake_check)
+    html = client.get("/ui/mailboxes/new").text
+    # the button for an IMAP login with password; required fields are marked, the script sets "required" by type
+    assert 'formaction="/ui/mailboxes/new/test"' in html and 'data-require="password"' in html
+    assert html.count('<span class="req"') >= 6 and "Legt nichts an." in html
+    before = sorted(p.name for p in (setup / "mailboxes").iterdir())
+    form = {"csrf": _csrf(html), "kind": "imap", "name": "Neu", "imap_host": "imap.neu.example", "imap_port": "993",
+            "source_folder": "INBOX", "imap_user": "me@neu.example", "imap_password": "pw", "template": "privat"}
+    r = client.post("/ui/mailboxes/new/test", data=form, headers={"Accept": "application/json"})
+    answer = r.json()
+    assert answer["tone"] == "ok" and answer["text"] == "Die Verbindung funktioniert." and answer["field"] is None
+    assert seen == [("imap.neu.example", 993, "INBOX", "me@neu.example", "pw")]
+    assert "OK - INBOX has 12 mails" in answer["details"] and "finanzen" not in answer["details"]  # not the folders
+    assert sorted(p.name for p in (setup / "mailboxes").iterdir()) == before  # nothing created
+    # a value to fix is named: the page marks that field
+    for change, field in (({"imap_host": ""}, "imap_host"), ({"imap_password": ""}, "imap_password"),
+                          ({"imap_user": ""}, "imap_user"), ({"imap_port": "99999"}, "imap_port")):
+        answer = client.post("/ui/mailboxes/new/test", data={**form, **change}, headers={"Accept": "application/json"}).json()
+        assert answer["tone"] == "err" and answer["field"] == field, (change, answer)
+    answer = client.post("/ui/mailboxes/new/test", data={**form, "kind": "gmail"}, headers={"Accept": "application/json"}).json()
+    assert answer["tone"] == "err" and "Anmeldung" in answer["text"] and len(seen) == 1
+    # without the script the page comes back with the answer, the form as it was and no password in it
+    html = client.post("/ui/mailboxes/new/test", data=form).text
+    assert "Die Verbindung funktioniert." in html and 'value="me@neu.example"' in html and "pw" not in html.split("<form")[1]
+    # a failed creation shows its error at the field, not in a banner on top
+    r = client.post("/ui/mailboxes/new", data={**form, "imap_host": ""})
+    assert r.status_code == 422 and 'id="error-imap_host"' in r.text and 'aria-invalid="true"' in r.text
+    assert 'class="banner err"' not in r.text
+    assert sorted(p.name for p in (setup / "mailboxes").iterdir()) == before
+
+
 def test_shared_settings(client, setup):
     html = client.get("/ui/settings").text
     assert "example/model-1" in html and 'name="api_key"' in html

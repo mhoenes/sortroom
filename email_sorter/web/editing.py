@@ -20,7 +20,8 @@ import tomlkit
 from tomlkit.items import AoT, Table
 
 from .. import jobs
-from ..config import (DELETE_MAX_DAYS, IMAP_AUTHS, INBOX_ACTION, SECRETS_FILE, Config, ConfigError, Credentials,
+from ..config import (DELETE_MAX_DAYS, EXAMPLE_MAILBOXES, IMAP_AUTHS, INBOX_ACTION, SECRETS_FILE, Config,
+                      ConfigError, Credentials,
                       Mailbox, _imap_login, _read_toml, config_from_raw, default_label, mailbox_id_for, read_secrets,
                       secrets_writable, stored_credentials, valid_mailbox_id, write_secrets)
 from ..i18n import DEFAULT_LANGUAGE, LANGUAGES, THEMES, _
@@ -652,43 +653,75 @@ def with_kind(form: dict) -> dict:
     return {**form, "kind": kind, **MAILBOX_KINDS[kind]}
 
 
+def _new_server(form: dict) -> tuple[str, int, str]:
+    """Server, port and inbox of the "Add mailbox" form, each error at its field."""
+    host = _text(form, "imap_host", 200)
+    if not host or " " in host:
+        raise EditError(_("IMAP server: please enter a host name."), "imap_host")
+    port = _number(form, "imap_port", _("Port"), 1, 65535, integer=True)
+    return host, port, _folder(form, "source_folder", _("Inbox")) or "INBOX"
+
+
+def connection_for_new(shared_path: Path, form: dict) -> tuple[Config, Credentials]:
+    """"Check connection" on the "Add mailbox" page, before anything is created: the server and login of the
+    form, with a mailbox's settings only as far as the check needs them. Gmail and Outlook can't be tried
+    before the sign-in, which comes right after the mailbox is created."""
+    form = with_kind(form)
+    if form.get("imap_auth") != "password":
+        raise EditError(_("Gmail and Outlook are tried by signing in, which comes right after the mailbox is "
+                          "created."))
+    host, port, source = _new_server(form)
+    user = _secret_text(form, "imap_user", _("User"), strip=True)
+    password = _secret_text(form, "imap_password", _("Password"))
+    if not user:
+        raise EditError(_("Please enter the user (the e-mail address) of the mailbox."), "imap_user")
+    if not password:
+        raise EditError(_("Please enter the password of the mailbox."), "imap_password")
+    raw = tomllib.loads(next(iter(EXAMPLE_MAILBOXES.values())).read_text(encoding="utf-8"))
+    raw = {**raw, "name": "new mailbox", "imap": {"host": host, "port": port, "source_folder": source}}
+    try:
+        cfg = config_from_raw({**raw, "classifier": _read_toml(shared_path)["classifier"]}, "new mailbox")
+    except (ConfigError, KeyError) as e:
+        raise EditError(str(e)) from None
+    return cfg, Credentials(user, password, "")
+
+
 @_one_at_a_time
 def create_mailbox(base_dir: Path, shared_path: Path, template_file: Path, template_name: str, form: dict) -> str:
     """Write mailboxes/<id>/mailbox.toml with the rules, schedule and categories of `template_file`
     (another mailbox or the built-in example). The id comes from the display name. Returns it."""
     name = _text(form, "name", 60)
     if not name:
-        raise EditError(_("The display name must not be empty."))
+        raise EditError(_("The display name must not be empty."), "name")
     root = base_dir / "mailboxes"
     box_id = mailbox_id_for(name, {p.name for p in root.iterdir() if p.is_dir()} if root.is_dir() else ())
     folder = root / box_id
-    host = _text(form, "imap_host", 200)
-    if not host or " " in host:
-        raise EditError(_("IMAP server: please enter a host name."), "imap_host")
+    host, port, source = _new_server(form)
     user = _secret_text(form, "imap_user", _("User"), strip=True)
     imap = tomlkit.table()
     auth, oauth = _sign_in_method(form, imap, None)
     password = _secret_text(form, "imap_password", _("Password")) if auth == "password" else ""
     if auth == "password" and (not user or not password):
-        raise EditError(_("Please enter the user and the password of the mailbox."))
+        raise EditError(_("Please enter the user and the password of the mailbox."),
+                        "imap_user" if not user else "imap_password")
     if not user:
-        raise EditError(_("Please enter the user (the e-mail address) of the mailbox."))
+        raise EditError(_("Please enter the user (the e-mail address) of the mailbox."), "imap_user")
     if auth == "google" and not oauth.get("client_secret"):
-        raise EditError(_("Please enter the client secret of your Google OAuth app."))
+        raise EditError(_("Please enter the client secret of your Google OAuth app."), "oauth_client_secret")
 
-    source = tomlkit.parse(template_file.read_text(encoding="utf-8"))
+    template = tomlkit.parse(template_file.read_text(encoding="utf-8"))
     doc = tomlkit.document()
     doc.add(tomlkit.comment(f'Mailbox "{name}" - created in the web UI, categories from "{template_name}"'))
     doc.add(tomlkit.nl())
     doc["name"] = name
     imap["host"] = host
-    imap["port"] = _number(form, "imap_port", _("Port"), 1, 65535, integer=True)
-    imap["source_folder"] = _folder(form, "source_folder", _("Inbox")) or "INBOX"
+    imap["port"] = port
+    imap["source_folder"] = source
     doc["imap"] = imap
-    doc["rules"] = source["rules"]
-    if "schedule" in source:
-        doc["schedule"] = source["schedule"]
-    doc["categories"] = source["categories"]
+    doc["rules"] = template["rules"]
+    if "schedule" in template:
+        doc["schedule"] = template["schedule"]
+    doc["categories"] = template["categories"]
     if is_gmail(host):
         _top_level_labels(doc)
     text = tomlkit.dumps(doc)
