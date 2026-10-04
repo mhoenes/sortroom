@@ -423,6 +423,53 @@ def test_rules_errors_are_at_their_row_and_each_rule_has_labels_for_a_phone(clie
     assert _box(setup).cfg.sender_rules[0].match == "scanner@brother.com"  # nothing of it was saved
 
 
+def _log_mail(setup, key, sender, days_ago=2):
+    from datetime import datetime, timedelta
+    store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
+    store.record(SimpleNamespace(
+        key=key, received=(datetime.now().astimezone() - timedelta(days=days_ago)).isoformat(timespec="minutes"),
+        sender=sender, sender_name="", subject=key, decision=Decision("werbung", 0.9, {}, 0.0, 0.0),
+        folder="INBOX/Werbung", flag=False, expires=None, source="classifier"))
+    store.close()
+
+
+def test_the_order_of_the_sender_rules_is_the_order_of_their_rows_and_each_rule_says_what_it_catches(client, setup):
+    html = client.get("/ui/m/privat/rules").text
+    # without a log there is no count, but each rule says in words what it matches; each row has its place and buttons
+    assert "Genau diese Adresse" in html and 'name="pos_0" value="0"' in html and 'name="pos___i__"' in html
+    assert 'data-move="-1"' in html and 'data-move="1"' in html and "Mails in den letzten" not in html
+    for n in range(3):
+        _log_mail(setup, f"<n{n}@x>", "news@shop.de")
+    _log_mail(setup, "<o@x>", "x@other.de")
+    _log_mail(setup, "<old@x>", "news@shop.de", days_ago=40)
+    html = client.get("/ui/m/privat/rules").text
+    assert '<span class="count">Keine Mail in den letzten 30 Tagen</span>' in html  # scanner@brother.com: no mail
+    token = _csrf(html)
+    asked = {"csrf": token, "rows": "3", "match_0": "@shop.de", "match_1": "news@shop.de", "match_2": "other"}
+    notes = client.post("/ui/m/privat/rules/check", data={**asked, "pos_0": "0", "pos_1": "1", "pos_2": "2"}).json()
+    assert notes["0"]["count"] == "3 Mails in den letzten 30 Tagen" and notes["2"]["count"] == "1 Mail in den letzten 30 Tagen"
+    assert notes["1"]["warn"].startswith("Wird nie erreicht: die Regel „@shop.de“ weiter oben")
+    # the second row moved up: its notes follow the row (keyed by the row's number), and the wider rule lost its mails
+    notes = client.post("/ui/m/privat/rules/check", data={**asked, "pos_0": "1", "pos_1": "0", "pos_2": "2"}).json()
+    assert notes["1"]["count"] == "3 Mails in den letzten 30 Tagen" and notes["1"]["warn"] == ""
+    assert notes["0"]["count"] == "Keine Mail in den letzten 30 Tagen · 3 weitere Mails fängt schon eine Regel darüber ab"
+
+    # saved in the order of the places, not of the numbers
+    r = client.post("/ui/m/privat/rules", data={"csrf": token, "rows": "2", "match_0": "@shop.de", "action_0": "werbung",
+                                                "pos_0": "1", "match_1": "news@shop.de", "action_1": "inbox",
+                                                "pos_1": "0", "drows": "0"}, follow_redirects=False)
+    assert r.status_code == 303
+    assert [(x.match, x.action) for x in _box(setup).cfg.sender_rules] == [("news@shop.de", "inbox"), ("@shop.de", "werbung")]
+    html = client.get("/ui/m/privat/rules").text
+    assert html.index('value="news@shop.de"') < html.index('value="@shop.de"')
+    # an error is at the row as it is shown again: the first row sent has the bad target, but it is the second one
+    r = client.post("/ui/m/privat/rules", data={"csrf": token, "rows": "2", "match_0": "@x.de", "action_0": "gibtsnicht",
+                                                "pos_0": "1", "match_1": "@y.de", "action_1": "inbox", "pos_1": "0",
+                                                "drows": "0"})
+    assert r.status_code == 422 and 'id="error-action_1"' in r.text and r.text.count('aria-invalid="true"') == 1
+    assert r.text.index('value="@y.de"') < r.text.index('value="@x.de"')
+
+
 def test_read_only_mailbox_page(client, setup):
     path = setup / "mailboxes" / "privat" / "mailbox.toml"
     os.chmod(path, stat.S_IREAD)

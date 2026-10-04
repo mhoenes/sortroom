@@ -451,8 +451,9 @@ table.cats td.rate { font-weight: 600; }
 .quote { margin: 0; white-space: pre-wrap; color: var(--muted); }
 tr.changed td { background: var(--row-changed); }
 table.rules input[type=text], table.rules select { width: 100%; }
-table.rules td { padding: 6px 8px; }
+table.rules td { padding: 6px 8px; vertical-align: top; }
 table.rules td.rule-del { width: 44px; }
+table.rules td.rule-tools { width: 120px; white-space: nowrap; text-align: right; }
 table.deleterules td.days { width: 140px; }
 table.deleterules td.tick { width: 90px; text-align: center; }
 table.deleterules td.tick input { width: 18px; height: 18px; accent-color: var(--accent); }
@@ -461,6 +462,9 @@ table.deleterules td.tick input { width: 18px; height: 18px; accent-color: var(-
 .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px;
   border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
 .icon-btn:hover { background: var(--err-bg); color: var(--err); }
+.icon-btn.rule-move:hover { background: var(--accent-soft); color: var(--accent); }
+.icon-btn:disabled { opacity: .35; cursor: default; }
+.icon-btn:disabled:hover { background: transparent; color: var(--muted); }
 
 pre.log { margin: 0; max-height: 520px; overflow: auto; padding: 14px 16px; border-radius: 8px; background: var(--side);
   color: var(--side-ink); font-family: var(--mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; }
@@ -706,14 +710,22 @@ table.senders tr[id] { scroll-margin-top: 80px; }
 table.rules tr.rule-new > td { background: var(--accent-soft); }
 /* the error of a rule's field, in its cell */
 table.rules .field-error { display: block; margin-top: 4px; }
+/* under a sender rule: what it matches, what it catches in the log, or that a rule above takes it all */
+.rule-note { margin-top: 4px; font-size: 13px; color: var(--muted); }
+.rule-note span:empty { display: none; }
+.rule-note .count:not(:empty)::before { content: " · "; }
+.rule-note .warn { display: block; color: var(--warn); font-weight: 600; }
 @media (max-width: 760px) {
-  /* a rule is a block: the sender (or folder) full width, the rest below it, the remove button beside the first line */
+  /* a rule is a block: the sender (or folder) full width, the rest below it, the remove button beside the first line
+     of a deletion rule, the buttons of a sender rule beside its target */
   table.rules thead { display: none; }
-  table.rules tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 6px 8px; align-items: center;
+  table.rules tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 8px; align-items: center;
     padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
   table.rules tbody tr:last-child { border-bottom: 0; }
   table.rules td { padding: 0; border: 0; grid-column: 1; }
-  table.rules td.rule-del { grid-column: 2; grid-row: 1; width: auto; }
+  table.rules td.rule-del, table.rules td.rule-tools { grid-column: 2; grid-row: 1; width: auto; }
+  table.rules:not(.deleterules) td:first-child { grid-column: 1 / -1; }
+  table.rules td.rule-tools { grid-row: 2; }
   table.rules td.days, table.rules td.tick { width: auto; display: flex; align-items: center; gap: 10px; text-align: left; }
   table.rules td.tick { flex-direction: row-reverse; justify-content: flex-end; }
   table.rules td[data-label]::before { content: attr(data-label); font-size: 13px; color: var(--muted); }

@@ -37,6 +37,15 @@ class SenderRule:
     match: str   # lowercase
     action: str  # INBOX_ACTION or a category key
 
+    @property
+    def kind(self) -> str:
+        """What the rule is: "address" (news@shop.de), "domain" (@shop.de), "subdomains" (shop.de) or "text"."""
+        if self.match.startswith("@"):
+            return "domain"
+        if "@" in self.match:
+            return "address"
+        return "subdomains" if "." in self.match else "text"
+
     def matches(self, address: str) -> bool:
         """`address` in lower case. A rule is
         - an address ("news@shop.de"): exactly this sender;
@@ -45,13 +54,22 @@ class SenderRule:
         - any other text ("newsletter"): part of the address.
         Domains are compared whole, so "@bank.de" doesn't match "x@bank.de.example" or "x@bank.dev"."""
         domain = address.rpartition("@")[2]
-        if self.match.startswith("@"):
+        kind = self.kind
+        if kind == "domain":
             return domain == self.match[1:]
-        if "@" in self.match:
+        if kind == "address":
             return address == self.match
-        if "." in self.match:
+        if kind == "subdomains":
             return domain == self.match or domain.endswith("." + self.match)
         return self.match in address
+
+
+def sender_address(sender: str | None) -> str:
+    """The address in a sender as the log keeps it (plain, or "Name <address>"), in lower case."""
+    address = (sender or "").strip().lower()
+    if "<" in address:
+        address = address[address.rfind("<") + 1:].rstrip(">").strip()
+    return address
 
 
 @dataclass(frozen=True)
@@ -102,9 +120,7 @@ class Config:
 
     def rule_for(self, sender: str) -> SenderRule | None:
         """The first sender rule matching this sender address, if any (case-insensitive)."""
-        address = (sender or "").strip().lower()
-        if "<" in address:  # "Name <address>"
-            address = address[address.rfind("<") + 1:].rstrip(">").strip()
+        address = sender_address(sender)
         if not address:
             return None
         return next((r for r in self.sender_rules if r.matches(address)), None)

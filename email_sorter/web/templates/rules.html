@@ -5,13 +5,19 @@
 {% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text|forceescape }}" data-tip="{{ text|forceescape }}">?</span>{% endmacro %}
 {% macro remove_button() %}{% if editable %}<button class="icon-btn rule-remove" type="button" aria-label="{{ _('Remove rule') }}" title="{{ _('Remove rule') }}">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>{% endif %}{% endmacro %}
-{% macro rule_row(i, match, action, new=false) %}<tr {% if new %}class="rule-new"{% endif %}>
-            <td><input type="text" name="match_{{ i }}" value="{{ match }}" aria-label="{{ _('Sender') }}" placeholder="{{ _('name@company.com or @company.com') }}"{{ invalid('match_' ~ i) }}>{{ field_error('match_' ~ i) }}</td>
+{% macro move_buttons() %}{% if editable %}<button class="icon-btn rule-move" type="button" data-move="-1" aria-label="{{ _('Move rule up') }}" title="{{ _('Move rule up') }}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button><button class="icon-btn rule-move" type="button" data-move="1" aria-label="{{ _('Move rule down') }}" title="{{ _('Move rule down') }}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>{% endif %}{% endmacro %}
+{# what the rule matches and catches (rulecheck.py): the three parts are filled by the page, and again by its script #}
+{% macro rule_note(i, note) %}<div class="rule-note" data-note="{{ i }}"><span class="what">{{ note.what }}</span><span class="count">{{ note.count }}</span><span class="warn">{{ note.warn }}</span></div>{% endmacro %}
+{% macro rule_row(i, match, action, new=false, note={}) %}<tr {% if new %}class="rule-new"{% endif %}>
+            <td><input type="text" name="match_{{ i }}" value="{{ match }}" aria-label="{{ _('Sender') }}" placeholder="{{ _('name@company.com or @company.com') }}"{{ invalid('match_' ~ i) }}>{{ field_error('match_' ~ i) }}{{ rule_note(i, note) }}
+              <input type="hidden" name="pos_{{ i }}" value="{{ i }}" data-pos></td>
             <td><select name="action_{{ i }}" aria-label="{{ _('Target') }}" {% if new %}autofocus{% endif %}{{ invalid('action_' ~ i) }}>
               <option value="inbox" {% if action == 'inbox' %}selected{% endif %}>{{ _('Leave in the inbox') }}</option>
               {% for key, c in cfg.categories.items() %}<option value="{{ key }}" {% if action == key %}selected{% endif %}>{{ c.label }}{% if c.folder %} → {{ c.folder|folder_label }}{% endif %}</option>{% endfor %}
             </select>{{ field_error('action_' ~ i) }}</td>
-            <td class="rule-del">{{ remove_button() }}</td>
+            <td class="rule-tools">{{ move_buttons() }}{{ remove_button() }}</td>
           </tr>{% endmacro %}
 {% macro delete_row(i, r) %}<tr>
             <td><input type="text" name="dfolder_{{ i }}" value="{{ r.folder }}" list="known-folders" aria-label="{{ _('Folder') }}" placeholder="INBOX/…" spellcheck="false"{{ invalid('dfolder_' ~ i) }}>{{ field_error('dfolder_' ~ i) }}</td>
@@ -40,18 +46,18 @@
 <form method="post" action="/ui/m/{{ box.id }}/rules" {% if error or tested or added %}data-dirty{% endif %} data-guard="{{ _('Rules') }}">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <fieldset {% if not editable %}disabled{% endif %} class="stack">
-    <section class="card stack rules-box" id="sender-rules" data-row-template="rule-row">
+    <section class="card stack rules-box" id="sender-rules" data-row-template="rule-row" data-check="/ui/m/{{ box.id }}/rules/check">
       <input type="hidden" name="rows" value="{{ rules|length }}" data-rows>
       <div>
         <h2>{{ _('Sender rules') }} {{ help(_('Mails from these senders are not decided by the model: they stay in the inbox or go straight into a category. A rule is an address (news@shop.com: exactly this sender), a domain with @ (@shop.com: every sender of this domain) or without (shop.com: also its subdomains such as mail.shop.com). Any other text matches when it is part of the address. The first matching rule wins.')) }}</h2>
-        <p class="muted hint">{{ _('Where mail from a sender goes, before the model is asked. The first matching rule wins.') }}</p>
+        <p class="muted hint">{{ _('Where mail from a sender goes, before the model is asked. The first matching rule wins: the order is the order of the rows.') }}</p>
       </div>
       <p class="muted no-rules">{{ _('No rules yet – the model decides every mail.') }}</p>
       <div class="scroll-x"><table class="rules">
-        <thead><tr><th scope="col">{{ _('Sender') }}</th><th scope="col">{{ _('Target') }}</th><th scope="col"><span class="sr-only">{{ _('Remove') }}</span></th></tr></thead>
+        <thead><tr><th scope="col">{{ _('Sender') }}</th><th scope="col">{{ _('Target') }}</th><th scope="col"><span class="sr-only">{{ _('Move or remove') }}</span></th></tr></thead>
         <tbody>
         {% for match, action in rules %}
-          {{ rule_row(loop.index0, match, action, loop.index0 == new_row) }}
+          {{ rule_row(loop.index0, match, action, loop.index0 == new_row, notes[loop.index0]) }}
         {% endfor %}
         </tbody>
       </table></div>
@@ -90,6 +96,41 @@
 </form>
 {{ test_script() }}
 <script>
+  // The sender rules are checked in the order of their rows: each row's place goes into pos_<n> (the server
+  // sorts by it), and the buttons move a row. Under each rule the server says what it matches and catches (rulecheck.py);
+  // it is asked again, after a pause, when a rule is typed, moved, added or removed.
+  const senders = document.getElementById('sender-rules');
+  let pause = 0, asked = 0;
+  const settle = () => {
+    const rows = [...senders.querySelectorAll('tbody tr')];
+    rows.forEach((tr, k) => {
+      tr.querySelector('[data-pos]').value = k;
+      const up = tr.querySelector('[data-move="-1"]'), down = tr.querySelector('[data-move="1"]');
+      if (up) up.disabled = k === 0;
+      if (down) down.disabled = k === rows.length - 1;
+    });
+  };
+  const ask = () => {
+    clearTimeout(pause);
+    pause = setTimeout(async () => {
+      const mine = ++asked;
+      try {
+        const r = await fetch(senders.dataset.check, {
+          method: 'POST', body: new FormData(senders.closest('form')), headers: {Accept: 'application/json'}});
+        if (!r.ok) return;
+        const notes = await r.json();
+        if (mine !== asked) return;  // a newer answer is on its way
+        senders.querySelectorAll('[data-note]').forEach(box => {
+          const note = notes[box.dataset.note] || {};
+          for (const part of ['what', 'count', 'warn']) box.querySelector('.' + part).textContent = note[part] || '';
+        });
+      } catch { /* the server is gone: the notes stay as they were */ }
+    }, 400);
+  };
+  senders.addEventListener('input', e => { if (e.target.name && e.target.name.startsWith('match_')) ask(); });
+  senders.closest('form').addEventListener('submit', settle);  // the order on screen is the one that counts
+  settle();
+
   // add and remove rule rows in place, in each list; nothing is saved until "Save rules"
   document.querySelectorAll('[data-row-template]').forEach(list => {
     const tpl = document.getElementById(list.dataset.rowTemplate);
@@ -97,14 +138,26 @@
     const body = list.querySelector('tbody'), rows = list.querySelector('[data-rows]');
     const unsaved = () => list.dispatchEvent(new Event('change', {bubbles: true}));  // see unsaved.js
     list.addEventListener('click', e => {
-      if (e.target.closest('.rule-remove')) {
+      const move = e.target.closest('.rule-move');
+      if (move) {
+        const tr = move.closest('tr'), up = move.dataset.move === '-1';
+        const other = up ? tr.previousElementSibling : tr.nextElementSibling;
+        if (!other) return;
+        if (up) other.before(tr); else other.after(tr);
+        settle();
+        (move.disabled ? tr.querySelector('.rule-move:not(:disabled)') : move).focus();  // the row keeps the focus
+        unsaved();
+        ask();
+      } else if (e.target.closest('.rule-remove')) {
         e.target.closest('tr').remove();
+        if (list === senders) { settle(); ask(); }
         unsaved();
       } else if (e.target.closest('.rule-add')) {
         const i = Number(rows.value);
         rows.value = i + 1;
         body.insertAdjacentHTML('beforeend', tpl.innerHTML.replaceAll('__i__', i));
         body.lastElementChild.querySelector('input').focus();
+        if (list === senders) { settle(); ask(); }
         unsaved();
       }
     });

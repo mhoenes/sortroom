@@ -61,6 +61,10 @@
   "%(num)s Mail",
   "%(num)s Mails"
  ],
+ "%(num)s mail in the last %(days)s days": [
+  "%(num)s Mail in den letzten %(days)s Tagen",
+  "%(num)s Mails in den letzten %(days)s Tagen"
+ ],
  "%(num)s mail moved": [
   "%(num)s Mail verschoben",
   "%(num)s Mails verschoben"
@@ -91,6 +95,10 @@
  ],
  "%(num)s mails from %(sender)s were put into %(target)s by hand": "%(num)s Mails von %(sender)s kamen von Hand nach „%(target)s“",
  "%(num)s mails from %(senders)s senders of %(domain)s were put into %(target)s by hand": "%(num)s Mails von %(senders)s Absendern von %(domain)s kamen von Hand nach „%(target)s“",
+ "%(num)s more is taken by a rule above": [
+  "%(num)s weitere Mail fängt schon eine Regel darüber ab",
+  "%(num)s weitere Mails fängt schon eine Regel darüber ab"
+ ],
  "%(num)s of the chosen mails is older than %(days)s days: the next run does not pick it up again – a backfill under Maintenance does.": [
   "%(num)s der Mails ist älter als %(days)s Tage: Der nächste Lauf holt sie nicht wieder ab – ein Backfill unter Wartung schon.",
   "%(num)s der Mails sind älter als %(days)s Tage: Der nächste Lauf holt sie nicht wieder ab – ein Backfill unter Wartung schon."
@@ -267,9 +275,13 @@
  "Enter its client ID and client secret below.": "Client-ID und Client-Secret der App unten eintragen.",
  "Errors": "Fehler",
  "Errors · %(when)s": "Fehler · %(when)s",
+ "Every address that contains \"%(text)s\"": "Jede Adresse, die „%(text)s“ enthält",
  "Every mail of the last 30 days was sorted with enough confidence or by you.": "Alle Mails der letzten 30 Tage sind sicher einsortiert oder von dir.",
  "Every mail of this run changed since, so there is nothing left to undo.": "Alle Mails dieses Laufs haben sich inzwischen geändert – es gibt nichts mehr rückgängig zu machen.",
  "Every mailbox has its own categories, rules and log": "Jedes Postfach hat eigene Kategorien, Regeln und ein eigenes Protokoll",
+ "Every sender of %(domain)s": "Jeder Absender von %(domain)s",
+ "Every sender of %(domain)s and its subdomains such as mail.%(domain)s": "Jeder Absender von %(domain)s und seiner Subdomains, etwa mail.%(domain)s",
+ "Exactly this address": "Genau diese Adresse",
  "Expired": "Abgelaufen",
  "Expired offers": "Abgelaufene Angebote",
  "Expiry check": "Ablauf-Prüfung",
@@ -401,6 +413,9 @@
  "Move a category into its folder": "Kategorie in ihren Ordner nachziehen",
  "Move down": "Nach unten",
  "Move down – the order of the lists": "Nach unten – die Reihenfolge der Listen",
+ "Move or remove": "Verschieben oder entfernen",
+ "Move rule down": "Regel nach unten",
+ "Move rule up": "Regel nach oben",
  "Move this mail right away": "Diese Mail gleich mit verschieben",
  "Move up": "Nach oben",
  "Move up – the order of the lists": "Nach oben – die Reihenfolge der Listen",
@@ -417,6 +432,7 @@
  "Name or address": "Name oder Adresse",
  "Needs action": "Handlungsbedarf",
  "Never": "Nie",
+ "Never reached: the rule \"%(match)s\" above already takes every mail this rule would.": "Wird nie erreicht: die Regel „%(match)s“ weiter oben fängt schon jede Mail ab, die diese Regel träfe.",
  "New category": "Neue Kategorie",
  "New key": "Neuer Schlüssel",
  "New key: lowercase letters, digits and _ only (max. 40).": "Neuer Schlüssel: nur Kleinbuchstaben, Ziffern und _ (max. 40).",
@@ -436,6 +452,7 @@
  "No login saved yet – this mailbox can't be sorted.": "Noch kein Login gespeichert – dieses Postfach kann nicht sortiert werden.",
  "No longer in the log": "Nicht mehr im Log",
  "No longer in the mailbox": "Nicht mehr im Postfach",
+ "No mail in the last %(days)s days": "Keine Mail in den letzten %(days)s Tagen",
  "No mailbox yet": "Noch kein Postfach",
  "No mails for these filters.": "Keine Mails für diese Filter.",
  "No processed mails from the last 7 days.": "Keine verarbeiteten Mails aus den letzten 7 Tagen.",
@@ -803,7 +820,7 @@
  "What the sorter processed in this mailbox": "Was der Sorter in diesem Postfach verarbeitet hat",
  "When a scheduled run, reconcile or the deletion rules of a mailbox fail – e.g. the login or the model key – one mail, and another one when it works again. Single mails that fail are retried and don't count.": "Wenn ein geplanter Lauf, der Abgleich oder die Lösch-Regeln eines Postfachs fehlschlagen – z. B. die Anmeldung oder der Modell-Schlüssel –, eine Mail, und noch eine, wenn es wieder geht. Einzelne Mails, die scheitern, werden erneut versucht und zählen nicht.",
  "When action is needed": "Bei Handlungsbedarf",
- "Where mail from a sender goes, before the model is asked. The first matching rule wins.": "Wohin Mails eines Absenders gehen, bevor das Modell gefragt wird. Die erste passende Regel gewinnt.",
+ "Where mail from a sender goes, before the model is asked. The first matching rule wins: the order is the order of the rows.": "Wohin Mails eines Absenders gehen, bevor das Modell gefragt wird. Die erste passende Regel gewinnt: die Reihenfolge der Zeilen ist die Reihenfolge der Prüfung.",
  "Where the sender offers one-click unsubscribe, Sortroom sends the request itself. Otherwise \"Unsubscribe\" opens its unsubscribe page or mail; then mark it as unsubscribed.": "Bietet der Absender die One-Click-Abmeldung an, schickt Sortroom sie selbst. Sonst öffnet „Abmelden“ seine Abmelde-Seite oder -Mail; danach markierst du ihn als abgemeldet.",
  "With Gmail (imap.gmail.com) the target folders are created as top-level labels, i.e. \"Promotions\" instead of \"INBOX/Promotions\". Outlook still shows them under the inbox.": "Bei Gmail (imap.gmail.com) werden die Zielordner als Labels auf oberster Ebene angelegt, also „Werbung“ statt „INBOX/Werbung“. Outlook zeigt sie trotzdem unter dem Posteingang an.",
  "With draft": "Mit Entwurf",
