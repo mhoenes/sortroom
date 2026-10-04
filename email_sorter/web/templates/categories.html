@@ -10,7 +10,6 @@
     <h1>{{ _('Categories') }}</h1>
     <div class="sub">{{ _('The model files every mail by these descriptions alone') }} · {{ ngettext('%(num)s category', '%(num)s categories', box.cfg.categories|length) }}</div>
   </div>
-  {% if editable %}<a class="btn" href="/ui/m/{{ box.id }}/categories?new=1#edit">{{ _('New category') }}</a>{% endif %}
 </div>
 
 {% if not editable %}
@@ -27,9 +26,13 @@
       {% for key, c in box.cfg.categories.items() %}
         <tr class="link {% if key == cat and not new %}sel{% endif %}">
           <td class="name"><a class="rowlink" href="/ui/m/{{ box.id }}/categories?cat={{ key }}#edit"><b>{{ c.label }}</b>
-            {% if c.flag %} <span class="pill info">{{ _('Star') }}</span>{% endif %}{% if c.track_expiry %} <span class="pill">{{ _('Expiry') }}</span>{% endif %}</a></td>
-          <td class="clip folder"><a class="rowlink" href="/ui/m/{{ box.id }}/categories?cat={{ key }}#edit">{{ c.folder|folder_label if c.folder else _('stays in the inbox') }}</a></td>
-          <td class="num">{{ (counts.get(key) or 0)|num }}</td>
+            {%- if c.flag %}<span class="marks" title="{{ _('Star: %(when)s', when=_('Always')) }}"><svg class="cat-mark" viewBox="0 0 24 24" aria-hidden="true"><path fill="var(--star)" stroke="var(--star)" stroke-width="1.5" stroke-linejoin="round" d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z"/></svg><span class="sr-only">{{ _('Star: %(when)s', when=_('Always')) }}</span></span>
+            {%- elif c.flag_on_action %}<span class="marks faint" title="{{ _('Star: %(when)s', when=_('When action is needed')) }}"><svg class="cat-mark" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z"/></svg><span class="sr-only">{{ _('Star: %(when)s', when=_('When action is needed')) }}</span></span>{% endif %}
+            {%- if c.track_expiry %}<span class="marks" title="{{ _('Track expiry date') }}"><svg class="cat-mark" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></g></svg><span class="sr-only">{{ _('Track expiry date') }}</span></span>{% endif %}</a></td>
+          {# the folder where it says more than the name: another one, or none (the inbox) faint #}
+          {% set where = c.folder|folder_label if c.folder else '' %}
+          <td class="clip folder {% if not where or where == c.label %}muted{% endif %}"><a class="rowlink" href="/ui/m/{{ box.id }}/categories?cat={{ key }}#edit">{{ where or _('stays in the inbox') }}</a></td>
+          <td class="num"><a href="/ui/m/{{ box.id }}/mails?category={{ key|urlencode }}&amp;period=30d" title="{{ _('The mails of the last 30 days') }}">{{ (counts.get(key) or 0)|num }}</a></td>
           {% set r = rates.get(key) %}
           {# none corrected is the normal case: shown faintly, so the categories with corrections stand out #}
           <td class="num {% if not r or not r[1] %}muted{% else %}rate{% endif %}" {% if r and r[0] %}title="{{ _('%(corrected)s of %(filed)s corrected', corrected=r[1]|num, filed=r[0]|num) }}"{% endif %}>{{ percent(r[1], r[0]) if r else '–' }}</td>
@@ -37,12 +40,24 @@
       {% endfor %}
       </tbody>
     </table></div>
+    {% if editable %}<div class="cats-foot"><a class="btn" href="/ui/m/{{ box.id }}/categories?new=1#edit">{{ _('+ New category') }}</a></div>{% endif %}
   </section>
 
   <section class="card editor stack" data-editor aria-label="{{ _('New category') if new else _('Edit category') }}">
-    <h2>{{ _('New category') if new else form.label or form.key }}</h2>
+    <div class="row editor-head"><h2 class="grow">{{ _('New category') if new else form.label or form.key }}</h2>
+      {# the order of the categories in all lists: one place up or down, saved at once #}
+      {% if not new and editable %}{% set keys = box.cfg.categories|list %}
+      <form method="post" action="/ui/m/{{ box.id }}/categories/move" class="move">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="key" value="{{ form.key }}">
+        <button class="move-btn" type="submit" name="step" value="-1" {% if keys[0] == cat %}disabled{% endif %}
+          aria-label="{{ _('Move up') }}" title="{{ _('Move up – the order of the lists') }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+        <button class="move-btn" type="submit" name="step" value="1" {% if keys[-1] == cat %}disabled{% endif %}
+          aria-label="{{ _('Move down') }}" title="{{ _('Move down – the order of the lists') }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg></button>
+      </form>{% endif %}
+    </div>
     {% set r = rates.get(cat) if not new else none %}
-    {% if r and r[0] %}<p class="muted" style="margin:0">{{ ngettext('In the last 30 days the model filed %(num)s mail here; %(corrected)s of them (%(pct)s) were put elsewhere by hand.', 'In the last 30 days the model filed %(num)s mails here; %(corrected)s of them (%(pct)s) were put elsewhere by hand.', r[0], corrected=r[1]|num, pct=percent(r[1], r[0])) }}</p>{% endif %}
+    {% if r and r[0] and not r[1] %}<p class="muted" style="margin:0">{{ ngettext('In the last 30 days the model filed %(num)s mail here; none was put elsewhere by hand.', 'In the last 30 days the model filed %(num)s mails here; none was put elsewhere by hand.', r[0]) }}</p>
+    {% elif r and r[0] %}<p class="muted" style="margin:0">{{ ngettext('In the last 30 days the model filed %(num)s mail here; %(corrected)s of them (%(pct)s) were put elsewhere by hand.', 'In the last 30 days the model filed %(num)s mails here; %(corrected)s of them (%(pct)s) were put elsewhere by hand.', r[0], corrected=r[1]|num, pct=percent(r[1], r[0])) }}</p>{% endif %}
     {% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
     <form method="post" action="/ui/m/{{ box.id }}/categories" class="stack" {% if dirty %}data-dirty{% endif %} data-guard="{{ _('the category %(name)s', name=form.label or form.key) if not new else _('the new category') }}">
       <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -109,7 +124,7 @@
           <span class="hint unsaved" hidden>{{ _('Not saved yet') }}</span>
           {% if not new %}
             {% if form.key in rules_using %}
-              <span class="muted" style="margin-left:auto;font-size:13px">{{ _('Used by sender rules – cannot be deleted') }}</span>
+              <span class="muted" style="margin-left:auto;font-size:13px">{{ _('Used by <a href="%(url)s">sender rules</a> – cannot be deleted', url='/ui/m/' ~ box.id ~ '/rules#sender-rules') }}</span>
             {% else %}
               <button class="btn danger" type="submit" name="delete" value="1" style="margin-left:auto"
                 onclick='return confirm({{ _("Delete this category? Mails already sorted stay in their folders.")|tojson }})'>{{ _('Delete') }}</button>
@@ -123,6 +138,11 @@
 </div>
 
 <script>
+  // a click anywhere in a row opens its category (the count goes to its mails)
+  document.querySelector('table.cats').addEventListener('click', e => {
+    if (e.target.closest('a, button')) return;
+    e.target.closest('tr.link')?.querySelector('a.rowlink').click();
+  });
   // on a tablet or phone the editor is below the list: coming from a click in it, go on to the editor
   if (location.hash === '#edit' && matchMedia('(max-width: 1100px)').matches)
     document.querySelector('[data-editor]').scrollIntoView();
