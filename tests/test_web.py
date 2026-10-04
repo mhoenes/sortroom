@@ -197,6 +197,9 @@ def test_mails_page_filters_and_detail(client):
     html = c.get("/ui/m/privat/mails?period=all&key=%3Cr3%40x%3E").text  # uncertain: why, and no date yet
     assert "Modell: Finanzen · Sicherheit 0,45" in html and "(mindestens 0,70 nötig)" in html
     assert "<summary>Ablaufdatum setzen</summary>" in html and "<summary>Mehr Details</summary>" in html
+    # on a tablet the details lie over the list; the dimmed list behind them closes them
+    assert '<a class="detail-backdrop" href="/ui/m/privat/mails?period=all&amp;page=1" tabindex="-1"' in html
+    assert 'class="detail-backdrop"' not in c.get("/ui/m/privat/mails?period=all").text  # nothing open: none
 
 
 def test_search_treats_wildcards_literally(client):
