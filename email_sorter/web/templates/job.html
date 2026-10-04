@@ -1,30 +1,43 @@
 {% extends "base.html" %}
 {% block title %}{{ job.label }}{% endblock %}
-{% block head %}{% if job.status == 'running' %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
+{# without the script the page reloads itself; with it only the state and the log are fetched (job.js) #}
+{% block head %}{% if job.status == 'running' %}<noscript><meta http-equiv="refresh" content="3"></noscript>{% endif %}{% endblock %}
+{# what went wrong in plain words, what to do about it where we know, and the raw message under it #}
+{% macro problem_banner(text, problem) %}<div class="banner err problem" role="alert">
+  <div class="grow"><b>{% if problem == 'imap' %}{{ _("The mailbox can't be reached, or its login failed.") }}{% elif problem == 'model' %}{{ _("The AI service doesn't answer, or rejects the key.") }}{% else %}{{ _('The job failed.') }}{% endif %}</b>
+    <span class="raw mono">{{ text|run_error }}</span></div>
+  {% if problem == 'imap' %}<a class="btn small" href="/ui/m/{{ box.id }}/settings#connection">{{ _('Check the connection') }}</a>
+  {% elif problem == 'model' %}<a class="btn small" href="/ui/settings#model">{{ _('Check the AI service') }}</a>{% endif %}
+</div>{% endmacro %}
 {% block content %}
 {% set j = job %}
 <div class="head">
   <div class="title">
     <span class="eyebrow">{{ box.name }}</span>
     <h1>{{ job.label }}</h1>
-    <div class="sub">{{ _('Started %(when)s', when=job.started|dt(true)) }}{% if job.finished %} · {{ _('finished %(when)s', when=job.finished|dt(true)) }}{% endif %} · {% include "_job_status.html" %}</div>
+    <div class="sub">{% if job.finished %}{{ _('Started %(when)s, took %(duration)s', when=job.started|job_when, duration=elapsed|duration) }}{% else %}{{ _('Started %(when)s', when=job.started|job_when) }}{% endif %} {% include "_job_status.html" %}</div>
   </div>
-  <a class="btn" href="/ui/m/{{ box.id }}/maintenance">{{ _('To maintenance') }}</a>
+  <div class="acts">
+    {% if undo_url %}<a class="btn" href="{{ undo_url }}">{{ _("To the run's mails") }}</a>{% endif %}
+    <a class="btn" href="/ui/m/{{ box.id }}/maintenance">{{ _('To maintenance') }}</a>
+  </div>
 </div>
 
-{% if job.status == 'running' %}<div class="banner ok" role="status">{{ _('Running … the page refreshes by itself.') }}</div>{% endif %}
-{% if job.status == 'rejected' %}<div class="banner" role="status">{{ _('Not started: something was already running for this mailbox.') }}</div>{% endif %}
-{% if job.error %}<div class="banner err" role="alert">{{ job.error }}</div>{% endif %}
+{% if job.status == 'running' %}<div class="banner ok" role="status"><span>{{ _('Running … this page updates by itself.') }}</span>
+  {# the last log line as progress; not announced at every change #}
+  <span class="mono last-line" id="job-last" aria-live="off">{{ lines[-1].text if lines else '' }}</span></div>{% endif %}
+{% if job.status == 'rejected' %}<div class="banner" role="status">{{ _('Not started: something was already running for this mailbox.') }}</div>
+{% elif job.error %}{{ problem_banner(job.error, problem) }}{% endif %}
 
 {% set r = job.result %}
 {% if r and r.classified is defined %}
 <div class="grid cols-4">
   <div class="card kpi"><span class="k">{{ _('Processed') }}</span><span class="v">{{ r.classified|num }}</span><span class="d">{{ _('for real') if r.live else _('Dry run – nothing changed') }}</span></div>
   <div class="card kpi"><span class="k">{{ _('Moved') if r.live else _('Would move') }}</span><span class="v">{{ r.moved|num }}</span><span class="d">{{ _('%(flagged)s starred · %(expired)s expired', flagged=r.flagged|num, expired=r.expired_moved|num) }}</span></div>
-  <div class="card kpi"><span class="k">{{ _('Errors') }}</span><span class="v">{{ r.failed|num }}</span><span class="d">{{ _('are retried in the next run') }}</span></div>
+  <div class="card kpi"><span class="k">{{ _('Errors') }}</span><span class="v">{{ r.failed|num }}</span><span class="d">{{ _('are retried in the next run') if r.live else _('could not be classified') }}</span></div>
   <div class="card kpi"><span class="k">{{ _('Cost') }}</span><span class="v">{{ r.cost_usd|usd(4) }}</span><span class="d">{% if r.report %}{{ _('Report:') }} <span class="mono">{{ r.report.replace('\\', '/').split('/')[-1] }}</span>{% endif %}</span></div>
 </div>
-{% if r.error %}<div class="banner err" role="alert">{{ r.error }}</div>{% endif %}
+{% if r.error %}{{ problem_banner(r.error, result_problem) }}{% endif %}
 {% elif r %}
 <div class="banner {{ 'ok' if r.ok else 'err' }}" role="status">{{ r.summary if r.summary else (_('All good.') if r.ok else _('There were errors – see the log.')) }}</div>
 {% endif %}
@@ -43,7 +56,17 @@
 {% endif %}
 
 <section class="card stack">
-  <h2>{{ _('Log') }}</h2>
-  {% if job.log %}<pre class="log">{{ job.log|join('\n') }}</pre>{% else %}<div class="empty">{{ _('No entries yet.') }}</div>{% endif %}
+  <div class="log-head"><h2>{{ _('Log') }}</h2>
+    {# only with the script: it does the filtering and the copying #}
+    <div class="log-tools" hidden>
+      <label class="check small"><input type="checkbox" id="log-problems"> {{ _('Problems only') }}</label>
+      <button class="btn small" type="button" id="log-copy">{{ _('Copy log') }}</button>
+    </div></div>
+  {% if truncated %}<p class="muted hint">{{ _('The log is cut after %(num)s lines; the rest is in logs/sortroom.log.', num=log_limit) }}</p>{% endif %}
+  <div class="empty" id="log-empty" {% if lines %}hidden{% endif %}>{{ _('No entries yet.') }}</div>
+  <pre class="log" id="job-log" tabindex="0" {% if not lines %}hidden{% endif %}>{% for l in lines -%}<span class="l {{ l.level }}">{{ l.text }}</span>{%- endfor %}</pre>
 </section>
+<script src="{{ asset('job.js') }}" data-running="{{ '1' if job.status == 'running' else '0' }}"
+  data-url="/ui/m/{{ box.id }}/jobs/{{ job.id }}/state" data-total="{{ lines|length }}"
+  data-copied="{{ _('Copied') }}" data-lost="{{ _('The connection is lost – please reload the page.') }}"></script>
 {% endblock %}

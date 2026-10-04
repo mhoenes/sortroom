@@ -240,6 +240,30 @@ templates.env.globals["run_problem"] = run_problem
 templates.env.filters["run_error"] = run_error
 
 
+def job_when(value: str | None) -> str:
+    """When a job started or ended: the time only if it was today."""
+    try:
+        stamp = datetime.fromisoformat(value or "")
+    except ValueError:
+        return value or "–"
+    return stamp.strftime("%H:%M") if stamp.date() == datetime.now().date() else i18n.dt(value)
+
+
+def duration(seconds: int | None) -> str:
+    """12 s, 3 min 5 s, 1 h 4 min."""
+    s = int(seconds or 0)
+    if s < 1:
+        return _("under 1 s")
+    h, rest = divmod(s, 3600)
+    m, sec = divmod(rest, 60)
+    parts = (f"{h} h" if h else "", f"{m} min" if m else "", f"{sec} s" if sec and not h else "")
+    return " ".join(part for part in parts if part)
+
+
+templates.env.filters["job_when"] = job_when
+templates.env.filters["duration"] = duration
+
+
 # categories shown in red: suspicious mail (key of the German and the English standard categories)
 DANGER_CATEGORIES = {"verdaechtig", "suspicious"}
 

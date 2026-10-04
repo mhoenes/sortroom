@@ -233,10 +233,12 @@ def get_job(job_id: str) -> dict:
 from urllib.parse import quote  # noqa: E402
 
 from fastapi import Request  # noqa: E402
+from fastapi.exception_handlers import http_exception_handler  # noqa: E402
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html  # noqa: E402
 from fastapi.responses import FileResponse, RedirectResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from starlette.middleware.sessions import SessionMiddleware  # noqa: E402
+from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: E402
 
 from . import web  # noqa: E402
 
@@ -278,6 +280,19 @@ def _redoc():
 @app.get("/favicon.ico", include_in_schema=False)
 def _favicon():
     return FileResponse(web.HERE / "static" / "icon-32.png", media_type="image/png")
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _http_error(request: Request, exc: StarletteHTTPException):
+    """A browser that opens a UI page and gets an error sees a page of the UI; everything else (the API, the
+    page's own scripts) gets the JSON it always did."""
+    wants_page = "text/html" in request.headers.get("accept", "")
+    if request.method == "GET" and request.url.path.startswith("/ui") and wants_page:
+        try:
+            return web.editor.error_page(request, exc.status_code, str(exc.detail))
+        except Exception:  # the page itself needs the settings: without them the plain answer
+            log.exception("could not render the error page")
+    return await http_exception_handler(request, exc)
 
 
 @app.exception_handler(web.LoginRequired)

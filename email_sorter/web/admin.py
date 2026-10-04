@@ -32,7 +32,7 @@ from ..cleanup import run_cleanup
 from ..mail import MailError, MailSettings, mail_settings, send, smtp_password
 from ..undo import changed_since, run_undo
 from ..store import Store
-from . import _box, _boxes, _sidebar, queries, require_login, router
+from . import _box, _boxes, _sidebar, queries, require_login, router, run_problem
 from .editing import (EditError, add_sender_rule, can_add_mailbox, classifier_from_form, connection_for_new,
                       create_mailbox,
                       mail_from_form, rename_category_key, rename_folder_refs, reserved_key_text, save_shared,
@@ -271,9 +271,49 @@ def job_page(request: Request, box_id: str, job_id: str):
         n = int((result.get("expired_moved") if job["kind"] == "recheck" else result.get("moved")) or 0)
         if n:
             confirm_text = _confirm_moving(job["kind"], n)
-    return _page(request, "job.html", {**_sidebar(request, boxes, box, "maintenance"), "box": box, "job": job,
-                                       "rerun": rerun, "risky": job["kind"] in RISKY_TASKS,
-                                       "editable": writable(box), "confirm_text": confirm_text})
+    lines = _log_lines(job["log"])
+    result = job["result"] if isinstance(job["result"], dict) else {}
+    undo_run = str((job.get("request") or {}).get("run") or "") if job["kind"] == "undo" else ""
+    return _page(request, "job.html", {
+        **_sidebar(request, boxes, box, "maintenance"), "box": box, "job": job, "rerun": rerun,
+        "risky": job["kind"] in RISKY_TASKS, "editable": writable(box), "confirm_text": confirm_text,
+        "lines": lines, "log_limit": jobs.MAX_LOG_LINES, "elapsed": _elapsed(job),
+        "truncated": bool(lines) and lines[-1]["text"].startswith("… (more lines"),
+        # what a failure points to, so the page can say what to do about it
+        "problem": run_problem({"error": job["error"]}) if job["error"] else "",
+        "result_problem": run_problem({"error": result["error"]}) if result.get("error") else "",
+        "undo_url": f"/ui/m/{box.id}/undo?run={quote(undo_run)}" if undo_run else ""})
+
+
+def _log_lines(log: list[str]) -> list[dict]:
+    """The log lines of a job ("HH:MM:SS LEVEL  message") with the kind of each, so warnings and errors stand out."""
+    out = []
+    for text in log:
+        parts = text.split(None, 2)
+        level = parts[1] if len(parts) > 1 else ""
+        kind = "err" if level in ("ERROR", "CRITICAL") else "warn" if level == "WARNING" else ""
+        out.append({"text": text, "level": kind})
+    return out
+
+
+def _elapsed(job: dict) -> int | None:
+    """Seconds a finished job took."""
+    try:
+        return int((datetime.fromisoformat(job["finished"]) - datetime.fromisoformat(job["started"])).total_seconds())
+    except (TypeError, ValueError):
+        return None
+
+
+@router.get("/ui/m/{box_id}/jobs/{job_id}/state", dependencies=[Depends(require_login)])
+def job_state(request: Request, box_id: str, job_id: str, after: int = 0):
+    """The state of a job and the log lines after the first `after`: what the job page's script asks for while the
+    job runs, instead of reloading the page."""
+    _boxes_, box = _box(request, box_id)
+    job = jobs.get(job_id)
+    if not job or job["mailbox"] != box.id:
+        raise HTTPException(404, _("Unknown job (jobs are only kept until the next restart)"))
+    log = list(job["log"])
+    return {"status": job["status"], "total": len(log), "lines": _log_lines(log[max(after, 0):])}
 
 
 def _confirm_moving(kind: str, n: int) -> str:
