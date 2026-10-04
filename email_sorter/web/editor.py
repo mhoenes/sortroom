@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextvars
 import logging
 import os
+import re
 import secrets
 import threading
 import time
@@ -29,7 +30,7 @@ from ..classifier import ClassifierAuthError
 from ..i18n import _
 from ..removal import MailboxBusy, delete_mailbox
 from ..trial import OTHER_SAMPLE, OWN_SAMPLE, run_trial
-from . import _box, _sidebar, queries, require_login, router, rulecheck, run_problem, templates
+from . import _box, _boxes, _sidebar, queries, require_login, router, rulecheck, run_problem, templates
 from .editing import (EditError, category_view, config_with_delete_rules, connection_from_form, delete_category,
                       key_from_label, move_category, save_category, save_rules, save_settings, secrets_writable,
                       writable)
@@ -73,6 +74,18 @@ templates.env.globals["pop_flash"] = pop_flash  # shown once by base.html
 
 def _page(request: Request, name: str, ctx: dict, status: int = 200):
     return templates.TemplateResponse(request, name, {"csrf": csrf_token(request), **ctx}, status_code=status)
+
+
+def error_page(request: Request, status: int, message: str):
+    """An error of a UI page as a page of the UI with a way on, instead of {"detail": …} in the browser."""
+    path = request.url.path
+    match = re.match(r"/ui/m/([^/]+)", path)
+    boxes = _boxes(request)
+    box = boxes.get(match.group(1)) if match else None
+    return _page(request, "error.html", {
+        **_sidebar(request, boxes, box, ""), "box": box, "status": status, "message": message,
+        "title": _("Not found") if status == 404 else _("Something went wrong"),
+        "to_maintenance": bool(box and "/jobs/" in path)}, status)
 
 
 def _shared_path(request: Request):

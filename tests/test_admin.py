@@ -225,6 +225,93 @@ def test_dry_run_can_be_started_for_real_from_its_job_page(client, monkeypatch):
     assert calls == [(False, 20), (True, 20)]  # same limit, now for real
 
 
+def _job(client, fn, kind="run", label="Probe-Job", request=None):
+    """A job of the mailbox "privat" that runs `fn`, done (or failed) when this returns."""
+    box = api.app.state.load_mailboxes()["privat"]
+    job = jobs.start(box, kind, label, fn, request=request or {}, needs_lock=False)
+    _wait(job["id"])
+    return job["id"]
+
+
+def test_the_job_page_says_what_a_failure_points_to_and_what_took_how_long(client):
+    def unreachable():
+        raise OSError("[Errno 11001] getaddrinfo failed")
+
+    def model():
+        raise RuntimeError("HTTP 401 from the classification endpoint: invalid api key")
+
+    def other():
+        raise ValueError("something odd")
+
+    # the mailbox can't be reached: said in words, with the way to the connection; the raw message stays under it
+    html = client.get(f"/ui/m/privat/jobs/{_job(client, unreachable)}").text
+    assert "Das Postfach ist nicht erreichbar, oder die Anmeldung schlug fehl." in html
+    assert 'href="/ui/m/privat/settings#connection"' in html and "getaddrinfo failed" in html
+    # the AI service; and an error of its own, without a link
+    html = client.get(f"/ui/m/privat/jobs/{_job(client, model)}").text
+    assert "Der KI-Dienst antwortet nicht oder lehnt den Schlüssel ab." in html and 'href="/ui/settings#model"' in html
+    html = client.get(f"/ui/m/privat/jobs/{_job(client, other)}").text
+    assert "Der Job ist fehlgeschlagen." in html and "something odd" in html and "#connection" not in html
+    # the header: when it started and how long it took; the status beside it
+    assert re.search(r"Gestartet \d\d:\d\d, dauerte unter 1 s", html)
+    # a job that was not started shows its own notice only, not the raw English error under it
+    box = api.app.state.load_mailboxes()["privat"]
+    now = datetime.now().isoformat(timespec="seconds")
+    jobs._jobs["rejected00001"] = {"id": "rejected00001", "mailbox": box.id, "kind": "run", "label": "Abgelehnt", "status": "rejected",
+                                    "started": now, "finished": now, "request": {}, "result": None,
+                                    "error": "another run is active", "log": []}
+    html = client.get("/ui/m/privat/jobs/rejected00001").text
+    assert "Nicht gestartet" in html and "another run is active" not in html
+
+
+def test_the_job_page_while_running_and_its_log(client):
+    box = api.app.state.load_mailboxes()["privat"]
+    now = datetime.now().isoformat(timespec="seconds")
+    log = ["10:00:00 INFO    starting", "10:00:01 WARNING a mail could not be read", "10:00:02 ERROR   it failed"]
+    jobs._jobs["running00001"] = {"id": "running00001", "mailbox": box.id, "kind": "backfill", "label": "Läuft", "status": "running",
+                                   "started": now, "finished": None, "request": {}, "result": None, "error": None, "log": list(log)}
+    html = client.get("/ui/m/privat/jobs/running00001").text
+    # with the script only the state is fetched; without it the page reloads itself (a noscript meta refresh)
+    assert '<noscript><meta http-equiv="refresh" content="3"></noscript>' in html and 'data-running="1"' in html
+    assert 'data-url="/ui/m/privat/jobs/running00001/state"' in html and 'data-total="3"' in html
+    assert "Läuft … diese Seite aktualisiert sich selbst." in html and 'id="job-last"' in html and "10:00:02 ERROR" in html
+    # warnings and errors are marked, so they can be told apart (and filtered); no blank lines between the lines
+    assert '<span class="l ">10:00:00 INFO    starting</span><span class="l warn">10:00:01 WARNING' in html
+    assert '<span class="l err">10:00:02 ERROR   it failed</span>' in html
+    assert "Gestartet" in html and "dauerte" not in html
+    # the state: the lines after the first n, with their kind; the status
+    state = client.get("/ui/m/privat/jobs/running00001/state?after=1").json()
+    assert state["status"] == "running" and state["total"] == 3
+    assert [(x["text"][9:16], x["level"]) for x in state["lines"]] == [("WARNING", "warn"), ("ERROR  ", "err")]
+    assert client.get("/ui/m/privat/jobs/running00001/state?after=3").json()["lines"] == []
+    assert client.get("/ui/m/privat/jobs/nope/state").status_code == 404
+    jobs._jobs["running00001"]["status"] = "done"  # finished: the page reloads for the result
+    assert client.get("/ui/m/privat/jobs/running00001/state?after=3").json()["status"] == "done"
+    # a long log says so at its top
+    jobs._jobs["running00001"]["log"] = [*log, "… (more lines in logs/sortroom.log)"]
+    assert "Das Protokoll ist nach 400 Zeilen abgeschnitten" in client.get("/ui/m/privat/jobs/running00001").text
+
+
+def test_an_undo_job_leads_back_to_the_runs_mails_and_a_dry_run_does_not_promise_a_retry(client, monkeypatch):
+    html = client.get(f"/ui/m/privat/jobs/{_job(client, lambda: RunResult(exit_code=0, live=True, classified=1, failed=1), kind='undo', request={'run': '2026-10-01T10:00:00'})}").text
+    assert 'href="/ui/m/privat/undo?run=2026-10-01T10%3A00%3A00"' in html and "Zu den Mails des Laufs" in html
+    assert "werden beim nächsten Lauf erneut versucht" in html  # live: retried
+    html = client.get(f"/ui/m/privat/jobs/{_job(client, lambda: RunResult(exit_code=0, live=False, classified=1, failed=1))}").text
+    assert "konnten nicht eingeordnet werden" in html and "erneut versucht" not in html  # dry run: nothing is retried
+
+
+def test_durations_and_errors_of_ui_pages(client):
+    from email_sorter import web
+    assert [web.duration(s) for s in (0, 12, 185, 3840, 7200)] == ["unter 1 s", "12 s", "3 min 5 s", "1 h 4 min", "2 h"]
+    # a UI page that fails is a page of the UI for a browser, with the way on; scripts and the API get JSON as before
+    r = client.get("/ui/m/privat/jobs/nope", headers={"Accept": "text/html"})
+    assert r.status_code == 404 and "Nicht gefunden" in r.text and "Jobs werden nur bis zum Neustart aufbewahrt" in r.text
+    assert 'href="/ui/m/privat/maintenance"' in r.text and 'href="/ui"' in r.text
+    r = client.get("/ui/m/privat/jobs/nope")
+    assert r.status_code == 404 and r.json() == {"detail": "Unbekannter Job (Jobs werden nur bis zum Neustart aufbewahrt)"}
+    assert client.get("/ui/m/nirgends/mails", headers={"Accept": "text/html"}).status_code == 404
+
+
 def test_no_live_rerun_after_failed_dry_run(client, monkeypatch):
     monkeypatch.setattr(admin, "run", lambda cfg, creds, ws, live, limit: RunResult(exit_code=1, live=live))
     token = _csrf(client.get("/ui/m/privat/maintenance").text)

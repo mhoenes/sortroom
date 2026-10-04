@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="head">
+  <div class="title">
+    {% if box %}<span class="eyebrow">{{ box.name }}</span>{% endif %}
+    <h1>{{ title }}</h1>
+    <div class="sub">{{ message }}</div>
+  </div>
+</div>
+<div class="actions">
+  {% if to_maintenance %}<a class="btn primary" href="/ui/m/{{ box.id }}/maintenance">{{ _('To maintenance') }}</a>{% endif %}
+  {% if box %}<a class="btn" href="/ui/m/{{ box.id }}">{{ _('Overview') }}</a>{% endif %}
+  <a class="btn" href="/ui">{{ _('All mailboxes') }}</a>
+</div>
+{% endblock %}
