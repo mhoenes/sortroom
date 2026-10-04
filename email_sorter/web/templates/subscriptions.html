@@ -6,6 +6,7 @@
       <input type="hidden" name="q" value="{{ q }}">
       <button class="{{ cls }}" type="submit" name="action" value="{{ action }}"
         {% if confirm %}onclick='return confirm({{ confirm|tojson }})'{% endif %}>{{ text }}</button></form>{% endmacro %}
+{% macro help(text) %}<span class="help" tabindex="0" role="note" aria-label="{{ text|forceescape }}" data-tip="{{ text|forceescape }}">?</span>{% endmacro %}
 {% block content %}
 <div class="head">
   <div class="title">
@@ -41,8 +42,8 @@
   {% if rows %}
   <div class="scroll-x"><table class="senders">
     <thead><tr><th scope="col">{{ _('Sender') }}</th><th scope="col">{{ _('Category') }}</th>
-      <th scope="col" class="num">{{ _('Mails') }}</th><th scope="col" class="opt wide">{{ _('Last mail') }}</th>
-      <th scope="col">{{ _('Status') }}</th><th scope="col"><span class="sr-only">{{ _('Action') }}</span></th></tr></thead>
+      <th scope="col" class="num">{{ _('Mails') }}</th><th scope="col" class="opt wide" style="white-space:nowrap">{{ _('Last mail') }}</th>
+      <th scope="col">{{ _('Status') }}</th><th scope="col">{{ _('Unsubscribe') }} {{ help(_('Where the sender offers one-click unsubscribe, Sortroom sends the request itself. Otherwise "Unsubscribe" opens its unsubscribe page or mail; then mark it as unsubscribed.')) }}</th></tr></thead>
     <tbody>
     {% for r in rows %}
       <tr id="{{ r.anchor }}" {% if r.address == at %}class="at"{% endif %}>
@@ -56,8 +57,8 @@
             {{- _('by rule') if r.rule == r.category else _('Rule: %(target)s', target=label('' if r.rule == 'inbox' else r.rule)) }}</a>
           {%- else %}<a class="cat-note" href="/ui/m/{{ box.id }}/rules?add={{ r.address|urlencode }}&amp;target={{ (r.category or 'inbox')|urlencode }}"
             title="{{ _('Its mail always into one category, without the model') }}">{{ _('Create a rule') }}</a>{% endif %}</td>
-        <td class="num">{{ r.mails|num }}</td>
-        <td class="opt wide" style="white-space:nowrap">{{ r.last|dt }}</td>
+        <td class="num"><span class="num-short">{{ r.mails|num }}</span><span class="num-long">{{ ngettext('%(num)s mail', '%(num)s mails', r.mails) }}</span></td>
+        <td class="opt wide" style="white-space:nowrap">{{ r.last|date }}</td>
         <td class="status">
           {%- if r.unsubscribed %}<span class="pill ok">{{ _('Unsubscribed') }}</span>
             {%- if r.since %} <span class="pill warn">{{ ngettext('%(num)s mail since', '%(num)s mails since', r.since) }}</span>{% endif %}
@@ -73,7 +74,7 @@
           {% else %}
             {# one way to unsubscribe: the one-click request, else the sender's page, else a mail #}
             {% if r.one_click %}
-              {{ act(r, 'unsubscribe', _('Unsubscribe'), 'btn small tonal', _('Unsubscribe from %(sender)s? Sortroom sends the unsubscribe request to %(host)s.', sender=r.address, host=r.one_click_host)) }}
+              {{ act(r, 'unsubscribe', _('Unsubscribe'), 'btn small tonal unsub-go', _('Unsubscribe from %(sender)s? Sortroom sends the unsubscribe request to %(host)s.', sender=r.address, host=r.one_click_host)) }}
             {% elif r.web %}<a class="btn small tonal" href="{{ r.web }}" target="_blank" rel="noopener noreferrer" data-unsub
                 title="{{ _('Opens the unsubscribe page of the sender') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>{{ _('Unsubscribe') }}</a>
             {% elif r.mailto %}<a class="btn small tonal" href="{{ r.mailto }}" data-unsub
@@ -96,13 +97,20 @@
     {% endfor %}
     </tbody>
   </table></div>
-  <p class="muted hint">{{ _('"Unsubscribe" sends the one-click request of the sender (RFC 8058) from this server, or opens its unsubscribe page or mail – then mark it as unsubscribed. Unsubscribe links are read when mails are sorted and when the log is reconciled.') }}</p>
   {% elif q %}<div class="empty">{{ _('No sender matches the search.') }}</div>
   {% elif any %}<div class="empty">{{ _('No sender with this status.') if status else _('Nothing left to do: you unsubscribed from all of them.') }}</div>
   {% elif category %}<div class="empty">{{ _('No sender of this category with an unsubscribe link in the last %(days)s days.', days=days) }}</div>
   {% else %}<div class="empty">{{ _('No sender with an unsubscribe link in the last %(days)s days. The links are read when mails are sorted and when the log is reconciled (Maintenance).', days=days) }}</div>{% endif %}
 </section>
 <script>
+  // the one-click request takes a moment: the button says so, and a second click sends nothing more
+  document.querySelectorAll('.unsub-go').forEach(btn => btn.form.addEventListener('submit', e => {
+    if (btn.form.dataset.sent) { e.preventDefault(); return; }
+    btn.form.dataset.sent = '1';
+    btn.setAttribute('aria-disabled', 'true');
+    btn.classList.add('busy');
+    btn.textContent = {{ _('Unsubscribing …')|tojson }};
+  }));
   // "⋯" folds what is rarely needed; it opens by itself to ask, once the sender's page or mail was opened
   document.querySelectorAll('[data-more]').forEach(btn => {
     const list = btn.parentElement.querySelector('[data-more-list]');
