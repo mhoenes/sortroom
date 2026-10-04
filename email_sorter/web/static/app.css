@@ -397,6 +397,18 @@ table.cats td.rate { font-weight: 600; }
 @container (max-width: 440px) { table.cats .folder { display: none; } }
 .editor { position: sticky; top: 24px; }
 .editor form:has(#track_expiry:not(:checked)) .expiry-folder { display: none; }
+/* the key of a category: technical, so one quiet line below the name */
+.editor .key-line { margin: -4px 0 0; font-size: 13px; }
+.editor .key-line code { font-family: var(--mono); font-size: 12px; padding: 1px 6px; border-radius: 4px;
+  background: var(--neutral-bg); color: var(--ink); }
+/* the description: grows with its text (categories.html), with its characters counted below it */
+.editor textarea[data-grow] { min-height: 9.5em; max-height: 70vh; overflow-y: auto; }
+.char-count { align-self: flex-end; font-size: 12px; font-weight: 400; color: var(--muted); }
+.char-count.near { color: var(--warn); font-weight: 600; }
+.star-choice { margin: 0; padding: 0; border: 0; min-width: 0; }
+.star-choice legend { padding: 0; margin-bottom: 2px; }
+/* "Track expiry date" right below the star: both are lines of choices, without the gap between fields */
+.star-choice + .toggles { margin-top: -12px; }
 .quote { margin: 0; white-space: pre-wrap; color: var(--muted); }
 tr.changed td { background: var(--row-changed); }
 table.rules input[type=text], table.rules select { width: 100%; }

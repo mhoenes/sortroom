@@ -49,7 +49,8 @@ RISKY_TASKS = {"rename_folder", "rename_category"}  # change the server and the 
 # ---------------------------------------------------------------- maintenance
 
 @router.get("/ui/m/{box_id}/maintenance", response_class=HTMLResponse, dependencies=[Depends(require_login)])
-def maintenance(request: Request, box_id: str):
+def maintenance(request: Request, box_id: str, category: str = ""):
+    """With `category`: that one chosen under "Rename a category key" (a link from the Categories page)."""
     boxes, box = _box(request, box_id)
     db = queries.connect(box.workspace)
     try:
@@ -62,7 +63,8 @@ def maintenance(request: Request, box_id: str):
     return _page(request, "maintenance.html", {
         **_sidebar(request, boxes, box, "maintenance"), "box": box, "tasks": TASKS,
         "jobs": jobs.recent(box.id, 15), "folders": cat_folders, "busy": request.app.state.is_busy(box),
-        "editable": writable(box), "today": date.today().isoformat(), "undoable": undoable})
+        "editable": writable(box), "today": date.today().isoformat(), "undoable": undoable,
+        "rename_category": category})
 
 
 @router.get("/ui/m/{box_id}/undo", response_class=HTMLResponse, dependencies=[Depends(require_login)])

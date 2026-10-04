@@ -13,6 +13,7 @@ import re
 import shutil
 import threading
 import tomllib
+import unicodedata
 from pathlib import Path
 
 import tomlkit
@@ -134,6 +135,34 @@ def _checked(form: dict, name: str) -> bool:
     return str(form.get(name, "")).lower() in ("1", "on", "true", "yes")
 
 
+STARS = ("never", "action", "always")
+
+
+def star_choice(form: dict) -> tuple[bool, bool]:
+    """(flag, flag_on_action) of a category form: one choice "star" (never, when action is needed, always), or
+    the two checkboxes of the settings file's names."""
+    star = str(form.get("star") or "")
+    if star in STARS:
+        return star == "always", star != "never"
+    return _checked(form, "flag"), _checked(form, "flag_on_action")
+
+
+def category_view(form: dict) -> dict:
+    """A posted category form as the page shows it again (after an error, back from a test)."""
+    flag, on_action = star_choice(form)
+    return {**{k: str(form.get(k) or "") for k in ("key", "label", "description", "folder", "expired_folder")},
+            "flag": flag, "flag_on_action": on_action, "track_expiry": _checked(form, "track_expiry")}
+
+
+def key_from_label(label: str) -> str:
+    """A key for a new category from its name: "Vereine & Clubs" -> "vereine_clubs" (as categories.html does)."""
+    s = label.strip().lower()
+    for umlaut, plain in (("ä", "ae"), ("ö", "oe"), ("ü", "ue"), ("ß", "ss")):
+        s = s.replace(umlaut, plain)
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]+", "_", s).strip("_")[:40].strip("_")
+
+
 def _set(table, key: str, value, default=None) -> None:
     """Set a key, or remove it when it equals the default (keeps the file short)."""
     if value == default or value in ("", None):
@@ -174,8 +203,9 @@ def save_category(box: Mailbox, shared_path: Path, key: str, form: dict, create:
     table["description"] = description
     _set(table, "label", label, default=default_label(key))
     _set(table, "folder", folder)
-    _set(table, "flag", _checked(form, "flag"), default=False)
-    _set(table, "flag_on_action", _checked(form, "flag_on_action"), default=True)
+    flag, on_action = star_choice(form)
+    _set(table, "flag", flag, default=False)
+    _set(table, "flag_on_action", on_action, default=True)
     _set(table, "track_expiry", track, default=False)
     _set(table, "expired_folder", expired)
     if create:

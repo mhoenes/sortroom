@@ -46,26 +46,45 @@
       <input type="hidden" name="csrf" value="{{ csrf }}">
       {% if new %}<input type="hidden" name="new" value="1">{% endif %}
       <fieldset {% if not editable %}disabled{% endif %} class="stack">
+        {# the name first; the key is technical: for a new category made from the name, later only shown #}
+        {% if new %}
         <div class="cols-2 grid">
-          <label class="f"><span class="lt">{{ _('Key') }} {{ help(_('Internal name under which the model and the log keep the category. Lowercase letters, digits and _ only. Can only be renamed later under "Maintenance".')) }}</span>
-            {% if new %}<input type="text" name="key" value="{{ form.key }}" required pattern="[a-z0-9_]{1,40}" placeholder="{{ _('e.g. clubs') }}">
-            {% else %}<input type="text" value="{{ form.key }}" readonly class="mono"><input type="hidden" name="key" value="{{ form.key }}">{% endif %}
+          <label class="f"><span class="lt">{{ _('Name') }} {{ help(_('How the category appears in the interface.')) }}</span>
+            <input type="text" name="label" value="{{ form.label }}" maxlength="60" required data-key-source placeholder="{{ _('e.g. Clubs') }}">
           </label>
-          <label class="f"><span class="lt">{{ _('Display name') }} {{ help(_('How the category appears here in the interface. Leave empty to use the key.')) }}</span>
-            <input type="text" name="label" value="{{ form.label }}" maxlength="60">
+          <label class="f"><span class="lt">{{ _('Key') }} {{ help(_('Internal name under which the model and the log keep the category: made from the name, lowercase letters, digits and _ only. Can be changed now; later only under "Maintenance".')) }}</span>
+            <input type="text" name="key" value="{{ form.key }}" pattern="[a-z0-9_]{1,40}" class="mono" data-key spellcheck="false" placeholder="{{ _('from the name') }}">
           </label>
         </div>
+        {% else %}
+        <label class="f"><span class="lt">{{ _('Name') }} {{ help(_('How the category appears in the interface. Leave empty to use the key.')) }}</span>
+          <input type="text" name="label" value="{{ form.label }}" maxlength="60">
+        </label>
+        <p class="key-line muted">{{ _('Key') }} <code>{{ form.key }}</code>
+          {%- if editable %} · <a href="/ui/m/{{ box.id }}/maintenance?category={{ form.key|urlencode }}#rename-category">{{ _('rename under Maintenance') }}</a>{% endif %}
+          {{ help(_('Internal name under which the model and the log keep the category.')) }}
+          <input type="hidden" name="key" value="{{ form.key }}"></p>
+        {% endif %}
+        {# the field everything depends on: grows with its text, says how much of the 4000 characters is used #}
         <label class="f"><span class="lt">{{ _('Description for the model') }} {{ help(_('The model sees only this text to decide whether a mail belongs here. Say concretely what belongs here and what does not – example senders and occasions help.')) }}</span>
-          <textarea name="description" rows="6" required maxlength="4000">{{ form.description }}</textarea>
+          <textarea name="description" rows="6" required maxlength="4000" data-grow data-count="desc-count"
+            placeholder="{{ _('Belongs here: …') }}&#10;{{ _('Does not belong here: …') }}&#10;{{ _('Typical senders: …') }}">{{ form.description }}</textarea>
+          <span class="char-count" id="desc-count" aria-live="polite">{{ _('%(used)s of %(max)s characters', used=form.description|length, max=4000) }}</span>
         </label>
         <label class="f"><span class="lt">{{ _('Target folder') }} {{ help(_('IMAP folder that confident mails of this category are moved to, e.g. INBOX/Finance. Empty: the mail stays in the inbox.')) }}</span>
           <input type="text" name="folder" value="{{ form.folder }}" placeholder="INBOX/…">
         </label>
+        {# the star: one choice, not two boxes of which "always" makes the other one pointless #}
+        {% set star = 'always' if form.flag else ('action' if form.flag_on_action else 'never') %}
+        <fieldset class="star-choice">
+          <legend class="lt">{{ _('Star') }} {{ help(_('"When action is needed": when the model thinks you need to do something (threshold in the settings) – usually not for promotions and updates. "Always": every mail of this category, e.g. security.')) }}</legend>
+          <div class="toggles">
+            {% for value, text in (('never', _('Never')), ('action', _('When action is needed')), ('always', _('Always'))) %}
+            <label class="check"><input type="radio" name="star" value="{{ value }}" {% if star == value %}checked{% endif %}>{{ text }}</label>
+            {% endfor %}
+          </div>
+        </fieldset>
         <div class="toggles">
-          <label class="check"><input type="checkbox" name="flag" {% if form.flag %}checked{% endif %}>{{ _('Always star') }}
-            {{ help(_('Every mail of this category gets a star (e.g. security).')) }}</label>
-          <label class="check"><input type="checkbox" name="flag_on_action" {% if form.flag_on_action %}checked{% endif %}>{{ _('Star when action is needed') }}
-            {{ help(_('A star only when the model thinks you need to do something (threshold in the settings). Usually off for promotions and updates.')) }}</label>
           <label class="check"><input type="checkbox" name="track_expiry" id="track_expiry" {% if form.track_expiry %}checked{% endif %}>{{ _('Track expiry date') }}
             {{ help(_('The model recognises time-limited offers. After the last valid day the mail is moved to the folder for expired mail.')) }}</label>
         </div>
@@ -92,4 +111,29 @@
     </form>
   </section>
 </div>
+
+<script>
+  // the description grows with its text (up to most of the window) and counts its characters
+  document.querySelectorAll('textarea[data-grow]').forEach(area => {
+    const count = document.getElementById(area.dataset.count);
+    const text = {{ _('%(used)s of %(max)s characters', used='{used}', max='{max}')|tojson }};
+    const fit = () => {
+      area.style.height = 'auto';
+      area.style.height = Math.min(area.scrollHeight + 2, innerHeight * 0.7) + 'px';
+      count.textContent = text.replace('{used}', area.value.length).replace('{max}', area.maxLength);
+      count.classList.toggle('near', area.value.length > area.maxLength * 0.9);
+    };
+    area.addEventListener('input', fit);
+    fit();
+  });
+  // a new category's key follows its name, until the key is changed by hand
+  const source = document.querySelector('[data-key-source]'), key = document.querySelector('[data-key]');
+  if (source && key) {
+    const slug = s => s.trim().toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+      .normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40).replace(/_+$/, '');
+    let own = key.value !== '' && key.value !== slug(source.value);
+    key.addEventListener('input', () => { own = key.value !== ''; });
+    source.addEventListener('input', () => { if (!own) key.value = slug(source.value); });
+  }
+</script>
 {% endblock %}

@@ -227,6 +227,36 @@ def test_categories_page_and_save(client, setup):
     assert _box(setup).cfg.categories["finanzen"].folder == "INBOX/Geld"
 
 
+def test_category_form_name_first_key_from_the_name_one_star_choice(client, setup):
+    from email_sorter.web.editing import key_from_label
+    assert [key_from_label(x) for x in ("Vereine & Clubs", "Größe/Übersicht", "Café ", "  ", "a" * 50)] == [
+        "vereine_clubs", "groesse_uebersicht", "cafe", "", "a" * 40]
+
+    html = client.get("/ui/m/privat/categories?new=1").text
+    # a new one: the name first, the key made from it (by the page's script, or here without it)
+    assert html.index('name="label"') < html.index('name="key"') and "data-key-source" in html
+    assert "0 von 4000 Zeichen" in html and 'placeholder="Gehört hierher: …&#10;Gehört nicht hierher: …' in html
+    r = client.post("/ui/m/privat/categories", data={"csrf": _csrf(html), "new": "1", "key": "", "label": "Vereine & Clubs",
+                                                     "description": "Vereinspost", "star": "never"},
+                    follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/ui/m/privat/categories?cat=vereine_clubs"
+    cat = _box(setup).cfg.categories["vereine_clubs"]
+    assert cat.label == "Vereine & Clubs" and not cat.flag and not cat.flag_on_action
+
+    # one there: the key one quiet line, renamed under Maintenance; the star one choice
+    html = client.get("/ui/m/privat/categories?cat=finanzen").text
+    assert '<code>finanzen</code> · <a href="/ui/m/privat/maintenance?category=finanzen#rename-category">' in html
+    assert 'name="star" value="action" checked' in html and "27 von 4000 Zeichen" in html
+    form = {"csrf": _csrf(html), "key": "finanzen", "description": "Rechnungen und Kontoauszüge"}
+    client.post("/ui/m/privat/categories", data={**form, "star": "always"})
+    assert _box(setup).cfg.categories["finanzen"].flag
+    client.post("/ui/m/privat/categories", data={**form, "star": "action"})
+    cat = _box(setup).cfg.categories["finanzen"]
+    assert not cat.flag and cat.flag_on_action and "flag_on_action" not in _raw(setup)["categories"]["finanzen"]
+    html = client.get("/ui/m/privat/maintenance?category=werbung").text
+    assert 'id="rename-category"' in html and '<option value="werbung" selected>' in html
+
+
 def test_forms_need_csrf_token(client, setup):
     r = client.post("/ui/m/privat/categories", data={"csrf": "falsch", "key": "finanzen", "description": "x"})
     assert r.status_code == 403
@@ -355,9 +385,8 @@ def test_trial_job_page(client, setup, monkeypatch):
     # back in the form: every field as sent to the test, marked as not saved
     html = client.get(back.replace("&amp;", "&")).text
     assert ">Entwurf</textarea>" in html and 'value="Angebote"' in html and 'value="INBOX/Angebote"' in html
-    assert 'name="flag" checked' in html and 'name="track_expiry" id="track_expiry" checked' in html
+    assert 'name="star" value="always" checked' in html and 'name="track_expiry" id="track_expiry" checked' in html
     assert 'value="INBOX/Alt"' in html and "data-dirty" in html
-    assert 'name="flag_on_action" checked' not in html  # off in the form sent
     assert _box(setup).cfg.categories["werbung"].label == "Werbung"  # nothing saved
     html = client.get("/ui/m/privat/categories?cat=werbung&draft=weg").text  # e.g. after a restart
     assert "Der Entwurf aus dem Test ist nicht mehr da" in html and "data-dirty" not in html
