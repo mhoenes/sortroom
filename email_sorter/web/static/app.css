@@ -357,6 +357,12 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 /* a card too narrow for four figures side by side shows them two by two */
 @container (max-width: 520px) { .boxcard .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .boxcard .actions { display: flex; gap: 8px; margin-top: auto; }
+/* a mailbox with an error still open: its card carries it, with what to do */
+.boxcard.problem { border-color: var(--err-line); }
+.boxcard .run-problem-box { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 12px;
+  border-radius: 8px; background: var(--err-bg); color: var(--err); font-size: 13px; }
+.boxcard .run-problem-box .btn { background: var(--surface); }
+.boxcard { scroll-margin-top: 16px; }
 
 /* login */
 .login { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; }

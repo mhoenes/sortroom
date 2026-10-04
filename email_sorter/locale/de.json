@@ -162,6 +162,7 @@
  "All mailboxes": "Alle Postfächer",
  "Always": "Immer",
  "Always for this sender?": "Immer für diesen Absender?",
+ "An error today, but the next run went through again.": "Heute ein Fehler, aber der nächste Lauf lief wieder durch.",
  "Any service that offers the <a href=\"https://docs.typesafe.ai/api\" target=\"_blank\" rel=\"noopener\">TypeSafe API</a>.": "Jeder Dienst, der die <a href=\"https://docs.typesafe.ai/api\" target=\"_blank\" rel=\"noopener\">TypeSafe-API</a> anbietet.",
  "Appearance": "Darstellung",
  "Applied once a day, and under Maintenance by hand. Starred mail stays unless \"Starred too\" is ticked.": "Gilt einmal am Tag und unter Wartung von Hand. Mails mit Stern bleiben, außer „Auch mit Stern“ ist angehakt.",
