@@ -2,13 +2,7 @@
 {% block title %}{{ job.label }}{% endblock %}
 {# without the script the page reloads itself; with it only the state and the log are fetched (job.js) #}
 {% block head %}{% if job.status == 'running' %}<noscript><meta http-equiv="refresh" content="3"></noscript>{% endif %}{% endblock %}
-{# what went wrong in plain words, what to do about it where we know, and the raw message under it #}
-{% macro problem_banner(text, problem) %}<div class="banner err problem" role="alert">
-  <div class="grow"><b>{% if problem == 'imap' %}{{ _("The mailbox can't be reached, or its login failed.") }}{% elif problem == 'model' %}{{ _("The AI service doesn't answer, or rejects the key.") }}{% else %}{{ _('The job failed.') }}{% endif %}</b>
-    <span class="raw mono">{{ text|run_error }}</span></div>
-  {% if problem == 'imap' %}<a class="btn small" href="/ui/m/{{ box.id }}/settings#connection">{{ _('Check the connection') }}</a>
-  {% elif problem == 'model' %}<a class="btn small" href="/ui/settings#model">{{ _('Check the AI service') }}</a>{% endif %}
-</div>{% endmacro %}
+{% from "_problem.html" import problem_banner with context %}
 {% block content %}
 {% set j = job %}
 <div class="head">
@@ -27,7 +21,7 @@
   {# the last log line as progress; not announced at every change #}
   <span class="mono last-line" id="job-last" aria-live="off">{{ lines[-1].text if lines else '' }}</span></div>{% endif %}
 {% if job.status == 'rejected' %}<div class="banner" role="status">{{ _('Not started: something was already running for this mailbox.') }}</div>
-{% elif job.error %}{{ problem_banner(job.error, problem) }}{% endif %}
+{% elif job.error %}{{ problem_banner(job.error, problem, _('The job failed.')) }}{% endif %}
 
 {% set r = job.result %}
 {% if r and r.classified is defined %}
@@ -37,7 +31,7 @@
   <div class="card kpi"><span class="k">{{ _('Errors') }}</span><span class="v">{{ r.failed|num }}</span><span class="d">{{ _('are retried in the next run') if r.live else _('could not be classified') }}</span></div>
   <div class="card kpi"><span class="k">{{ _('Cost') }}</span><span class="v">{{ r.cost_usd|usd(4) }}</span><span class="d">{% if r.report %}{{ _('Report:') }} <span class="mono">{{ r.report.replace('\\', '/').split('/')[-1] }}</span>{% endif %}</span></div>
 </div>
-{% if r.error %}{{ problem_banner(r.error, result_problem) }}{% endif %}
+{% if r.error %}{{ problem_banner(r.error, result_problem, _('The job failed.')) }}{% endif %}
 {% elif r %}
 <div class="banner {{ 'ok' if r.ok else 'err' }}" role="status">{{ r.summary if r.summary else (_('All good.') if r.ok else _('There were errors – see the log.')) }}</div>
 {% endif %}

@@ -1,59 +1,101 @@
 {% extends "base.html" %}
+{% from "_problem.html" import problem_banner with context %}
 {% block title %}{{ _('Test') }} · {{ cat_label }}{% endblock %}
-{% block head %}{% if job.status == 'running' %}<meta http-equiv="refresh" content="2">{% endif %}{% endblock %}
+{# without the script the page reloads itself; with it only the progress is fetched (trial.js) #}
+{% block head %}{% if job.status == 'running' %}<noscript><meta http-equiv="refresh" content="2"></noscript>{% endif %}{% endblock %}
+{# the mails of the sample as a table, on a phone as one block each; `reasons`: the unreadable ones with why #}
+{% macro mail_rows(rows, reasons=false) %}
+<div class="scroll-x"><table class="trial">
+  <thead><tr><th scope="col">{{ _('Received') }}</th><th scope="col">{{ _('Sender') }}</th><th scope="col">{{ _('Subject') }}</th><th scope="col">{{ _('So far') }}</th><th scope="col">{{ _('With draft') }}</th>{% if not reasons %}<th scope="col" class="num">{{ _('Confidence') }}</th>{% endif %}</tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr {% if r.after and r.after != r.before %}class="changed"{% endif %}>
+      <td class="date">{{ r.received|dt }}</td>
+      <td class="from clip" title="{{ r.sender }}">{{ r.sender }}</td>
+      <td class="subj clip" title="{{ r.subject }}">{{ r.subject or _('(no subject)') }}</td>
+      <td class="before" data-label="{{ _('So far') }}"><span class="pill">{{ label(r.before) }}</span>{% if r.corrected %} <span class="muted" style="font-size:12px">{{ _('by hand') }}</span>{% endif %}</td>
+      <td class="after" data-label="{{ _('With draft') }}">{% if r.error %}<span class="muted">{{ r.error }}</span>
+          {% elif r.after == r.before %}<span class="muted">{{ _('unchanged') }}</span>
+          {% else %}<span class="pill {{ 'ok' if r.after == job.key else 'warn' }}">{{ label(r.after) }}</span>{% endif %}</td>
+      {% if not reasons %}<td class="num conf">{{ r.confidence|conf }}</td>{% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endmacro %}
 {% block content %}
+{# back to the form as it was sent to the test: every field, not saved yet #}
+{% set back = '/ui/m/' ~ box.id ~ '/categories?' ~ ('new=1&' if job.new else '') ~ 'cat=' ~ job.key|urlencode ~ '&draft=' ~ job.id ~ '#edit' %}
 <div class="head">
   <div class="title">
     <span class="eyebrow">{{ box.name }}</span>
     <h1>{{ _('Test: %(category)s', category=cat_label) }}{% if job.new %} {{ _('(new)') }}{% endif %}</h1>
     <div class="sub">{{ _('The model files already sorted mails with the new description · nothing is moved or saved') }}</div>
   </div>
-  {# back to the form as it was sent to the test: every field, not saved yet #}
-  {% set back = '/ui/m/' ~ box.id ~ '/categories?' ~ ('new=1&' if job.new else '') ~ 'cat=' ~ job.key|urlencode ~ '&draft=' ~ job.id ~ '#edit' %}
   <a class="btn" href="{{ back }}">{{ _('Back to the form') }}</a>
 </div>
 
 <section class="card stack">
   <h2>{{ _('Tested description') }}</h2>
   <p class="quote">{{ job.description }}</p>
+  {% if s.saved is not none %}
+    {% if s.saved != job.description %}<details class="more"><summary>{{ _('The saved description') }}</summary><p class="quote">{{ s.saved }}</p></details>
+    {% else %}<p class="muted hint">{{ _('The same as the saved description.') }}</p>{% endif %}
+  {% endif %}
 </section>
 
 {% if job.status == 'running' %}
-<div class="banner ok" role="status">{{ _('Test running … %(done)s of %(total)s mails filed. The page refreshes by itself.', done=job.done, total=job.total) if job.total else _('Test running … %(done)s mails filed. The page refreshes by itself.', done=job.done) }}</div>
+<div class="banner ok trial-running" role="status"><span>{{ _('Test running … this page updates by itself.') }}</span>
+  <progress id="trial-progress" max="{{ job.total or 1 }}" value="{{ job.done }}"></progress>
+  <span class="mono" id="trial-count" aria-live="off">{{ progress }}</span></div>
 {% elif job.status == 'failed' %}
-<div class="banner err" role="alert">{{ _('Test failed: %(error)s', error=job.error) }}</div>
+{{ problem_banner(job.error, problem, _('The test failed.'), back=(back, _('Back to the form'))) }}
 {% else %}
-<div class="grid cols-4">
-  <div class="card kpi"><span class="k">{{ _('Tested') }}</span><span class="v">{{ s.tested }}</span><span class="d">{{ _('%(n)s unreadable', n=s.errors) }} · {{ job.cost|usd(4) }}</span></div>
-  <div class="card kpi"><span class="k">{{ _('Stay in %(category)s', category=cat_label) }}</span><span class="v">{{ s.kept }} <small>{{ _('of %(n)s', n=s.own) }}</small></span><span class="d">{{ _('so far in this category') }}</span></div>
+{% if not s.tested %}
+<div class="banner" role="status">{{ _("No mail could be tested: the model hasn't sorted any mails yet, or they are no longer in their folders.") }}</div>
+{% else %}
+{# the verdict first, then what the sample was, then the figures #}
+<div class="card verdict {{ 'none' if not s.changed else '' }}">
+  <b>{{ s.verdict }}</b>{% if s.verdict_detail %} <span class="muted">{{ s.verdict_detail }}</span>{% endif %}
+  <span class="muted hint">{{ s.sample }}{% if not s.own %} {{ _('A new category has no mails of its own yet: only what would join it shows.') if job.new else _('There are no sorted mails of this category yet: only what would join it shows.') }}{% endif %}</span>
+</div>
+<div class="grid {{ 'cols-4' if s.own else 'cols-3' }}">
+  <div class="card kpi"><span class="k">{{ _('Tested') }}</span><span class="v">{{ s.tested }}</span><span class="d">{{ _('%(n)s unreadable', n=s.unreadable|length) }} · {{ job.cost|usd(4) }}</span></div>
+  {% if s.own %}<div class="card kpi"><span class="k">{{ _('Stay in %(category)s', category=cat_label) }}</span><span class="v">{{ s.kept }} <small>{{ _('of %(n)s', n=s.own) }}</small></span><span class="d">{{ _('so far in this category') }}</span></div>{% endif %}
   <div class="card kpi"><span class="k">{{ _('Would change') }}</span><span class="v">{{ s.lost|length }}</span><span class="d">{{ _('from %(category)s to another one', category=cat_label) }}</span></div>
   <div class="card kpi"><span class="k">{{ _('Would join') }}</span><span class="v">{{ s.gained|length }}</span><span class="d">{{ _('from other categories') }}</span></div>
 </div>
 
-{% if s.corrected %}<div class="banner {{ 'ok' if s.corrected_right == s.corrected else '' }}" role="status">{{ _('%(right)s of %(total)s mails corrected by hand would now be filed the way you corrected them.', right=s.corrected_right, total=s.corrected) }}</div>{% endif %}
+{% if s.corrections %}<div class="banner {{ 'ok' if s.corrected_right == s.corrected else '' }}" role="status">{{ s.corrections }}</div>{% endif %}
+
+{# the mails to look at first: what would be filed differently, a correction of yours the draft gets wrong first #}
+{% if s.changed %}
 <section class="card" style="padding:6px 12px">
-  <div class="scroll-x"><table>
-    <thead><tr><th scope="col">{{ _('Received') }}</th><th scope="col">{{ _('Sender') }}</th><th scope="col">{{ _('Subject') }}</th><th scope="col">{{ _('So far') }}</th><th scope="col">{{ _('With draft') }}</th><th scope="col" class="num">{{ _('Confidence') }}</th></tr></thead>
-    <tbody>
-    {% for r in rows %}
-      <tr {% if r.after and r.after != r.before %}class="changed"{% endif %}>
-        <td style="white-space:nowrap">{{ r.received|dt }}</td>
-        <td class="clip" style="width:20%" title="{{ r.sender }}">{{ r.sender }}</td>
-        <td class="clip" style="width:34%">{{ r.subject or _('(no subject)') }}</td>
-        <td><span class="pill">{{ label(r.before) }}</span>{% if r.corrected %} <span class="muted" style="font-size:12px">{{ _('by hand') }}</span>{% endif %}</td>
-        <td>{% if r.error %}<span class="muted">{{ r.error }}</span>
-            {% elif r.after == r.before %}<span class="muted">{{ _('unchanged') }}</span>
-            {% else %}<span class="pill {{ 'ok' if r.after == job.key else 'warn' }}">{{ label(r.after) }}</span>{% endif %}</td>
-        <td class="num">{{ r.confidence|conf }}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table></div>
+  <h2 class="table-title">{{ _('Would be filed differently') }} <span class="muted">({{ s.changed|length }})</span></h2>
+  {{ mail_rows(s.changed) }}
 </section>
+{% endif %}
+{% if s.unchanged %}
+<section class="card" style="padding:6px 12px">
+  <details class="more" {% if not s.changed %}open{% endif %}>
+    <summary>{{ _('Stay as they are') }} ({{ s.unchanged|length }})</summary>
+    {{ mail_rows(s.unchanged) }}
+  </details>
+</section>
+{% endif %}
+{% endif %}
+{% if s.unreadable %}
+<section class="card" style="padding:6px 12px">
+  <h2 class="table-title">{{ _('Could not be tested') }} <span class="muted">({{ s.unreadable|length }})</span></h2>
+  {{ mail_rows(s.unreadable, reasons=true) }}
+</section>
+{% endif %}
 
 <div class="actions">
-  <a class="btn primary" href="{{ back }}">{{ _('Put the draft into the form') }}</a>
-  <span class="muted" style="font-size:13px">{{ _('Nothing is saved until "Save" in the form.') }}</span>
+  <a class="btn primary" href="{{ back }}">{{ _('Back to the form') }}</a>
+  <span class="muted" style="font-size:13px">{{ _('The draft is in the form again. Nothing is saved until "Save" there.') }}</span>
 </div>
 {% endif %}
+{% if job.status == 'running' %}<script src="{{ asset('trial.js') }}" data-url="/ui/m/{{ box.id }}/categories/test/{{ job.id }}/state"
+  data-lost="{{ _('The connection is lost – please reload the page.') }}"></script>{% endif %}
 {% endblock %}

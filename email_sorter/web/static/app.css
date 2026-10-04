@@ -458,6 +458,13 @@ table.cats td.rate { font-weight: 600; }
 .editor[data-editor] { scroll-margin-top: 16px; }
 .quote { margin: 0; white-space: pre-wrap; color: var(--muted); }
 tr.changed td { background: var(--row-changed); }
+/* the category test: the verdict first, the mails that change as a table (blocks on a phone) */
+.card.verdict { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 16px 20px; }
+.card.verdict .hint { flex-basis: 100%; }
+h2.table-title { margin: 12px 4px 4px; font-size: 15px; font-weight: 600; }
+.trial-running progress { flex: 0 1 180px; height: 8px; accent-color: var(--accent); }
+table.trial td.from { width: 22%; }
+table.trial td.subj { width: 34%; }
 table.rules input[type=text], table.rules select { width: 100%; }
 table.rules td { padding: 6px 8px; vertical-align: top; }
 table.rules td.rule-del { width: 44px; }
@@ -637,6 +644,22 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
   .kpi .d { overflow-wrap: anywhere; }
   pre.log { white-space: pre; }  /* a line stays one line, so the times stay in a column; the log scrolls sideways */
   .head { flex-wrap: wrap; align-items: flex-start; }
+  /* a mail of the category test is a block: the subject, the sender and date, then where it was and where it would go */
+  table.trial thead { display: none; }
+  table.trial tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center;
+    padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+  table.trial tbody tr:last-child { border-bottom: 0; }
+  table.trial td, table.trial td.from, table.trial td.subj { padding: 0; border: 0; width: auto; }
+  table.trial tr.changed { background: var(--row-changed); padding-left: 8px; padding-right: 8px; border-radius: 6px; }
+  table.trial tr.changed td { background: transparent; }
+  table.trial td.clip { max-width: none; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+  table.trial td.subj { grid-column: 1 / -1; grid-row: 1; font-weight: 600; }
+  table.trial td.from { grid-column: 1; grid-row: 2; font-size: 13px; color: var(--muted); }
+  table.trial td.date { grid-column: 2; grid-row: 2; font-size: 12px; color: var(--muted); white-space: nowrap; }
+  table.trial td.before { grid-column: 1; grid-row: 3; }
+  table.trial td.after { grid-column: 1; grid-row: 4; }
+  table.trial td.conf { grid-column: 2; grid-row: 4; font-size: 12px; color: var(--muted); text-align: right; }
+  table.trial td[data-label]::before { content: attr(data-label) ": "; font-size: 12px; color: var(--muted); }
   .filters .sel { max-width: none; }
   .maillist .date { display: none; }
   /* phones: the open mail above the list, full width */

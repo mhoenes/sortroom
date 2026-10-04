@@ -522,6 +522,85 @@ def test_trial_job_page(client, setup, monkeypatch):
     editor._trials[job]["status"] = "done"
 
 
+def _trial(job_id, rows, **fields):
+    editor._trials[job_id] = {"id": job_id, "box": "privat", "key": "werbung", "new": False,
+                              "description": "Der Entwurf", "form": {}, "status": "done", "done": 0, "total": 0,
+                              "rows": rows, "cost": 0.0002, "error": None, "started": time.time(), **fields}
+
+
+def test_trial_result_page_leads_with_what_changes_and_says_what_the_sample_was(client, setup):
+    R = trial.TrialRow
+    rows = [
+        R("2026-10-01T10:00", "own@x", "Bleibt", "werbung", "werbung", 0.9),
+        R("2026-10-01T11:00", "own2@x", "Geht weg", "werbung", "finanzen", 0.8),
+        R("2026-10-01T12:00", "new@x", "Kommt dazu", "finanzen", "werbung", 0.9),
+        R("2026-10-01T13:00", "fix@x", "Von Hand, falsch", "werbung", "finanzen", 0.7, corrected=True),
+        R("2026-10-01T14:00", "fix2@x", "Von Hand, richtig", "werbung", "werbung", 0.9, corrected=True),
+        R("2026-10-01T15:00", "other@x", "Anderswo", "finanzen", "finanzen", 0.9),
+        R("2026-10-01T16:00", "gone@x", "Weg", "finanzen", error="nicht mehr im Ordner"),
+    ]
+    _trial("t-many", rows)
+    html = client.get("/ui/m/privat/categories/test/t-many").text
+    # the verdict first (3 of 6 change), then the sample, which says what it was made of
+    assert "Viele Mails würden anders einsortiert." in html and "3 von 6 Mails würden anders einsortiert." in html
+    assert "Stichprobe aus 7 Mails: 2 aus dieser Kategorie, 3 aus anderen, 2 von Hand korrigiert." in html
+    assert "Von deinen 2 Korrekturen von Hand würde der Entwurf 1 richtig treffen." in html
+    # the changes as a table of their own, a correction of yours that the draft gets wrong first; the rest folded
+    changed = html.split('<h2 class="table-title">Würden anders einsortiert <span class="muted">(3)</span></h2>')[1]
+    assert changed.index("Von Hand, falsch") < changed.index("Geht weg") < changed.index("Kommt dazu")
+    assert "Bleibt<" not in changed.split("</table>")[0]  # the unchanged one is not among the changes
+    assert '<details class="more" >' in html and "Bleiben, wie sie sind (3)" in html  # closed: there are changes
+    # the unreadable one, with why
+    assert "Konnten nicht getestet werden" in html and "nicht mehr im Ordner" in html
+    # the subject has its tooltip like the sender; the saved description to compare with
+    assert 'title="Geht weg"' in html and "Die gespeicherte Beschreibung" in html and "Newsletter und Angebote" in html
+
+    # a few changes: "nearly everything stays"; nothing: said so, and the unchanged ones are open
+    _trial("t-few", [R(None, f"a{i}@x", f"Mail {i}", "werbung", "werbung", 0.9) for i in range(9)]
+           + [R(None, "b@x", "Eine", "werbung", "finanzen", 0.8)])
+    assert "Fast alles bleibt, wie es ist." in client.get("/ui/m/privat/categories/test/t-few").text
+    _trial("t-same", [R(None, "a@x", "Gleich", "werbung", "werbung", 0.9)], description="Newsletter und Angebote")
+    html = client.get("/ui/m/privat/categories/test/t-same").text
+    assert "In dieser Stichprobe ändert sich nichts." in html and '<details class="more" open>' in html
+    assert "Entspricht der gespeicherten Beschreibung." in html and "Würden anders einsortiert" not in html
+
+    # no mail of the category yet (a new one): no "Stay" card, and a sentence why
+    _trial("t-new", [R(None, "new@x", "Kommt dazu", "finanzen", "vereine", 0.9)], key="vereine", new=True)
+    html = client.get("/ui/m/privat/categories/test/t-new").text
+    assert "Bleiben in" not in html and "Eine neue Kategorie hat noch keine eigenen Mails" in html
+    assert "Die gespeicherte Beschreibung" not in html and "Entspricht der gespeicherten" not in html
+    # nothing to test with at all
+    _trial("t-empty", [])
+    assert "Es konnte keine Mail getestet werden" in client.get("/ui/m/privat/categories/test/t-empty").text
+
+
+def test_trial_result_page_while_running_and_when_it_fails(client):
+    # running: only the progress is fetched (a noscript refresh without the script), with the figure in words
+    _trial("t-run", [], status="running", done=12, total=25)
+    html = client.get("/ui/m/privat/categories/test/t-run").text
+    assert '<noscript><meta http-equiv="refresh" content="2"></noscript>' in html
+    assert "12 von 25 Mails einsortiert" in html and '<progress id="trial-progress" max="25" value="12">' in html
+    assert 'data-url="/ui/m/privat/categories/test/t-run/state"' in html
+    state = client.get("/ui/m/privat/categories/test/t-run/state").json()
+    assert state == {"status": "running", "done": 12, "total": 25, "progress": "12 von 25 Mails einsortiert"}
+    editor._trials["t-run"]["status"] = "done"
+    assert client.get("/ui/m/privat/categories/test/t-run/state").json()["status"] == "done"  # the page reloads for the result
+    # a failure in words, with the way to what is wrong and back to the form with the draft
+    _trial("t-model", [], status="failed", error="The endpoint rejects the API key: 401", problem="model")
+    html = client.get("/ui/m/privat/categories/test/t-model").text
+    assert "Der KI-Dienst antwortet nicht oder lehnt den Schlüssel ab." in html and 'href="/ui/settings#model"' in html
+    assert "The endpoint rejects the API key: 401" in html and "cat=werbung&amp;draft=t-model#edit" in html
+    _trial("t-net", [], status="failed", error="[Errno 11001] getaddrinfo failed")
+    html = client.get("/ui/m/privat/categories/test/t-net").text
+    assert "Das Postfach ist nicht erreichbar" in html and 'href="/ui/m/privat/settings#connection"' in html
+    _trial("t-odd", [], status="failed", error="something odd")
+    assert "Der Test ist fehlgeschlagen." in client.get("/ui/m/privat/categories/test/t-odd").text
+    # a test that is gone (after a restart): a page of the UI with the way to the categories; JSON for scripts
+    r = client.get("/ui/m/privat/categories/test/nope", headers={"Accept": "text/html"})
+    assert r.status_code == 404 and 'href="/ui/m/privat/categories"' in r.text and "Zu den Kategorien" in r.text
+    assert client.get("/ui/m/privat/categories/test/nope/state").status_code == 404
+
+
 def test_schedule_settings_saved(client, setup):
     html = client.get("/ui/m/privat/settings").text
     assert "Zeitplan" in html and 'name="schedule_minutes" min="1" max="1440" step="1" value="10"' in html

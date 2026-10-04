@@ -21,7 +21,7 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
-from .. import jobs, oauth
+from .. import i18n, jobs, oauth
 from ..check import check_imap
 from ..cleanup import run_cleanup
 from ..config import (INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, imap_credentials, load_credentials,
@@ -85,7 +85,10 @@ def error_page(request: Request, status: int, message: str):
     return _page(request, "error.html", {
         **_sidebar(request, boxes, box, ""), "box": box, "status": status, "message": message,
         "title": _("Not found") if status == 404 else _("Something went wrong"),
-        "to_maintenance": bool(box and "/jobs/" in path)}, status)
+        # the page the missing one belongs to: a job's to Maintenance, a category test's to the categories
+        "back": ((f"/ui/m/{box.id}/maintenance", _("To maintenance")) if "/jobs/" in path
+                 else (f"/ui/m/{box.id}/categories", _("To the categories")) if "/categories/" in path
+                 else None) if box else None}, status)
 
 
 def _shared_path(request: Request):
@@ -235,7 +238,7 @@ async def categories_test(request: Request, box_id: str):
             rows, cost = run_trial(box.cfg, creds, box.workspace / "data" / "state.db", key, description, progress)
             job.update(status="done", rows=rows, cost=cost)
         except ClassifierAuthError as e:
-            job.update(status="failed", error=_("The endpoint rejects the API key: %(e)s", e=e))
+            job.update(status="failed", error=_("The endpoint rejects the API key: %(e)s", e=e), problem="model")
         except Exception as e:
             log.exception("[%s] category trial failed", box.id)
             job.update(status="failed", error=str(e))
@@ -245,31 +248,84 @@ async def categories_test(request: Request, box_id: str):
     return RedirectResponse(f"/ui/m/{box.id}/categories/test/{job['id']}", status_code=303)
 
 
-@router.get("/ui/m/{box_id}/categories/test/{job_id}", response_class=HTMLResponse,
-            dependencies=[Depends(require_login)])
-def categories_test_result(request: Request, box_id: str, job_id: str):
+def _trial_job(request: Request, box_id: str, job_id: str) -> tuple[dict, Mailbox, dict]:
     boxes, box = _box(request, box_id)
     job = _trials.get(job_id)
     if not job or job["box"] != box.id:
         raise HTTPException(404, _("Unknown test (tests are only kept until the next restart)"))
+    return boxes, box, job
+
+
+def _progress_text(job: dict) -> str:
+    if job["total"]:
+        return _("%(done)s of %(total)s mails filed", done=job["done"], total=job["total"])
+    return _("%(done)s mails filed", done=job["done"])
+
+
+@router.get("/ui/m/{box_id}/categories/test/{job_id}/state", dependencies=[Depends(require_login)])
+def categories_test_state(request: Request, box_id: str, job_id: str):
+    """How far a test is, for the result page's script while it runs (instead of reloading the page)."""
+    _boxes_, _box_, job = _trial_job(request, box_id, job_id)
+    return {"status": job["status"], "done": job["done"], "total": job["total"], "progress": _progress_text(job)}
+
+
+# a draft that changes up to this share of the sample "nearly leaves everything as it is", up to the next "some"
+_FEW, _SOME = 0.15, 0.4
+
+
+def _trial_summary(job: dict, cat) -> dict:
+    """What the page shows of a finished test: the sample, the mails that change (the ones to look at first),
+    the unchanged and the unreadable ones, and a verdict in words."""
     key, rows = job["key"], job["rows"]
     tested = [r for r in rows if r.after]
     own = [r for r in tested if r.before == key]
-    summary = {
-        "tested": len(tested),
-        "kept": sum(1 for r in own if r.after == key),
+    # to look at first: what you corrected by hand and the draft would file differently, then what leaves the
+    # category, what joins it, what would go to yet another one; each in the order of the sample (newest first)
+    changed = sorted((r for r in tested if r.after != r.before),
+                     key=lambda r: 0 if r.corrected else 1 if r.before == key else 2 if r.after == key else 3)
+    corrected = [r for r in tested if r.corrected]
+    corrected_right = sum(1 for r in corrected if r.after == r.before)
+    fixed = sum(1 for r in rows if r.corrected)
+    from_category = sum(1 for r in rows if not r.corrected and r.before == key)
+    share = len(changed) / len(tested) if tested else 0
+    verdict = (_("Nothing changes in this sample.") if not changed
+               else _("Nearly everything stays as it is.") if share <= _FEW
+               else _("Some mails would be filed differently.") if share <= _SOME
+               else _("Many mails would be filed differently."))
+    return {
+        "tested": len(tested), "own": len(own), "kept": sum(1 for r in own if r.after == key),
         "lost": [r for r in own if r.after != key],
         "gained": [r for r in tested if r.before != key and r.after == key],
-        "moved_elsewhere": [r for r in tested if r.before != key and r.after not in (key, r.before)],
-        "own": len(own),
-        "errors": sum(1 for r in rows if r.error),
-        "corrected": sum(1 for r in tested if r.corrected),
-        "corrected_right": sum(1 for r in tested if r.corrected and r.after == r.before),
+        "changed": changed, "unchanged": [r for r in tested if r.after == r.before],
+        "unreadable": [r for r in rows if r.error],
+        "corrected": len(corrected), "corrected_right": corrected_right,
+        "verdict": verdict,
+        "verdict_detail": i18n.ngettext("%(num)s of %(total)s mails would be filed differently.",
+                                        "%(num)s of %(total)s mails would be filed differently.",
+                                        len(changed), total=len(tested)) if changed else "",
+        "sample": i18n.ngettext(
+            "Sample of %(num)s mail: %(own)s from this category, %(other)s from others, %(corr)s corrected by hand.",
+            "Sample of %(num)s mails: %(own)s from this category, %(other)s from others, %(corr)s corrected by hand.",
+            len(rows), own=from_category, other=len(rows) - from_category - fixed, corr=fixed),
+        "corrections": i18n.ngettext(
+            "Of your %(num)s correction by hand, the draft would get %(right)s right.",
+            "Of your %(num)s corrections by hand, the draft would get %(right)s right.",
+            len(corrected), right=corrected_right) if corrected else "",
+        # the description as saved, to compare the draft with; None for a category that doesn't exist yet
+        "saved": cat.description if cat and not job["new"] else None,
     }
+
+
+@router.get("/ui/m/{box_id}/categories/test/{job_id}", response_class=HTMLResponse,
+            dependencies=[Depends(require_login)])
+def categories_test_result(request: Request, box_id: str, job_id: str):
+    boxes, box, job = _trial_job(request, box_id, job_id)
+    key = job["key"]
     cat = box.cfg.categories.get(key)
     return _page(request, "trial.html", {
-        **_sidebar(request, boxes, box, "categories"), "box": box, "job": job, "rows": rows, "s": summary,
-        "cat_label": cat.label if cat else key,
+        **_sidebar(request, boxes, box, "categories"), "box": box, "job": job, "s": _trial_summary(job, cat),
+        "cat_label": cat.label if cat else key, "progress": _progress_text(job),
+        "problem": job.get("problem") or (run_problem({"error": job["error"]}) if job["error"] else ""),
         "label": lambda k: box.cfg.categories[k].label if k in box.cfg.categories else (
             _("Inbox") if k == INBOX_ACTION else k if k != key else _("%(key)s (new)", key=k))})
 
