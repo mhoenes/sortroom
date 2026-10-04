@@ -209,6 +209,19 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 .filters .search { flex: 3 1 300px; }
 .filters .search > span { display: flex; gap: 8px; }
 .filters .search input { flex-grow: 1; min-width: 0; }
+/* the search button inside its field, so it can't pass for another field */
+.filters .search-field { position: relative; }
+.filters .search-field input { padding-right: 42px; }
+.search-go { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center;
+  justify-content: center; width: 34px; height: 30px; border: 0; border-radius: 6px; background: none; color: var(--muted);
+  cursor: pointer; }
+.search-go:hover { background: var(--neutral-bg); color: var(--ink); }
+.filters .reset { align-self: center; font-size: 13px; color: var(--accent); }
+/* the Mails filters: a box that only shows its summary on a phone (folded there by the page's script) */
+.filter-box > summary { display: none; }
+.filter-box > summary .count { display: inline-flex; align-items: center; justify-content: center; min-width: 20px;
+  height: 20px; padding: 0 6px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-ink);
+  font-size: 12px; font-weight: 600; }
 .filters .sel { flex: 1 1 150px; max-width: 220px; }
 .filters .toggles { flex-basis: 100%; gap: 8px; }
 
@@ -238,9 +251,11 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 .maillist .date-inline { display: none; }
 .maillist .pill { max-width: 150px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
 .maillist .meter .track { width: 40px; }
+/* below the category: where the mail is, when that isn't its category's folder */
+.maillist td.cat .where-note { display: block; margin-top: 3px; font-size: 12px; color: var(--warn); }
 /* with the detail open, confidence and folder are shown there - give the subject the room */
-.has-detail .maillist .conf, .has-detail .maillist .where { display: none; }
-@media (min-width: 1600px) { .has-detail .maillist .conf, .has-detail .maillist .where { display: table-cell; } }
+.has-detail .maillist .conf { display: none; }
+@media (min-width: 1600px) { .has-detail .maillist .conf { display: table-cell; } }
 .detail h2 { font-size: 17px; line-height: 1.35; overflow-wrap: anywhere; }
 .detail dl { margin: 0; display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px 12px; font-size: 13px; }
 .detail dt { color: var(--muted); } .detail dd { margin: 0; overflow-wrap: anywhere; }
@@ -462,7 +477,6 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
   .task { grid-template-columns: minmax(0, 1fr) auto; }
   .task .about { grid-column: 1 / -1; }
   .has-detail .maillist .conf { display: table-cell; }
-  .maillist .where, .has-detail .maillist .where { display: none; }
 }
 @media (max-width: 960px) {
   .maillist .conf, .has-detail .maillist .conf { display: none; }
@@ -479,6 +493,11 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
 }
 @media (max-width: 760px) {
   .main { padding: 20px 16px; }
+  .filter-box > summary { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px;
+    border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); font-weight: 500;
+    cursor: pointer; list-style: none; }
+  .filter-box > summary::-webkit-details-marker { display: none; }
+  .filter-box[open] > summary { margin-bottom: 12px; }
   .sched { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
   .sched-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
   .cols-2, .cols-3 { grid-template-columns: minmax(0, 1fr); }
