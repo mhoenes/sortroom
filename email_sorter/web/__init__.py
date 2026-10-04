@@ -192,6 +192,7 @@ _ASSETS = _asset_urls(HERE / "static")
 templates.env.globals["asset"] = _ASSETS.__getitem__  # unknown name: fails loudly while rendering
 # AGPL-3.0 section 13: users of the web UI are offered the source. Point this at your own
 # repository if you run a modified version for others.
+templates.env.globals["session_days"] = SESSION_DAYS
 templates.env.globals["source_url"] = os.environ.get("SOURCE_URL", "https://github.com/mhoenes/sortroom")
 
 def run_kind(kind: str) -> str:
