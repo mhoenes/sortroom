@@ -32,12 +32,13 @@
 </section>
 {% endif %}
 
-{% macro go(label, primary=false, danger=false, disabled=false, why=none) %}<div class="go">
+{% set sort_ask = _('Sort for real now? The mails are moved into their folders and the model costs money. A dry run shows first what would happen.') %}
+{% macro go(label, primary=false, danger=false, disabled=false, why=none, ask=none) %}<div class="go">
       {# the dry run comes first, so Enter in a field only ever starts a dry run #}
       <button class="btn small" type="submit" {% if disabled %}disabled{% endif %}>{{ _('Dry run') }}</button>
       <button class="btn small {{ 'primary' if primary }}{{ 'danger' if danger }}" type="submit" name="live" value="1"
         {% if disabled %}disabled title="{{ why or _('Settings are read-only') }}"{% endif %}
-        {% if danger %}onclick='return confirm({{ _("Really run it? Check first with a dry run what would happen.")|tojson }})'{% endif %}>{{ label }}</button>
+        {% if ask or danger %}onclick='return confirm({{ (ask or _("Really run it? Check first with a dry run what would happen."))|tojson }})'{% endif %}>{{ label }}</button>
     </div>{% endmacro %}
 
 <section class="card stack">
@@ -48,14 +49,14 @@
       <div class="about"><h3>{{ _('Start a run now') }}</h3>
         <p>{{ _('The same run as the scheduled one: new mails of the last %(days)s days that are older than the waiting time.', days=box.cfg.lookback_days) }}</p></div>
       <div class="fields"><label class="f">{{ _('Max. mails') }} <input type="number" name="limit" min="1" max="100000" step="1" placeholder="{{ _('default: %(n)s', n=box.cfg.max_per_run) }}"></label></div>
-      {{ go(_('Sort now'), primary=true) }}
+      {{ go(_('Sort now'), primary=true, ask=sort_ask) }}
     </form>
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/backfill">{{ hidden() }}
       <div class="about"><h3>{{ _('Backfill') }}</h3>
         <p>{{ _('Sorts older mails in the inbox from a date on, month by month. Mails already processed are skipped.') }}</p></div>
       <div class="fields"><label class="f">{{ _('From date') }} <input type="date" name="since" max="{{ today }}" required></label>
         <label class="f">{{ _('Max. mails') }} <input type="number" name="limit" min="1" max="100000" step="1" placeholder="{{ _('empty = all') }}"></label></div>
-      {{ go(_('Sort older mails')) }}
+      {{ go(_('Sort older mails'), ask=sort_ask) }}
     </form>
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/resort">{{ hidden() }}
       <div class="about"><h3>{{ _('Re-sort a folder') }}</h3>
@@ -66,13 +67,13 @@
             {% for f in folders %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
           </select></label>
         <label class="f">{{ _('Max. mails') }} <input type="number" name="limit" min="1" max="100000" step="1" placeholder="{{ _('empty = all') }}"></label></div>
-      {{ go(_('Re-sort folder')) }}
+      {{ go(_('Re-sort folder'), ask=sort_ask) }}
     </form>
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/recheck">{{ hidden() }}
       <div class="about"><h3>{{ _('Check expiry dates') }}</h3>
         <p>{{ _('Looks for an expiry date in already sorted mails of categories with "Track expiry date" that were never checked.') }}</p></div>
       <div class="fields"></div>
-      {{ go(_('Check dates')) }}
+      {{ go(_('Check dates'), ask=_('Check the expiry dates for real? Expired offers are moved. A dry run shows first which.')) }}
     </form>
   </div>
 </section>
@@ -93,7 +94,7 @@
         <p>{{ _('Moves mail older than its rule allows into the trash of the mailbox (Rules → Deletion rules). The dry run lists what would go.') }}</p>
         <p class="muted">{% if box.cfg.delete_rules %}{{ ngettext('%(num)s rule · runs by itself once a day.', '%(num)s rules · run by themselves once a day.', box.cfg.delete_rules|length) }}{% else %}{{ _('No deletion rules yet.') }} <a href="/ui/m/{{ box.id }}/rules#deletion-rules">{{ _('Set them up') }}</a>{% endif %}</p></div>
       <div class="fields"></div>
-      {{ go(_('Apply rules'), disabled=not box.cfg.delete_rules, why=_('No deletion rules yet')) }}
+      {{ go(_('Apply rules'), ask=_('Move the mails the deletion rules name into the trash now? A dry run shows first which.'), disabled=not box.cfg.delete_rules, why=_('No deletion rules yet')) }}
     </form>
     <form class="task" method="post" action="/ui/m/{{ box.id }}/maintenance/relocate">{{ hidden() }}
       <div class="about"><h3>{{ _('Move a category into its folder') }}</h3>
@@ -102,7 +103,7 @@
           <select name="category" required>
             {% for key, c in box.cfg.categories.items() if c.folder %}<option value="{{ key }}">{{ c.label }} → {{ c.folder }}</option>{% endfor %}
           </select></label></div>
-      {{ go(_('Move mails')) }}
+      {{ go(_('Move mails'), ask=_('Move the sorted mails of this category into its folder now? A dry run shows first which.')) }}
     </form>
     {# undoing happens on the run's own page, which lists its mails #}
     <form class="task" id="undo" method="get" action="/ui/m/{{ box.id }}/undo">
