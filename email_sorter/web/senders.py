@@ -1,4 +1,4 @@
-"""The senders page: who sends the most mail with an unsubscribe link, and unsubscribing from them."""
+"""The Subscriptions page: who sends the most mail with an unsubscribe link, and unsubscribing from them."""
 from __future__ import annotations
 
 import logging
@@ -26,21 +26,47 @@ def _links(sender: dict) -> dict:
             "mailto": next((x for x in links if x.lower().startswith("mailto:")), None)}
 
 
+# the status filter: what is still to do (the default: not unsubscribed, or mail still comes after you did),
+# mail still coming after unsubscribing, unsubscribed, all
+STATUSES = ("", "coming", "done", "all")
+
+
+def _status(sender: dict) -> str:
+    """open (not unsubscribed), coming (unsubscribed, but mail came since) or done."""
+    if not sender["unsubscribed"]:
+        return "open"
+    return "coming" if sender["since"] else "done"
+
+
+def _shown(status: str, wanted: str) -> bool:
+    return {"": status != "done", "coming": status == "coming", "done": status != "open"}.get(wanted, True)
+
+
+def _back(box_id: str, category: str, status: str) -> str:
+    query = {k: v for k, v in (("category", category), ("status", status)) if v}
+    return f"/ui/m/{box_id}/senders" + (f"?{urlencode(query)}" if query else "")
+
+
 @router.get("/ui/m/{box_id}/senders", response_class=HTMLResponse, dependencies=[Depends(require_login)])
-def senders(request: Request, box_id: str, category: str = ""):
+def senders(request: Request, box_id: str, category: str = "", status: str = ""):
     boxes, box = _box(request, box_id)
     category = category if category in box.cfg.categories else ""
+    status = status if status in STATUSES else ""
     db = queries.connect(box.workspace)
     try:
-        rows = queries.senders(db, category, danger=DANGER_CATEGORIES)
+        everyone = queries.senders(db, category, danger=DANGER_CATEGORIES)
     finally:
         if db:
             db.close()
-    for row in rows:
-        row.update(_links(row))
+    for row in everyone:
+        row.update(_links(row), status=_status(row))
+    counts = {s: sum(_shown(r["status"], s) for r in everyone) for s in STATUSES}
+    # mail still coming after you unsubscribed: on top, it needs a look
+    rows = sorted((r for r in everyone if _shown(r["status"], status)), key=lambda r: r["status"] != "coming")
     return _page(request, "senders.html", {
-        **_sidebar(request, boxes, box, "senders"), "box": box, "rows": rows, "category": category,
-        "days": queries.SENDER_DAYS, "label": lambda k: _label(box, k)})
+        **_sidebar(request, boxes, box, "senders"), "box": box, "rows": rows, "any": bool(everyone),
+        "category": category, "status": status, "counts": counts, "days": queries.SENDER_DAYS,
+        "label": lambda k: _label(box, k)})
 
 
 @router.post("/ui/m/{box_id}/senders/action", dependencies=[Depends(require_login)])
@@ -48,8 +74,8 @@ async def sender_action(request: Request, box_id: str):
     form = await _form(request)
     _all_boxes, box = _box(request, box_id)
     address, action = str(form.get("address") or "").strip().lower(), str(form.get("action") or "")
-    category = str(form.get("category") or "")
-    back = f"/ui/m/{box.id}/senders" + (f"?{urlencode({'category': category})}" if category else "")
+    category, status = str(form.get("category") or ""), str(form.get("status") or "")
+    back = _back(box.id, category if category in box.cfg.categories else "", status if status in STATUSES else "")
     store = Store(box.workspace / "data" / "state.db")
     try:
         sender = store.sender(address) if address else None

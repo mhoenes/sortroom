@@ -1,22 +1,28 @@
 {% extends "base.html" %}
-{% block title %}{{ _('Senders') }} · {{ box.name }}{% endblock %}
-{% macro act(r, action, text, cls='', confirm=none) %}<form method="post" action="/ui/m/{{ box.id }}/senders/action">
+{% block title %}{{ _('Subscriptions') }} · {{ box.name }}{% endblock %}
+{% macro act(r, action, text, cls='btn small', confirm=none) %}<form method="post" action="/ui/m/{{ box.id }}/senders/action">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="address" value="{{ r.address }}">
-      <input type="hidden" name="category" value="{{ category }}">
-      <button class="btn small {{ cls }}" type="submit" name="action" value="{{ action }}"
+      <input type="hidden" name="category" value="{{ category }}"><input type="hidden" name="status" value="{{ status }}">
+      <button class="{{ cls }}" type="submit" name="action" value="{{ action }}"
         {% if confirm %}onclick='return confirm({{ confirm|tojson }})'{% endif %}>{{ text }}</button></form>{% endmacro %}
 {% block content %}
 <div class="head">
   <div class="title">
     <span class="eyebrow">{{ box.name }}</span>
-    <h1>{{ _('Senders') }}</h1>
-    <div class="sub">{{ _('Senders whose mails carry an unsubscribe link, by mails in the last %(days)s days', days=days) }}</div>
+    <h1>{{ _('Subscriptions') }}</h1>
+    <div class="sub">{{ _('Senders whose mails carry an unsubscribe link, by number of mails (%(days)s days)', days=days) }}</div>
   </div>
 </div>
 
-{# the filter only once there is something to filter, or while one is set #}
-{% if rows or category %}
+{# the filters only once there is something to filter, or while one is set #}
+{% if any or category or status %}
 <form class="filters" method="get" action="/ui/m/{{ box.id }}/senders">
+  <label class="f sel">{{ _('Status') }}
+    <select name="status" onchange="this.form.submit()">
+      {% for key, text in (('', _('To do')), ('coming', _('Mail despite unsubscribing')), ('done', _('Unsubscribed')), ('all', _('All'))) %}
+      <option value="{{ key }}" {% if status == key %}selected{% endif %}>{{ text }} ({{ counts[key] }})</option>{% endfor %}
+    </select>
+  </label>
   <label class="f sel">{{ _('Category') }}
     <select name="category" onchange="this.form.submit()">
       <option value="">{{ _('All') }}</option>
@@ -30,7 +36,8 @@
   {% if rows %}
   <div class="scroll-x"><table class="senders">
     <thead><tr><th scope="col">{{ _('Sender') }}</th><th scope="col" class="opt">{{ _('Category') }}</th>
-      <th scope="col" class="num">{{ _('Mails') }}</th><th scope="col" class="opt">{{ _('Last mail') }}</th><th scope="col">{{ _('Unsubscribe') }}</th></tr></thead>
+      <th scope="col" class="num">{{ _('Mails') }}</th><th scope="col" class="opt wide">{{ _('Last mail') }}</th>
+      <th scope="col">{{ _('Status') }}</th><th scope="col"><span class="sr-only">{{ _('Action') }}</span></th></tr></thead>
     <tbody>
     {% for r in rows %}
       <tr>
@@ -40,30 +47,47 @@
           <a href="/ui/m/{{ box.id }}/mails?period=all&amp;q={{ r.address|urlencode }}">{{ r.address }}</a></td>
         <td class="opt">{{ label(r.category) if r.category else '–' }}</td>
         <td class="num">{{ r.mails|num }}</td>
-        <td class="opt" style="white-space:nowrap">{{ r.last|dt }}</td>
-        <td><div class="unsub">
+        <td class="opt wide" style="white-space:nowrap">{{ r.last|dt }}</td>
+        <td class="status">
+          {%- if r.unsubscribed %}<span class="pill ok">{{ _('Unsubscribed') }}</span>
+            {%- if r.since %} <span class="pill warn">{{ ngettext('%(num)s mail since', '%(num)s mails since', r.since) }}</span>{% endif %}
+            <span class="status-note">{{ _('on %(date)s', date=r.unsubscribed|date) }}</span>
+          {%- elif r.suspicious %}<span class="pill err" title="{{ ngettext('%(num)s mail of this sender was sorted as suspicious', '%(num)s mails of this sender were sorted as suspicious', r.suspicious) }}">{{ _('Suspicious') }}</span>
+          {%- endif %}</td>
+        <td class="act"><div class="unsub">
           {% if r.unsubscribed %}
-            <span class="pill ok">{{ _('Unsubscribed %(date)s', date=r.unsubscribed|date) }}</span>
-            {% if r.since %}<span class="pill warn">{{ ngettext('%(num)s mail since', '%(num)s mails since', r.since) }}</span>{% endif %}
-            {{ act(r, 'reset', _('Reset')) }}
+            {{ act(r, 'reset', _('Not unsubscribed'), 'text-btn') }}
           {% elif r.suspicious %}
             {# no unsubscribing, no link, no mail: that would only tell the sender the address is read #}
-            <span class="pill err" title="{{ ngettext('%(num)s mail of this sender was sorted as suspicious', '%(num)s mails of this sender were sorted as suspicious', r.suspicious) }}">{{ _('Suspicious') }}</span>
             <span class="unsub-note">{{ _('Do not unsubscribe – that only tells the sender your address is read.') }}</span>
-          {% elif r.one_click %}
-            {{ act(r, 'unsubscribe', _('Unsubscribe'), 'primary', _('Unsubscribe from %(sender)s? Sortroom sends the unsubscribe request to %(host)s.', sender=r.address, host=r.one_click_host)) }}
           {% else %}
-            {% if r.web %}<a class="btn small" href="{{ r.web }}" target="_blank" rel="noopener noreferrer">{{ _('Open link') }}</a>{% endif %}
-            {% if r.mailto %}<a class="btn small" href="{{ r.mailto }}">{{ _('Write mail') }}</a>{% endif %}
-            {{ act(r, 'mark', _('Mark as unsubscribed')) }}
+            {# one way to unsubscribe: the one-click request, else the sender's page, else a mail #}
+            {% if r.one_click %}
+              {{ act(r, 'unsubscribe', _('Unsubscribe'), 'btn small tonal', _('Unsubscribe from %(sender)s? Sortroom sends the unsubscribe request to %(host)s.', sender=r.address, host=r.one_click_host)) }}
+            {% elif r.web %}<a class="btn small tonal" href="{{ r.web }}" target="_blank" rel="noopener noreferrer" data-unsub
+                title="{{ _('Opens the unsubscribe page of the sender') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>{{ _('Unsubscribe') }}</a>
+            {% elif r.mailto %}<a class="btn small tonal" href="{{ r.mailto }}" data-unsub
+                title="{{ _('Writes the unsubscribe mail to the sender') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>{{ _('Unsubscribe') }}</a>
+            {% endif %}
+            {# after its page or mail (or if you did elsewhere): note it; the script asks once the link was used #}
+            <span class="unsub-mark"><span class="unsub-ask">{{ _('Done?') }}</span>
+              {{ act(r, 'mark', _('Mark as unsubscribed'), 'text-btn') }}</span>
+            {% if r.web and r.mailto and not r.one_click %}<a class="unsub-alt" href="{{ r.mailto }}">{{ _('or by mail') }}</a>{% endif %}
           {% endif %}
         </div></td>
       </tr>
     {% endfor %}
     </tbody>
   </table></div>
-  <p class="muted hint">{{ _('"Unsubscribe" sends the one-click request of the sender (RFC 8058) from this server. For the other senders open the link or write the mail yourself, then mark them. Unsubscribe links are read when mails are sorted and when the log is reconciled.') }}</p>
+  <p class="muted hint">{{ _('"Unsubscribe" sends the one-click request of the sender (RFC 8058) from this server, or opens its unsubscribe page or mail – then mark it as unsubscribed. Unsubscribe links are read when mails are sorted and when the log is reconciled.') }}</p>
+  {% elif any %}<div class="empty">{{ _('No sender with this status.') if status else _('Nothing left to do: you unsubscribed from all of them.') }}</div>
   {% elif category %}<div class="empty">{{ _('No sender of this category with an unsubscribe link in the last %(days)s days.', days=days) }}</div>
   {% else %}<div class="empty">{{ _('No sender with an unsubscribe link in the last %(days)s days. The links are read when mails are sorted and when the log is reconciled (Maintenance).', days=days) }}</div>{% endif %}
 </section>
+<script>
+  // once the sender's page or mail was opened: ask whether it worked
+  document.querySelectorAll('[data-unsub]').forEach(link => link.addEventListener('click', () => {
+    link.closest('.unsub').querySelector('.unsub-mark').classList.add('asked');
+  }));
+</script>
 {% endblock %}

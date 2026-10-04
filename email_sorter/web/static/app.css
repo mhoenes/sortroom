@@ -478,6 +478,9 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
 }
 
 @media (max-width: 1100px) {
+  /* Subscriptions: room for the status and the actions */
+  .senders .wide { display: none; }
+  table.senders .addr { max-width: 220px; }
   .cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .split, .mails, .mails.has-detail, .catgrid { grid-template-columns: minmax(0, 1fr); }
   /* forms: two columns on a laptop or tablet, one only on a phone (760px) */
@@ -547,7 +550,8 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
   table.senders tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; border-bottom: 1px solid var(--line-soft); }
   table.senders tr:last-child { border-bottom: 0; }
   table.senders td { border-bottom: 0; }
-  table.senders td:last-child { grid-column: 1 / -1; padding-top: 0; }
+  table.senders td:last-child, table.senders td.status { grid-column: 1 / -1; padding-top: 0; }
+  table.senders td.status:empty { display: none; }
   table.senders .addr { max-width: none; }
   .review a { flex-direction: column; align-items: stretch; gap: 6px; }
   .review .what, .review .guess { width: auto; }
@@ -560,6 +564,14 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
 .senders .addr .from-name + a { font-size: 13px; }
 .unsub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .unsub form { display: contents; }
+/* beside the Unsubscribe button: noting it quietly; once its page or mail was opened, asked for */
+.unsub-mark { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 6px; }
+.unsub-ask { display: none; font-size: 13px; color: var(--muted); }
+.unsub-mark.asked .unsub-ask { display: inline; }
+.unsub-mark.asked .text-btn { font-weight: 600; }
+.unsub .text-btn, .unsub-alt { font-size: 13px; }
+.senders td.status .pill { margin: 2px 4px 2px 0; white-space: nowrap; }
+.senders td.status .status-note { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
 .unsub-note { font-size: 13px; color: var(--muted); }
 
 /* with a mouse or trackpad the controls can be lower than the 44px a finger needs: forms like Settings and

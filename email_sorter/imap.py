@@ -153,7 +153,7 @@ def find_uids(mb: MailBox, folder: str, wanted: dict[str, str | None], fallback_
     return found
 
 
-# the header lines a message key, a sender rule and the senders page need (see mailtext)
+# the header lines a message key, a sender rule and the Subscriptions page need (see mailtext)
 HEADER_FIELDS = ("MESSAGE-ID", "FROM", "SUBJECT", "DATE", "LIST-UNSUBSCRIBE", "LIST-UNSUBSCRIBE-POST")
 
 

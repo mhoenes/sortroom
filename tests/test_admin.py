@@ -404,14 +404,21 @@ def test_senders_page_and_unsubscribe(client, setup, monkeypatch):
     monkeypatch.setattr(senders_web, "one_click", lambda url: sent.append(url) or 200)
 
     html = client.get("/ui/m/privat/senders").text
-    assert "Absender · Privat" in html and 'href="/ui/m/privat/senders" aria-current="page"' in html
+    assert "Abonnements · Privat" in html and 'href="/ui/m/privat/senders" aria-current="page"' in html
     assert "news@shop.example" in html and "Von news@shop.example abmelden? Sortroom schickt die Abmeldung an shop.example." in html
-    assert 'href="mailto:off@verein.example"' in html and "Als abgemeldet markieren" in html
+    # one Unsubscribe per sender: here the mail, then noting it
+    assert 'href="mailto:off@verein.example" data-unsub' in html and "Als abgemeldet markieren" in html
+    assert '<option value="" selected>Zu erledigen (2)</option>' in html and "Abgemeldet (0)" in html
+    assert "Kein Absender mit diesem Status" in client.get("/ui/m/privat/senders?status=done").text
     token = _csrf(html)
     r = client.post("/ui/m/privat/senders/action", data={"csrf": token, "address": "news@shop.example",
-                                                          "action": "unsubscribe", "category": "werbung"})
+                                                          "action": "unsubscribe", "category": "werbung", "status": ""})
     assert sent == ["https://shop.example/u"] and "Von news@shop.example abgemeldet" in r.text
-    assert "Abgemeldet am" in r.text and str(r.url).endswith("/senders?category=werbung")
+    assert str(r.url).endswith("/senders?category=werbung")
+    assert "Zu erledigen (1)" in r.text and 'class="status-note"' not in r.text  # done: no longer in "To do"
+    html = client.get("/ui/m/privat/senders?status=done").text
+    assert '<span class="pill ok">Abgemeldet</span>' in html and '<span class="status-note">am ' in html
+    assert "club@verein.example" not in html and "Nicht abgemeldet" in html
     r = client.post("/ui/m/privat/senders/action", data={"csrf": token, "address": "club@verein.example",
                                                           "action": "unsubscribe"})
     assert "bietet keine One-Click-Abmeldung" in r.text and len(sent) == 1
@@ -420,8 +427,20 @@ def test_senders_page_and_unsubscribe(client, setup, monkeypatch):
     assert store.sender("club@verein.example")["method"] == "manual"
     assert store.sender("news@shop.example")["method"] == "one-click"
     store.close()
-    r = client.post("/ui/m/privat/senders/action", data={"csrf": token, "address": "news@shop.example", "action": "reset"})
-    assert "nicht mehr als abgemeldet markiert" in r.text
+    r = client.post("/ui/m/privat/senders/action", data={"csrf": token, "address": "news@shop.example",
+                                                          "action": "reset", "status": "done"})
+    assert "nicht mehr als abgemeldet markiert" in r.text and str(r.url).endswith("/senders?status=done")
+    html = client.get("/ui/m/privat/senders").text
+    assert "news@shop.example" in html and "club@verein.example" not in html
+
+    # mail after unsubscribing: on top, also in "To do"
+    store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
+    store.db.execute("UPDATE senders SET unsubscribed = '2020-01-01T00:00:00' WHERE address = 'club@verein.example'")
+    store.db.commit()
+    store.close()
+    html = client.get("/ui/m/privat/senders").text
+    assert html.index("club@verein.example") < html.index("news@shop.example") and "1 Mail seitdem" in html
+    assert "Mails trotz Abmeldung (1)" in html
 
 
 def test_no_unsubscribing_from_suspicious_senders(client, setup, monkeypatch):
