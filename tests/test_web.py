@@ -237,13 +237,26 @@ def test_all_mailboxes_says_when_nothing_can_be_sorted_and_adds_a_mailbox_once(c
     assert 'href="/ui/settings#model">Globale Einstellungen</a>.' in html and "wird nichts sortiert" in html
     monkeypatch.setattr(web, "classifier_key", lambda path: "k")
     assert "wird nichts sortiert" not in c.get("/ui").text
-    # the button to add a mailbox is in the header while there are some
-    assert html.count("Postfach hinzufügen") == 1
+    # the button to add a mailbox: in the header (a phone hides it) and below the cards (a wide screen hides that),
+    # only while there are mailboxes
+    assert html.count("Postfach hinzufügen") == 2 and 'class="btn add-box"' in html and 'class="add-box-foot"' in html
+    # nothing counted, nothing to open: a figure of zero is no link
+    write_secrets(web._boxes(c)["gmail"].secrets_path, "imap", {"user": "u", "password": "p"})
+    gmail = c.get("/ui").text.split('id="box-gmail"')[1].split("</section>")[0]
+    assert "<div><span>Zur Prüfung</span><b>0</b></div>" in gmail and "mails?uncertain=1" not in gmail
+    assert "<div><span>Mit Stern (7 Tage)</span><b>0</b></div>" in gmail
+    # running: the pill says it, the line doesn't say it again
+    monkeypatch.setattr(api.app.state, "is_busy", lambda box: True)
+    monkeypatch.setattr(api.app.state.scheduler, "status", lambda box: {
+        "enabled": True, "active": True, "running": True, "minutes": 10, "next": None})
+    running = c.get("/ui").text
+    assert 'class="pill info">Läuft gerade</span>' in running and "Ein Lauf läuft gerade" not in running
     # without any mailbox: one button, in the card, and no hint about a key
     monkeypatch.setattr(api, "load_mailboxes", lambda base, path: {})
     monkeypatch.setattr(api.app.state, "load_mailboxes", lambda: {})
     empty = c.get("/ui").text
     assert empty.count("Postfach hinzufügen") == 1 and 'class="btn primary" href="/ui/mailboxes/new"' in empty
+    assert "add-box" not in empty
     assert "wird nichts sortiert" not in empty
 
 
@@ -450,7 +463,8 @@ def test_all_mailboxes_sums_in_the_subtitle_review_button_quiet_schedule_and_log
     assert 'class="stat needs-review" href="/ui/m/privat/mails?uncertain=1&amp;period=30d"' in html
     assert ('class="btn primary" href="/ui/m/privat/mails?uncertain=1&amp;period=30d&amp;key=%3Cr3%40x%3E">'
             'Prüfen (1)</a>') in html
-    assert 'class="stat" href="/ui/m/privat"><span>Kosten diesen Monat' in html  # the cost: on to the Overview
+    # the cost leads nowhere, so it isn't a link; a figure that counts nothing isn't one either (gmail has a login below)
+    assert '<div><span>Kosten diesen Monat' in html and 'href="/ui/m/privat"><span>Kosten' not in html
     # the server only where the name doesn't say the account; no login saved: said, with the way
     assert CFG.imap_host in html
     assert "Noch kein Login gespeichert" in html

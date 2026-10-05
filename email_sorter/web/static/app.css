@@ -353,7 +353,9 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 
 /* all mailboxes: the totals and the cards share the width, however many there are */
 .totals { grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); }
-.boxes { grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); }
+.boxes { grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); align-items: start; }
+/* adding a mailbox is rare: in the header on a wide screen, below the cards on a phone */
+.add-box-foot { display: none; }
 
 /* mailbox cards */
 .boxcard { display: flex; flex-direction: column; gap: 16px; container-type: inline-size; }
@@ -658,6 +660,8 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
   .kpi .d { overflow-wrap: anywhere; }
   pre.log { white-space: pre; }  /* a line stays one line, so the times stay in a column; the log scrolls sideways */
   .head { flex-wrap: wrap; align-items: flex-start; }
+  .head .add-box { display: none; }
+  .add-box-foot { display: block; margin-top: 16px; }
   /* a mail of the category test is a block: the subject, the sender and date, then where it was and where it would go */
   table.trial thead { display: none; }
   table.trial tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center;
