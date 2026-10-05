@@ -14,6 +14,7 @@
     .ground { background: #161513 !important; }
     .card { background: #1F1E1B !important; border-color: #34322D !important; }
     .row { border-color: #2A2925 !important; }
+    .band { background: #26241F !important; border-left-color: #74D0C6 !important; }
     .ink { color: #ECEAE4 !important; }
     .muted { color: #ABA69A !important; }
     .link { color: #74D0C6 !important; }
@@ -40,19 +41,20 @@
       <table role="presentation" class="card" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#FFFFFF;border:1px solid #E2DFD7;border-radius:12px;">
         <tr><td class="pad ink" style="padding:20px 24px 4px;color:#1B1A17;font-size:18px;font-weight:600;">{{ name }}</td></tr>
         {% for g in groups %}
-        <tr><td class="pad" style="padding:16px 24px 6px;">
+        <tr><td style="padding:{{ '10px' if loop.first else '22px' }} 0 0;font-size:0;line-height:0;">&nbsp;</td></tr>
+        <tr><td class="pad band" style="padding:9px 24px 9px 20px;background:#EEF3F1;border-left:4px solid #0E766E;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-            <td class="ink" style="color:#1B1A17;font-size:14px;font-weight:600;">{{ g.heading }}
-              <span class="count" style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:10px;background:#E2F1EF;color:#0A5A54;font-size:12px;font-weight:600;">{{ g.total|num }}</span></td>
+            <td class="ink" style="color:#1B1A17;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;">{{ g.heading }}
+              <span class="count" style="display:inline-block;margin-left:8px;padding:1px 8px;border-radius:10px;background:#0E766E;color:#FFFFFF;font-size:12px;font-weight:600;letter-spacing:0;text-transform:none;">{{ g.total|num }}</span></td>
             {% if g.url %}<td align="right" style="white-space:nowrap;font-size:13px;"><a class="link" href="{{ g.url }}" style="color:#0E766E;text-decoration:none;font-weight:600;">{{ _('Show') }} &rarr;</a></td>{% endif %}
           </tr></table>
         </td></tr>
         <tr><td class="pad" style="padding:0 24px;">
           {% for i in g.items %}
-          <div class="row" style="padding:10px 0;border-top:1px solid #F0EEE8;">
-            <div style="font-size:15px;line-height:1.4;">{% if i.url %}<a class="link" href="{{ i.url }}" style="color:#0A5A54;text-decoration:none;font-weight:500;">{{ i.title }}</a>
+          <div class="row" style="padding:11px 0;{{ '' if loop.first else 'border-top:1px solid #F0EEE8;' }}">
+            <div style="font-size:14px;line-height:1.4;">{% if i.url %}<a class="link" href="{{ i.url }}" style="color:#0A5A54;text-decoration:none;font-weight:500;">{{ i.title }}</a>
               {%- else %}<span class="ink" style="color:#1B1A17;font-weight:500;">{{ i.title }}</span>{% endif %}</div>
-            <div class="muted" style="color:#5F5B52;font-size:13px;line-height:1.5;margin-top:2px;">{{ i.meta }}
+            <div class="muted" style="color:#5F5B52;font-size:12.5px;line-height:1.5;margin-top:2px;">{{ i.meta|quiet_addresses }}
               {%- if i.note and i.tone != 'err' %}&nbsp; <span class="{{ 'pill-warn' if i.tone == 'warn' else 'pill' }}" style="display:inline-block;padding:0 7px;border-radius:9px;font-size:12px;{{ 'background:#FBEEDC;color:#6E3503;' if i.tone == 'warn' else 'background:#EFEDE7;color:#5F5B52;' }}">{{ i.note }}</span>{% endif %}</div>
             {% if i.note and i.tone == 'err' %}<div class="err" style="color:#95251A;font-size:13px;line-height:1.5;margin-top:2px;">{{ i.note }}</div>{% endif %}
           </div>

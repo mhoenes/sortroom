@@ -139,8 +139,14 @@ def test_the_daily_summary(configured, smtp):
     # the HTML part: the same, and each subject opens its mail in the admin UI
     assert ('<a class="link" href="http://nas:8765/ui/m/privat/mails?uncertain=1&amp;period=30d&amp;key=unsure"'
             in html)
-    assert "Shop News &lt;s@shop.example&gt; · " in html and "läuft morgen ab" in html and "login failed" in html and "Tägliche Zusammenfassung" in html
+    # an address is a link in the text's own colour, so the mail program doesn't make it a blue underlined one
+    assert ('Shop News &lt;<a href="mailto:s@shop.example" style="color:inherit;text-decoration:none;">s@shop.example</a>'
+            '&gt; · ') in html and "läuft morgen ab" in html and "login failed" in html and "Tägliche Zusammenfassung" in html
     assert "<b>x</b>" not in html and "&lt;b&gt;x&lt;/b&gt;" in html and "key=%3Cb%3Ex%3C%2Fb%3E" in html
+    # each group is a band of its own (tinted, with an accent bar) and the first mail under it has no line above
+    assert html.count('class="pad band"') == 4 and "text-transform:uppercase" in html
+    assert 'border-left:4px solid #0E766E' in html and ".band { background: #26241F" in html
+
 
     sent_dir = configured.parent / "mailboxes"
     morning = datetime.combine(date.today(), datetime.min.time()).replace(hour=6, minute=59)
@@ -152,6 +158,15 @@ def test_the_daily_summary(configured, smtp):
     assert msg.get_content_type() == "multipart/alternative"
     assert "Zur Prüfung: 2" in msg.get_body(("plain",)).get_content()
     assert "Zur Prüfung" in msg.get_body(("html",)).get_content()
+
+
+def test_addresses_in_the_summary_are_quiet_links_and_everything_else_is_text():
+    quiet = digest.quiet_addresses
+    assert str(quiet("Max <max@x.example> · 04.10. 12:07")) == (
+        'Max &lt;<a href="mailto:max@x.example" style="color:inherit;text-decoration:none;">max@x.example</a>&gt; · 04.10. 12:07')
+    assert str(quiet("a@b.example")) .startswith('<a href="mailto:a@b.example"')
+    assert str(quiet("<script>alert(1)</script> & co")) == "&lt;script&gt;alert(1)&lt;/script&gt; &amp; co"
+    assert str(quiet("")) == ""
 
 
 def test_no_summary_on_a_quiet_day(configured, smtp):

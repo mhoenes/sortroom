@@ -6,12 +6,15 @@ into the admin UI.
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from pathlib import Path
 from urllib.parse import quote
+
+from markupsafe import Markup, escape
 
 from . import i18n
 from .config import Mailbox
@@ -147,6 +150,21 @@ def footer() -> str:
     return _("The daily summary of Sortroom. Switch it off under Global settings → Mail.")
 
 
+_ADDRESS = re.compile(r"[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+")
+
+
+def quiet_addresses(text: str) -> Markup:
+    """The text with each address a mailto link in the text's own colour: a mail program turns a bare address into a
+    blue underlined link by itself, which shouts in a list of senders."""
+    out, last = [], 0
+    for m in _ADDRESS.finditer(text):
+        out += [escape(text[last:m.start()]),
+                Markup('<a href="mailto:{0}" style="color:inherit;text-decoration:none;">{0}</a>').format(m.group(0))]
+        last = m.end()
+    out.append(escape(text[last:]))
+    return Markup("").join(out)
+
+
 def compose(config_path: Path, boxes: dict[str, Mailbox],
             now: datetime | None = None) -> tuple[str, str, str] | None:
     """(subject, text, html), or None when no mailbox has anything to report."""
@@ -173,6 +191,7 @@ def compose(config_path: Path, boxes: dict[str, Mailbox],
     if not sections:
         return None
     subject = _("Sortroom: %(review)s to review, %(starred)s starred", review=review, starred=starred)
+    templates.env.filters["quiet_addresses"] = quiet_addresses
     html = templates.get_template("mail_digest.html").render(
         subject=subject, day=i18n.date(now.date().isoformat()), sections=sections, footer=footer(),
         home=settings.link("/ui"))
