@@ -465,8 +465,8 @@ def test_all_mailboxes_sums_in_the_subtitle_review_button_quiet_schedule_and_log
             'Prüfen (1)</a>') in html
     # the cost leads nowhere, so it isn't a link; a figure that counts nothing isn't one either (gmail has a login below)
     assert '<div><span>Kosten diesen Monat' in html and 'href="/ui/m/privat"><span>Kosten' not in html
-    # the server only where the name doesn't say the account; no login saved: said, with the way
-    assert CFG.imap_host in html
+    # the card names the mailbox only; the server is not repeated there (it is in its settings)
+    assert CFG.imap_host not in html  # the server is in the mailbox's settings, not on its card
     assert "Noch kein Login gespeichert" in html
     # nothing to count without a login: the card says "Nicht eingerichtet" and offers the one thing to do
     gmail = html.split('id="box-gmail"')[1].split("</section>")[0]

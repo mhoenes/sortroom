@@ -30,7 +30,6 @@
     <div class="row" style="align-items:center">
       <div class="grow boxhead" style="display:flex;flex-direction:column;gap:2px">
         <h2 style="font-size:18px"><a class="boxname" href="/ui/m/{{ c.box.id }}">{{ c.box.name }}</a></h2>
-        {% if '@' not in c.box.name %}<span class="muted" style="font-size:13px">{{ c.box.cfg.imap_host }}</span>{% endif %}
       </div>
       {% set last = st.last_run %}
       {% set when = _('Last run: %(when)s', when=last.started|dt(true)) if last else '' %}
