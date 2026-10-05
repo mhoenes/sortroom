@@ -268,6 +268,17 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, a:focus-visible, 
 .detail .more-info dl { margin-top: 2px; }
 .maillist td { white-space: nowrap; padding-top: 8px; padding-bottom: 8px; }
 .maillist td.mail { width: 100%; }
+/* choosing several mails: the box column, the bar of what to do with them, the chosen rows */
+.maillist th.pick, .maillist td.pick { width: 32px; padding-right: 0; }
+.maillist .pick input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+.maillist tr.chosen td { background: var(--accent-soft); }
+.batch-bar { position: sticky; top: 8px; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
+  padding: 10px 12px; margin: 6px 0; border-radius: 10px; background: var(--accent-soft); border: 1px solid var(--line); }
+.batch-bar[hidden] { display: none; }
+.batch-bar .batch-count { font-weight: 600; margin-right: 4px; }
+.batch-bar .combo select { height: 32px; }
+.list-tools { display: none; }
+.select-toggle[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); }
 .maillist .subj, .maillist .meta { display: block; overflow: hidden; text-overflow: ellipsis; }
 .maillist .subj { font-weight: 500; }
 .maillist .meta { margin-top: 2px; font-size: 12px; color: var(--muted); }
@@ -662,6 +673,11 @@ svg.star.inline { display: inline-block; width: 14px; height: 14px; vertical-ali
   table.trial td[data-label]::before { content: attr(data-label) ": "; font-size: 12px; color: var(--muted); }
   .filters .sel { max-width: none; }
   .maillist .date { display: none; }
+  /* on a phone choosing mails is a mode: the button starts it, the boxes show, a tap on a row chooses it */
+  .list-tools { display: block; margin: 4px 0 6px; }
+  .batch-bar .combo { flex: 1 1 100%; min-width: 0; }
+  .batch-bar .combo select { flex: 1; min-width: 0; }
+  .maillist:not(.selecting) th.pick, .maillist:not(.selecting) td.pick { display: none; }
   /* phones: the open mail above the list, full width */
   .mails .detail { position: static; width: auto; max-height: none; box-shadow: none; order: -1; }
   .detail-backdrop { display: none; }

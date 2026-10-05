@@ -362,6 +362,68 @@ def test_mail_actions(client, setup, monkeypatch):
     assert [(x.match, x.action) for x in _box(setup).cfg.sender_rules][-1] == ("@example.de", "werbung")
 
 
+def test_several_mails_at_once_from_the_mails_page(client, setup, monkeypatch):
+    from email_sorter import manual
+    store = Store(setup / "mailboxes" / "privat" / "data" / "state.db")
+    for key, hours in (("<m2@x>", 1), ("<m3@x>", 2)):
+        store.record(SimpleNamespace(key=key, received=(datetime.now().astimezone() - timedelta(hours=hours)).isoformat(timespec="minutes"),
+                                     sender="shop@example.de", subject=f"Mail {key}", decision=Decision("werbung", 0.4, {}, 0.1, 0.0),
+                                     folder=None, flag=False, expires=None, source="classifier"))
+    store.set_gone(["<m3@x>"], True)  # deleted: no box
+    store.close()
+    html = client.get("/ui/m/privat/mails?period=all").text
+    # a box per mail, all of them in the form of the bar, and a box for all of the page
+    assert html.count('name="key" value="&lt;m1@x&gt;" form="batch"') == 1 and 'name="key" value="&lt;m2@x&gt;" form="batch"' in html
+    assert 'class="pick-all"' in html and 'action="/ui/m/privat/mails/batch"' in html
+    assert ">Vorschläge übernehmen</button>" in html and ">Stern entfernen</button>" in html and "Verschieben nach …" in html
+    assert 'name="back" value="period=all&amp;page=1"' in html
+    # a deleted mail can't be acted on: it is in the list when asked for, without a box
+    deleted = client.get("/ui/m/privat/mails?period=all&gone=1").text
+    assert "Mail &lt;m3@x&gt;" in deleted and 'value="&lt;m3@x&gt;" form="batch"' not in deleted
+    token = _csrf(html)
+    calls = []
+
+    def outcome(keys, how=manual.MOVED):
+        return {k: (manual.GONE if k == "<m2@x>" else how) for k in keys}
+
+    monkeypatch.setattr(admin, "accept_mails", lambda cfg, creds, ws, keys: calls.append(("accept", list(keys))) or outcome(keys))
+    monkeypatch.setattr(admin, "move_mails", lambda cfg, creds, ws, wanted: calls.append(("move", dict(wanted))) or outcome(wanted))
+    monkeypatch.setattr(admin, "set_stars", lambda cfg, creds, ws, keys, on: calls.append(("star" if on else "unstar", list(keys))) or outcome(keys))
+
+    def post(**data):
+        return client.post("/ui/m/privat/mails/batch", data={"csrf": token, "back": "period=all&page=1", **data},
+                           follow_redirects=False)
+
+    # accepting: one sentence says what happened; what was not found stays chosen (and the page says so, not hiding)
+    r = client.post("/ui/m/privat/mails/batch", data={"csrf": token, "back": "period=all&page=1", "action": "accept",
+                                                       "key": ["<m1@x>", "<m2@x>"]}, follow_redirects=False)
+    assert calls == [("accept", ["<m1@x>", "<m2@x>"])]
+    assert r.headers["location"] == "/ui/m/privat/mails?period=all&page=1&pick=%3Cm2%40x%3E"
+    page = client.get(r.headers["location"]).text
+    assert "1 Mail verschoben, 1 nicht gefunden (gelöscht oder von Hand verschoben?)." in page and 'class="banner warn"' in page
+    assert 'value="&lt;m2@x&gt;" form="batch" checked' in page and 'value="&lt;m1@x&gt;" form="batch" checked' not in page
+    # moving to a category or the inbox, stars
+    client.post("/ui/m/privat/mails/batch", data={"csrf": token, "action": "move", "category": "finanzen", "key": ["<m1@x>"]})
+    client.post("/ui/m/privat/mails/batch", data={"csrf": token, "action": "move", "category": "inbox", "key": ["<m1@x>", "<m1@x>"]})
+    r = client.post("/ui/m/privat/mails/batch", data={"csrf": token, "action": "star", "key": ["<m1@x>"]}, follow_redirects=True)
+    assert "Stern bei 1 Mail gesetzt." in r.text
+    r = client.post("/ui/m/privat/mails/batch", data={"csrf": token, "action": "unstar", "key": ["<m1@x>"]}, follow_redirects=True)
+    assert "Stern von 1 Mail entfernt." in r.text
+    assert calls[1:] == [("move", {"<m1@x>": "finanzen"}), ("move", {"<m1@x>": "inbox"}),  # a key twice: once
+                         ("star", ["<m1@x>"]), ("unstar", ["<m1@x>"])]
+    n = len(calls)
+    # nothing chosen, an unknown action, no category: said, nothing done
+    assert "Bitte mindestens eine Mail auswählen." in client.post("/ui/m/privat/mails/batch", data={"csrf": token, "action": "accept"}, follow_redirects=True).text
+    assert "Unbekannte Aktion." in client.post("/ui/m/privat/mails/batch", data={"csrf": token, "action": "x", "key": "<m1@x>"}, follow_redirects=True).text
+    assert "Bitte eine Kategorie wählen." in client.post("/ui/m/privat/mails/batch", data={"csrf": token, "action": "move", "category": "gibtsnicht", "key": "<m1@x>"}, follow_redirects=True).text
+    assert len(calls) == n
+    # the sentence for the other outcomes
+    assert admin._batch_text("accept", {"a": manual.MOVED, "b": manual.MOVED, "c": manual.SORTED, "d": manual.NO_FOLDER, "e": manual.UNCHANGED}) == (
+        "2 Mails verschoben, 1 ist schon dort, 2 blieben, wie sie sind (schon einsortiert, oder ihre Kategorie hat keinen Ordner).", "ok")
+    text, tone = admin._batch_text("move", {"a": manual.FAILED + ":the server said no", "b": manual.UNKNOWN})
+    assert tone == "warn" and "1 nicht gefunden" in text and "1 fehlgeschlagen: the server said no" in text
+
+
 def test_reviewing_from_the_overview(client, setup, monkeypatch):
     moves = []
     monkeypatch.setattr(admin, "move_mail", lambda cfg, creds, ws, key, cat: moves.append((key, cat)) or "INBOX/Werbung")

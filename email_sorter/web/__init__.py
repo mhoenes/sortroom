@@ -464,7 +464,8 @@ def mails(request: Request, box_id: str, q: str = "", category: str = "", folder
         "today": datetime.now().date().isoformat(), "offer_rule": rule if rule in box.cfg.categories
         or rule == INBOX_ACTION else "",
         "expired_to": lambda cat: expired_target(box.cfg, cat), "prev_key": prev_key, "next_key": next_key,
-        "notice": notice})
+        "notice": notice,
+        "picked": set(request.query_params.getlist("pick"))})  # still chosen after a batch: what didn't work
 
 
 from . import admin, editor, subscriptions, suggestions  # noqa: E402,F401  (register their pages on router)

@@ -53,13 +53,36 @@
 <div class="grid mails {% if selected %}has-detail{% endif %}">
   <section class="card" style="padding:6px 12px">
     {% if rows %}
+    <div class="list-tools"><button class="btn small select-toggle" type="button" aria-pressed="false">{{ _('Choose mails') }}</button></div>
+    {# several mails at once: the checkboxes of the list belong to this form; the bar shows while some are chosen #}
+    <form id="batch" class="batch-bar" method="post" action="/ui/m/{{ box.id }}/mails/batch"
+      data-accept-one="{{ ngettext('Move %(num)s mail to its suggested folder?', 'Move %(num)s mails to their suggested folders?', 1, num='{n}') }}"
+      data-accept-many="{{ ngettext('Move %(num)s mail to its suggested folder?', 'Move %(num)s mails to their suggested folders?', 2, num='{n}') }}"
+      data-move-one="{{ ngettext('Move %(num)s mail to %(category)s?', 'Move %(num)s mails to %(category)s?', 1, num='{n}', category='{category}') }}"
+      data-move-many="{{ ngettext('Move %(num)s mail to %(category)s?', 'Move %(num)s mails to %(category)s?', 2, num='{n}', category='{category}') }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token(request) }}">
+      <input type="hidden" name="back" value="{{ query ~ ('&' if query else '') ~ 'page=' ~ f.page }}">
+      <span class="batch-count" aria-live="polite"></span>
+      <button class="btn small primary" type="submit" name="action" value="accept" formnovalidate>{{ _('Accept suggestions') }}</button>
+      <span class="combo"><select name="category" required aria-label="{{ _('Move the chosen mails to') }}">
+        <option value="" selected disabled>{{ _('Move to …') }}</option>
+        {% for key, c in box.cfg.categories.items() %}<option value="{{ key }}">{{ c.label }}</option>{% endfor %}
+        <option value="inbox">{{ _('Back to the inbox') }}</option>
+      </select><button class="btn small" type="submit" name="action" value="move">{{ _('Move') }}</button></span>
+      <button class="btn small" type="submit" name="action" value="star" formnovalidate>{{ _('Star') }}</button>
+      <button class="btn small" type="submit" name="action" value="unstar" formnovalidate>{{ _('Remove star') }}</button>
+      <button class="btn small" type="button" data-clear>{{ _('Clear') }}</button>
+    </form>
     <div class="scroll-x"><table class="maillist">
-      <thead><tr><th scope="col" class="star-col"><span class="sr-only">{{ _('Star') }}</span></th><th scope="col" class="date">{{ _('Received') }}</th><th scope="col">{{ _('Mail') }}</th><th scope="col">{{ _('Category') }}</th><th scope="col" class="conf">{{ _('Confidence') }}</th></tr></thead>
+      <thead><tr><th scope="col" class="pick"><input type="checkbox" class="pick-all" aria-label="{{ _('Choose all mails of this page') }}"></th><th scope="col" class="star-col"><span class="sr-only">{{ _('Star') }}</span></th><th scope="col" class="date">{{ _('Received') }}</th><th scope="col">{{ _('Mail') }}</th><th scope="col">{{ _('Category') }}</th><th scope="col" class="conf">{{ _('Confidence') }}</th></tr></thead>
       <tbody>
       {% for m in rows %}
         {% set href = list_href ~ '&key=' ~ link_key(m.message_key) %}
         {% set low = m.confidence < min_conf %}
         <tr class="link {% if selected and selected.message_key == m.message_key %}sel{% endif %}">
+          {# a deleted mail can't be acted on: no box #}
+          <td class="pick">{% if not m.gone %}<input type="checkbox" name="key" value="{{ m.message_key }}" form="batch" {% if m.message_key in picked %}checked{% endif %}
+            aria-label="{{ _('Choose %(subject)s', subject=m.subject or _('(no subject)')) }}">{% endif %}</td>
           <td class="star-col">{% if m.flagged %}<svg class="star" viewBox="0 0 24 24" role="img" aria-label="{{ _('starred') }}"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z"/></svg>{% endif %}</td>
           {# the whole row opens the mail (script below); one tab stop per row, on the subject #}
           <td class="date"><a class="rowlink" href="{{ href }}" tabindex="-1">{{ m.received|dt }}</a></td>
@@ -218,13 +241,61 @@
         if (r.top < 0 || r.bottom > innerHeight) open.scrollIntoView({ block: 'center' });
       }
     }
-    // a click anywhere in a row opens its mail, like a click on its subject
+    // a click anywhere in a row opens its mail, like a click on its subject; in the box's cell (or in any cell while
+    // choosing on a phone) it chooses the mail instead
     const list = document.querySelector('.maillist');
     if (list) list.addEventListener('click', e => {
-      if (e.target.closest('a, button, input, select, label')) return;
-      const link = e.target.closest('tr.link')?.querySelector('td.mail a.rowlink');
-      if (link) link.click();
+      const choosing = list.classList.contains('selecting');
+      if (e.target.closest('button, input, select, label')) return;
+      if (e.target.closest('a') && !(choosing && e.target.closest('a.rowlink'))) return;  // choosing: a row's link chooses too
+      const row = e.target.closest('tr.link');
+      const box = row?.querySelector('input[name=key]');
+      if (box && (e.target.closest('td.pick') || choosing)) {
+        e.preventDefault();
+        box.checked = !box.checked;
+        box.dispatchEvent(new Event('change', { bubbles: true }));
+        return;
+      }
+      const link = row?.querySelector('td.mail a.rowlink');
+      if (link && !e.target.closest('a')) link.click();
     });
+    // several mails at once: the bar with what can be done to them shows while some are chosen
+    const batch = document.getElementById('batch');
+    if (batch && list) {
+      const boxes = [...list.querySelectorAll('input[name=key]')], all = list.querySelector('.pick-all');
+      const count = batch.querySelector('.batch-count'), toggle = document.querySelector('.select-toggle');
+      const counted = {{ _('%(n)s chosen', n='{n}')|tojson }};
+      const chosen = () => boxes.filter(b => b.checked).length;
+      const show = () => {
+        const n = chosen();
+        batch.hidden = n === 0;
+        count.textContent = counted.replace('{n}', n);
+        all.checked = n > 0 && n === boxes.length;
+        all.indeterminate = n > 0 && n < boxes.length;
+        boxes.forEach(b => b.closest('tr').classList.toggle('chosen', b.checked));
+      };
+      all.addEventListener('change', () => { boxes.forEach(b => { b.checked = all.checked; }); show(); });
+      boxes.forEach(b => b.addEventListener('change', show));
+      batch.querySelector('[data-clear]').addEventListener('click', () => { boxes.forEach(b => { b.checked = false; }); show(); });
+      // on a phone choosing is a mode of its own, so the list stays easy to read and to open mails from
+      toggle.addEventListener('click', () => {
+        const on = !list.classList.contains('selecting');
+        list.classList.toggle('selecting', on);
+        toggle.setAttribute('aria-pressed', String(on));
+        if (!on) { boxes.forEach(b => { b.checked = false; }); show(); }
+      });
+      if (chosen()) list.classList.add('selecting');  // some are still chosen after a batch: they stay in view
+      // moving mails asks first, with how many (and where to)
+      batch.addEventListener('submit', e => {
+        const go = e.submitter, n = chosen();
+        if (!go || !['accept', 'move'].includes(go.value)) return;
+        const ask = (go.value === 'accept' ? (n === 1 ? batch.dataset.acceptOne : batch.dataset.acceptMany)
+          : (n === 1 ? batch.dataset.moveOne : batch.dataset.moveMany))
+          .replace('{n}', n).replace('{category}', batch.querySelector('select').selectedOptions[0]?.textContent || '');
+        if (!confirm(ask)) e.preventDefault();
+      });
+      show();
+    }
     // on a phone the filters fold into "Filters", so the list comes first
     const box = document.querySelector('.filter-box');
     if (box && matchMedia('(max-width: 760px)').matches) box.open = false;
