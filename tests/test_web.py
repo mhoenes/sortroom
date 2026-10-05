@@ -12,6 +12,7 @@ from email_sorter.config import Mailbox
 from email_sorter.classifier import Decision
 from email_sorter.sorter import RunResult
 from email_sorter.store import Store
+from email_sorter.web.editing import write_secrets
 from support import example_config
 
 CFG = example_config()
@@ -46,6 +47,7 @@ def client(tmp_path, monkeypatch):
     store.record_run("backfill", "since 2025-01-01", now, now,
                      RunResult(exit_code=1, live=True, classified=10, failed=1, error="socket error"))
     store.close()
+    write_secrets(boxes["privat"].secrets_path, "imap", {"user": "u", "password": "p"})
     monkeypatch.setattr(api, "load_mailboxes", lambda base, path: boxes)
     with TestClient(api.app) as c:
         yield c
@@ -224,6 +226,25 @@ def test_all_mailboxes_page(client):
     assert 'href="/ui/m/privat/mails?uncertain=1&amp;period=30d"' in html
     assert 'href="/ui/m/privat/mails?flagged=1&amp;period=7d"' in html
     assert 'href="/ui/m/privat/mails">' not in html  # no separate "Mails" button any more
+
+
+def test_all_mailboxes_says_when_nothing_can_be_sorted_and_adds_a_mailbox_once(client, tmp_path, monkeypatch):
+    c = _login(client)
+    # a long name breaks inside the card, the status beside it stays whole (classes the stylesheet relies on)
+    html = c.get("/ui").text
+    assert 'class="grow boxhead"' in html
+    # without a key for the AI service no mailbox is sorted: said on top, with the way to the key
+    assert 'href="/ui/settings#model">Globale Einstellungen</a>.' in html and "wird nichts sortiert" in html
+    monkeypatch.setattr(web, "classifier_key", lambda path: "k")
+    assert "wird nichts sortiert" not in c.get("/ui").text
+    # the button to add a mailbox is in the header while there are some
+    assert html.count("Postfach hinzufügen") == 1
+    # without any mailbox: one button, in the card, and no hint about a key
+    monkeypatch.setattr(api, "load_mailboxes", lambda base, path: {})
+    monkeypatch.setattr(api.app.state, "load_mailboxes", lambda: {})
+    empty = c.get("/ui").text
+    assert empty.count("Postfach hinzufügen") == 1 and 'class="btn primary" href="/ui/mailboxes/new"' in empty
+    assert "wird nichts sortiert" not in empty
 
 
 def test_overview_page(client):
@@ -432,7 +453,12 @@ def test_all_mailboxes_sums_in_the_subtitle_review_button_quiet_schedule_and_log
     assert 'class="stat" href="/ui/m/privat"><span>Kosten diesen Monat' in html  # the cost: on to the Overview
     # the server only where the name doesn't say the account; no login saved: said, with the way
     assert CFG.imap_host in html
-    assert "Noch kein Login gespeichert" in html and 'href="/ui/m/gmail/settings#connection">Login eintragen</a>' in html
+    assert "Noch kein Login gespeichert" in html
+    # nothing to count without a login: the card says "Nicht eingerichtet" and offers the one thing to do
+    gmail = html.split('id="box-gmail"')[1].split("</section>")[0]
+    assert "Nicht eingerichtet" in gmail and 'class="stats"' not in gmail and "Zur Prüfung" not in gmail
+    assert 'class="btn primary" href="/ui/m/gmail/settings#connection">Login eintragen</a>' in gmail
+    assert 'class="stats"' in html.split('id="box-privat"')[1].split("</section>")[0]
     # the usual schedule isn't repeated on every card: only what is not usual
     usual = {"enabled": True, "active": True, "running": False, "minutes": 10, "next": datetime(2026, 9, 27, 17, 45)}
     monkeypatch.setattr(api.app.state.scheduler, "status", lambda box: dict(usual))
