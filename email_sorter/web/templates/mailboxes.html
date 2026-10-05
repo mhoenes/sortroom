@@ -17,7 +17,7 @@
       {%- endif %}</div>
     {% if cards|length > 1 %}<div class="sub totals-line">{{ _('%(n)s sorted today', n=totals.today|num) }} · {{ _('%(n)s to review', n=totals.uncertain|num) }} · {{ _('%(cost)s this month', cost=totals.cost|usd) }}</div>{% endif %}
   </div>
-  {% if cards %}<a class="btn" href="/ui/mailboxes/new">{{ _('Add mailbox') }}</a>{% endif %}
+  {% if cards %}<a class="btn add-box" href="/ui/mailboxes/new">{{ _('Add mailbox') }}</a>{% endif %}
 </div>
 
 {# 3: without a key for the AI service no mailbox is sorted #}
@@ -60,12 +60,14 @@
        without a login has nothing to count #}
     {% if not c.login_missing %}<div class="stats">
       <div><span>{{ _('Today') }}</span><b>{{ st.sorted_today|num }}</b></div>
-      <a class="stat {{ 'needs-review' if st.uncertain }}" href="/ui/m/{{ c.box.id }}/mails?uncertain=1&amp;period=30d"><span>{{ _('To review') }}</span><b>{{ st.uncertain|num }}</b></a>
-      <a class="stat" href="/ui/m/{{ c.box.id }}/mails?flagged=1&amp;period=7d"><span>{{ _('Starred (7 days)') }}</span><b>{{ st.flagged_7d|num }}</b></a>
-      <a class="stat" href="/ui/m/{{ c.box.id }}"><span>{{ _('Cost this month') }}</span><b>{{ st.cost_month|usd }}</b></a>
+      {% if st.uncertain %}<a class="stat needs-review" href="/ui/m/{{ c.box.id }}/mails?uncertain=1&amp;period=30d"><span>{{ _('To review') }}</span><b>{{ st.uncertain|num }}</b></a>
+      {% else %}<div><span>{{ _('To review') }}</span><b>{{ st.uncertain|num }}</b></div>{% endif %}
+      {% if st.flagged_7d %}<a class="stat" href="/ui/m/{{ c.box.id }}/mails?flagged=1&amp;period=7d"><span>{{ _('Starred (7 days)') }}</span><b>{{ st.flagged_7d|num }}</b></a>
+      {% else %}<div><span>{{ _('Starred (7 days)') }}</span><b>{{ st.flagged_7d|num }}</b></div>{% endif %}
+      <div><span>{{ _('Cost this month') }}</span><b>{{ st.cost_month|usd }}</b></div>
     </div>{% endif %}
     {% set s = c.schedule %}
-    {% if s.running or not (s.enabled and s.active) or status.mixed_intervals or (s.enabled and s.active and not s.next) %}
+    {% if not c.busy and (s.running or not (s.enabled and s.active) or status.mixed_intervals or (s.enabled and s.active and not s.next)) %}
     <div class="muted" style="font-size:13px">{% if s.running %}{{ _('A run is in progress') }}
       {% elif s.enabled and s.active and s.next %}{{ _('Next run %(time)s · every %(minutes)s min', time=s.next.strftime('%H:%M'), minutes=s.minutes) }}
       {% elif s.enabled and s.active %}{{ _('Schedule starts shortly') }}
@@ -88,4 +90,5 @@
   </section>
 {% endfor %}
 </div>
+{% if cards %}<div class="add-box-foot"><a class="btn" href="/ui/mailboxes/new">{{ _('Add mailbox') }}</a></div>{% endif %}
 {% endblock %}
