@@ -32,6 +32,7 @@
  "%(moved)s mail(s) moved to the trash": "%(moved)s Mail(s) in den Papierkorb verschoben",
  "%(moved)s mail(s) would go to the trash": "%(moved)s Mail(s) kämen in den Papierkorb",
  "%(moved)s moved": "%(moved)s verschoben",
+ "%(n)s chosen": "%(n)s ausgewählt",
  "%(n)s days ago": "vor %(n)s Tagen",
  "%(n)s h ago": "vor %(n)s Std",
  "%(n)s min ago": "vor %(n)s Min",
@@ -39,6 +40,10 @@
  "%(n)s sorted today": "%(n)s heute einsortiert",
  "%(n)s to review": "%(n)s zur Prüfung",
  "%(n)s unreadable": "%(n)s nicht lesbar",
+ "%(num)s already there": [
+  "%(num)s ist schon dort",
+  "%(num)s sind schon dort"
+ ],
  "%(num)s can still be undone": [
   "%(num)s lässt sich noch rückgängig machen",
   "%(num)s lassen sich noch rückgängig machen"
@@ -58,6 +63,11 @@
  "%(num)s failed run today": [
   "%(num)s Lauf mit Fehlern heute",
   "%(num)s Läufe mit Fehlern heute"
+ ],
+ "%(num)s failed: %(why)s": "%(num)s fehlgeschlagen: %(why)s",
+ "%(num)s left as it is (sorted already, or its category has no folder)": [
+  "%(num)s blieb, wie sie ist (schon einsortiert, oder ihre Kategorie hat keinen Ordner)",
+  "%(num)s blieben, wie sie sind (schon einsortiert, oder ihre Kategorie hat keinen Ordner)"
  ],
  "%(num)s mail": [
   "%(num)s Mail",
@@ -100,6 +110,10 @@
  "%(num)s more is taken by a rule above": [
   "%(num)s weitere Mail fängt schon eine Regel darüber ab",
   "%(num)s weitere Mails fängt schon eine Regel darüber ab"
+ ],
+ "%(num)s not found (deleted or moved by hand?)": [
+  "%(num)s nicht gefunden (gelöscht oder von Hand verschoben?)",
+  "%(num)s nicht gefunden (gelöscht oder von Hand verschoben?)"
  ],
  "%(num)s of %(total)s mails would be filed differently.": [
   "%(num)s von %(total)s Mails würde anders einsortiert.",
@@ -161,6 +175,7 @@
  "API key": "API-Schlüssel",
  "Aborted": "Abgebrochen",
  "Accept": "Übernehmen",
+ "Accept suggestions": "Vorschläge übernehmen",
  "Accept: move to %(folder)s": "Übernehmen: nach %(folder)s",
  "Add mailbox": "Postfach hinzufügen",
  "Add the first mailbox – with the standard categories as a starting point.": "Leg das erste Postfach an – mit den Standard-Kategorien als Ausgangspunkt.",
@@ -216,11 +231,15 @@
  "Check the connection": "Verbindung prüfen",
  "Check the description": "Beschreibung prüfen",
  "Check the expiry dates for real? Expired offers are moved. A dry run shows first which.": "Ablaufdaten jetzt echt prüfen? Abgelaufene Angebote werden verschoben. Ein Probelauf zeigt vorher, welche.",
+ "Choose %(subject)s": "„%(subject)s“ auswählen",
  "Choose Google or Microsoft as the sign-in method and enter the client ID first.": "Wähle zuerst Google oder Microsoft als Anmeldung und trage die Client-ID ein.",
  "Choose a category …": "Kategorie wählen …",
+ "Choose all mails of this page": "Alle Mails dieser Seite auswählen",
  "Choose all that can be undone": "Alle auswählen, die sich rückgängig machen lassen",
  "Choose by where the run put them": "Nach Ziel des Laufs auswählen",
+ "Choose mails": "Mails auswählen",
  "Choose:": "Auswählen:",
+ "Clear": "Auswahl aufheben",
  "Client ID": "Client-ID",
  "Client ID: please copy it from your OAuth app.": "Client-ID: bitte aus deiner OAuth-App kopieren.",
  "Client secret": "Client-Secret",
@@ -436,6 +455,14 @@
   "Soll %(num)s Mail jetzt verschoben werden?",
   "Sollen %(num)s Mails jetzt verschoben werden?"
  ],
+ "Move %(num)s mail to %(category)s?": [
+  "Soll %(num)s Mail nach %(category)s verschoben werden?",
+  "Sollen %(num)s Mails nach %(category)s verschoben werden?"
+ ],
+ "Move %(num)s mail to its suggested folder?": [
+  "Soll %(num)s Mail in den vorgeschlagenen Ordner verschoben werden?",
+  "Sollen %(num)s Mails in ihre vorgeschlagenen Ordner verschoben werden?"
+ ],
  "Move %(num)s mail to the trash now?": [
   "Soll %(num)s Mail jetzt in den Papierkorb verschoben werden?",
   "Sollen %(num)s Mails jetzt in den Papierkorb verschoben werden?"
@@ -447,9 +474,11 @@
  "Move or remove": "Verschieben oder entfernen",
  "Move rule down": "Regel nach unten",
  "Move rule up": "Regel nach oben",
+ "Move the chosen mails to": "Die ausgewählten Mails verschieben nach",
  "Move the mails the deletion rules name into the trash now? A dry run shows first which.": "Die Mails, die die Lösch-Regeln nennen, jetzt in den Papierkorb verschieben? Ein Probelauf zeigt vorher, welche.",
  "Move the sorted mails of this category into its folder now? A dry run shows first which.": "Die einsortierten Mails dieser Kategorie jetzt in ihren Ordner verschieben? Ein Probelauf zeigt vorher, welche.",
  "Move this mail right away": "Diese Mail gleich mit verschieben",
+ "Move to …": "Verschieben nach …",
  "Move up": "Nach oben",
  "Move up – the order of the lists": "Nach oben – die Reihenfolge der Listen",
  "Moved": "Verschoben",
@@ -591,6 +620,7 @@
  "Reconcile the log with the mailbox": "Protokoll mit Postfach abgleichen",
  "Remove": "Entfernen",
  "Remove rule": "Regel entfernen",
+ "Remove star": "Stern entfernen",
  "Remove the date": "Datum entfernen",
  "Remove the star": "Stern entfernen",
  "Rename": "Umbenennen",
@@ -704,7 +734,15 @@
  "Standard categories, %(language)s": "Standard-Kategorien, %(language)s",
  "Star": "Stern",
  "Star for needed action from": "Stern bei Handlungsbedarf ab",
+ "Star removed from %(num)s mail": [
+  "Stern von %(num)s Mail entfernt",
+  "Stern von %(num)s Mails entfernt"
+ ],
  "Star removed.": "Stern entfernt.",
+ "Star set on %(num)s mail": [
+  "Stern bei %(num)s Mail gesetzt",
+  "Stern bei %(num)s Mails gesetzt"
+ ],
  "Star set.": "Stern gesetzt.",
  "Star: %(when)s": "Stern: %(when)s",
  "Starred": "Mit Stern",

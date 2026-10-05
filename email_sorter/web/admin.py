@@ -23,7 +23,8 @@ from ..config import (EXAMPLE_MAILBOXES, INBOX_ACTION, SECRETS_FILE, ConfigError
 from ..i18n import _
 from ..maintenance import relocate_category, rename_category, rename_folder
 from ..oauth import PROVIDERS
-from ..manual import ManualError, move_mail, set_star
+from ..manual import (FAILED, GONE, MOVED, NO_FOLDER, SORTED, UNCHANGED, UNKNOWN, ManualError, accept_mails, move_mail,
+                      move_mails, set_star, set_stars)
 from ..reconcile import run_reconcile
 from ..resort import run_resort
 from ..runtime import single_instance
@@ -403,6 +404,84 @@ async def mail_action(request: Request, box_id: str):
         _flash(request, str(e), "err")
     except Exception as e:
         log.exception("[%s] mail action failed", box.id)
+        _flash(request, _("Failed: %(e)s", e=e), "err")
+    return RedirectResponse(back, status_code=303)
+
+
+BATCH_MAX = 200  # mails of one batch; a page of the list has 50
+
+
+def _batch_text(action: str, outcomes: dict[str, str]) -> tuple[str, str]:
+    """What a batch did, in one sentence, and its tone: "12 mails moved, 1 not found (deleted or moved by hand?)"."""
+    count = Counter(o.split(":", 1)[0] for o in outcomes.values())
+    parts = []
+    if count[MOVED]:
+        parts.append(i18n.ngettext("Star set on %(num)s mail", "Star set on %(num)s mails", count[MOVED])
+                     if action == "star" else
+                     i18n.ngettext("Star removed from %(num)s mail", "Star removed from %(num)s mails", count[MOVED])
+                     if action == "unstar" else
+                     i18n.ngettext("%(num)s mail moved", "%(num)s mails moved", count[MOVED]))
+    if count[UNCHANGED]:
+        parts.append(i18n.ngettext("%(num)s already there", "%(num)s already there", count[UNCHANGED]))
+    if count[SORTED] + count[NO_FOLDER]:
+        parts.append(i18n.ngettext("%(num)s left as it is (sorted already, or its category has no folder)",
+                                   "%(num)s left as they are (sorted already, or their category has no folder)",
+                                   count[SORTED] + count[NO_FOLDER]))
+    if count[GONE] + count[UNKNOWN]:
+        parts.append(i18n.ngettext("%(num)s not found (deleted or moved by hand?)",
+                                   "%(num)s not found (deleted or moved by hand?)", count[GONE] + count[UNKNOWN]))
+    if count[FAILED]:
+        why = next(o.split(":", 1)[1] for o in outcomes.values() if o.startswith(FAILED + ":"))
+        parts.append(_("%(num)s failed: %(why)s", num=count[FAILED], why=why))
+    tone = "warn" if count[GONE] + count[UNKNOWN] + count[FAILED] else "ok"
+    return ", ".join(parts) + ".", tone
+
+
+@router.post("/ui/m/{box_id}/mails/batch", dependencies=[Depends(require_login)])
+async def mails_batch(request: Request, box_id: str):
+    """Act on the mails chosen in the Mails list at once: accept their suggestions, put them into one category (or
+    the inbox), or set or remove their stars. One IMAP session for all of them. What didn't work stays chosen."""
+    form = await _form(request)
+    _all_boxes, box = _box(request, box_id)
+    keys = list(dict.fromkeys(str(k) for k in (await request.form()).getlist("key") if k))[:BATCH_MAX]
+    action, category = str(form.get("action") or ""), str(form.get("category") or "")
+    back = str(form.get("back") or "")
+    back = f"/ui/m/{box.id}/mails" + (f"?{back}" if back and not back.startswith(("/", "http")) else "")
+    if not keys:
+        _flash(request, _("Please choose at least one mail."), "err")
+        return RedirectResponse(back, status_code=303)
+    if action not in ("accept", "move", "star", "unstar"):
+        _flash(request, _("Unknown action."), "err")
+        return RedirectResponse(back, status_code=303)
+    if action == "move" and category != INBOX_ACTION and category not in box.cfg.categories:
+        _flash(request, _("Please choose a category."), "err")
+        return RedirectResponse(back, status_code=303)
+
+    def act() -> dict[str, str]:
+        creds = load_credentials(box)
+        if action == "accept":
+            return accept_mails(box.cfg, creds, box.workspace, keys)
+        if action == "move":
+            return move_mails(box.cfg, creds, box.workspace, dict.fromkeys(keys, category))
+        return set_stars(box.cfg, creds, box.workspace, keys, action == "star")
+
+    def locked() -> dict[str, str]:
+        with single_instance(box.lock_path) as acquired:
+            if not acquired:
+                raise EditError(_("A run is in progress for this mailbox. Please try again in a moment."))
+            return act()
+
+    try:
+        outcomes = await run_in_threadpool(locked)
+        text, tone = _batch_text(action, outcomes)
+        _flash(request, text, tone)
+        # what didn't work stays chosen, to look at or try again
+        back += "".join(f"{'&' if '?' in back else '?'}pick={quote(k, safe='')}" for k, o in outcomes.items()
+                        if o.split(":", 1)[0] in (GONE, UNKNOWN, FAILED))
+    except (EditError, ManualError, ConfigError) as e:
+        _flash(request, str(e), "err")
+    except Exception as e:
+        log.exception("[%s] mail batch failed", box.id)
         _flash(request, _("Failed: %(e)s", e=e), "err")
     return RedirectResponse(back, status_code=303)
 

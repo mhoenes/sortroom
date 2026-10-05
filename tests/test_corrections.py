@@ -157,3 +157,107 @@ def test_star_by_hand(tmp_path, monkeypatch):
     store = Store(tmp_path / "data" / "state.db")
     assert store.get("a")["flagged"] == 0 and calls[-2][-1] is False
     store.close()
+
+
+class BatchMailbox:
+    """A fake mailbox for the batch functions: which folders exist, which mails a folder search finds, and what was
+    moved or flagged, with how many IMAP sessions were opened."""
+
+    def __init__(self, monkeypatch, folders, missing=(), failing=()):
+        self.sessions, self.moves, self.flags, self.created = 0, [], [], []
+        self.folders, self.missing, self.failing = set(folders), set(missing), set(failing)
+        me = self
+
+        class Session:
+            folder = SimpleNamespace(exists=lambda name: name in me.folders, set=lambda name: None)
+
+            def __enter__(self):
+                me.sessions += 1
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def flag(self, uids, flag, value):
+                me.flags.append((list(uids), value))
+
+        monkeypatch.setattr(manual, "connect", lambda cfg, creds: Session())
+        monkeypatch.setattr(manual, "delimiter", lambda mb: ".")
+        monkeypatch.setattr(manual, "find_uids", lambda mb, folder, wanted, fallback_days: {
+            k: f"uid-{k}" for k in wanted if k not in me.missing})
+        monkeypatch.setattr(manual, "ensure_folder", lambda mb, name: me.created.append(name))
+        monkeypatch.setattr(manual, "move_uids", self.move)
+
+    def move(self, mb, uids, folder):
+        if folder in self.failing:
+            raise RuntimeError("the server said no")
+        self.moves.append((folder, list(uids)))
+
+
+def _batch_store(tmp_path):
+    store = Store(tmp_path / "data" / "state.db")
+    _record(store, "a", "werbung", None, confidence=0.4)           # uncertain, suggested werbung
+    _record(store, "b", "finanzen", None, confidence=0.4)          # uncertain, suggested finanzen
+    _record(store, "c", "persoenlich", None, confidence=0.4)       # its category has no folder
+    _record(store, "d", "werbung", "INBOX/Werbung")                # sorted already
+    _record(store, "f", "werbung", "INBOX/Werbung")                # sorted, confident: a correction when moved
+    store.close()
+
+
+def test_accepting_several_suggestions_moves_per_folder_in_one_session(tmp_path, monkeypatch):
+    _batch_store(tmp_path)
+    mb = BatchMailbox(monkeypatch, {"INBOX", "INBOX.Werbung", "INBOX.Finanzen"})
+    out = manual.accept_mails(CFG, CREDS, tmp_path, ["a", "b", "c", "d", "x"])
+    # a and b go to the folders of their suggestions; c has no folder, d is sorted, x is not in the log
+    assert out == {"a": manual.MOVED, "b": manual.MOVED, "c": manual.NO_FOLDER, "d": manual.SORTED, "x": manual.UNKNOWN}
+    assert sorted(mb.moves) == [("INBOX.Finanzen", ["uid-b"]), ("INBOX.Werbung", ["uid-a"])] and mb.sessions == 1
+    store = Store(tmp_path / "data" / "state.db")
+    assert store.get("a")["moved_to"] == "INBOX/Werbung" and store.get("b")["moved_to"] == "INBOX/Finanzen"
+    assert store.get("c")["moved_to"] is None and store.get("a")["source"] == "manual"
+    store.close()
+    # nothing to do on the server: no session at all
+    assert manual.accept_mails(CFG, CREDS, tmp_path, ["c", "d"]) == {"c": manual.NO_FOLDER, "d": manual.SORTED}
+    assert mb.sessions == 1
+
+
+def test_moving_several_mails_counts_corrections_and_reports_each(tmp_path, monkeypatch):
+    _batch_store(tmp_path)
+    mb = BatchMailbox(monkeypatch, {"INBOX", "INBOX.Werbung", "INBOX.Finanzen"}, missing={"b"})
+    out = manual.move_mails(CFG, CREDS, tmp_path, {"a": "finanzen", "b": "finanzen", "d": "werbung", "f": "finanzen"})
+    # a and f moved, b is no longer in its folder, d is already where it should be
+    assert out == {"a": manual.MOVED, "b": manual.GONE, "d": manual.UNCHANGED, "f": manual.MOVED}
+    # one move per folder the mails are in (the inbox, the folder of f), in one session
+    assert sorted(mb.moves) == [("INBOX.Finanzen", ["uid-a"]), ("INBOX.Finanzen", ["uid-f"])] and mb.sessions == 1
+    store = Store(tmp_path / "data" / "state.db")
+    # a correction of the model's confident decision counts for the correction rate, as for a single mail
+    assert store.correction("f")["corrected_to"] == "finanzen" and store.correction("a") is None
+    assert store.get("b")["moved_to"] is None  # not found: the log is as it was
+    store.close()
+
+
+def test_a_failed_move_and_a_missing_folder_leave_the_rest_alone(tmp_path, monkeypatch):
+    _batch_store(tmp_path)
+    mb = BatchMailbox(monkeypatch, {"INBOX", "INBOX.Werbung"}, failing={"INBOX.Finanzen"})
+    out = manual.move_mails(CFG, CREDS, tmp_path, {"a": "werbung", "b": "finanzen"})
+    assert out["a"] == manual.MOVED and out["b"] == "failed:the server said no" and mb.moves == [("INBOX.Werbung", ["uid-a"])]
+    store = Store(tmp_path / "data" / "state.db")
+    assert store.get("b")["moved_to"] is None
+    store.close()
+    # the folder a mail is in is gone: not found, without asking the server for it
+    gone = BatchMailbox(monkeypatch, {"INBOX"})
+    assert manual.move_mails(CFG, CREDS, tmp_path, {"d": "inbox"}) == {"d": manual.GONE} and gone.moves == []
+
+
+def test_starring_several_mails_per_folder(tmp_path, monkeypatch):
+    _batch_store(tmp_path)
+    mb = BatchMailbox(monkeypatch, {"INBOX", "INBOX.Werbung"}, missing={"d"})
+    out = manual.set_stars(CFG, CREDS, tmp_path, ["a", "d", "f", "x"], True)
+    assert out == {"a": manual.MOVED, "d": manual.GONE, "f": manual.MOVED, "x": manual.UNKNOWN} and mb.sessions == 1
+    assert sorted(mb.flags) == [(["uid-a"], True), (["uid-f"], True)]  # a in the inbox, f in its folder
+    store = Store(tmp_path / "data" / "state.db")
+    assert store.get("a")["flagged"] == 1 and store.get("f")["flagged"] == 1 and store.get("d")["flagged"] == 0
+    store.close()
+    manual.set_stars(CFG, CREDS, tmp_path, ["a"], False)
+    store = Store(tmp_path / "data" / "state.db")
+    assert store.get("a")["flagged"] == 0
+    store.close()
