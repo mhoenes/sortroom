@@ -22,7 +22,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from .. import __version__, i18n
-from ..config import INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, default_label, imap_credentials, read_secrets
+from ..config import (INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, classifier_key, default_label, imap_credentials,
+                      read_secrets)
 from ..i18n import _
 from ..sorter import expired_target
 from . import queries
@@ -410,8 +411,12 @@ def all_mailboxes(request: Request):
         "scheduled": any(s["enabled"] and s["active"] for s in schedules),
         "process_off": bool(schedules) and not any(s["active"] for s in schedules),
     }
+    try:  # no API key for the AI service: nothing is sorted, whatever the cards say
+        no_key = bool(cards) and not classifier_key(request.app.state.config_path.with_name(SECRETS_FILE))
+    except ConfigError:
+        no_key = False
     return templates.TemplateResponse(request, "mailboxes.html", {
-        **_sidebar(request, boxes, None, "all"), "cards": cards, "totals": totals, "status": status})
+        **_sidebar(request, boxes, None, "all"), "cards": cards, "totals": totals, "status": status, "no_key": no_key})
 
 
 @router.get("/ui/m/{box_id}", response_class=HTMLResponse, dependencies=[Depends(require_login)])
