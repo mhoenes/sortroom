@@ -7,9 +7,10 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# tini is the container's init (PID 1). The entrypoint ends in uvicorn, which would otherwise be PID 1, and a
-# web server doesn't collect processes that end after their parent: the Docker health check's, for one, stayed
-# behind as "[python] <defunct>" entries and used up process ids until the container was restarted.
+# tini is the container's init (PID 1): the entrypoint puts it in front of the command once it has given up root
+# (email_sorter/container.py). Otherwise uvicorn would be PID 1, and a web server doesn't collect processes that
+# end after their parent: the Docker health check's, for one, stayed behind as "[python] <defunct>" entries and
+# used up process ids until the container was restarted.
 RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
 
 # requirements-lock.txt pins every package (also the indirect ones) to the versions the tests ran with
@@ -32,5 +33,5 @@ EXPOSE 8765
 HEALTHCHECK --interval=60s --timeout=5s --start-period=20s \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/health', timeout=4)"]
 
-ENTRYPOINT ["/usr/bin/tini", "--", "python", "-m", "email_sorter.container"]
+ENTRYPOINT ["python", "-m", "email_sorter.container"]
 CMD ["uvicorn", "email_sorter.api:app", "--host", "0.0.0.0", "--port", "8765", "--no-access-log"]

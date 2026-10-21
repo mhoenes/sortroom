@@ -61,6 +61,19 @@ def test_the_image_has_an_init_and_a_health_check_without_a_shell():
     health check in shell form was one of them. (Static: the image isn't built in the tests.)"""
     dockerfile = (Path(__file__).parent.parent / "Dockerfile").read_text(encoding="utf-8")
     assert "apt-get install -y --no-install-recommends tini" in dockerfile
-    assert 'ENTRYPOINT ["/usr/bin/tini", "--", "python", "-m", "email_sorter.container"]' in dockerfile
+    assert 'ENTRYPOINT ["python", "-m", "email_sorter.container"]' in dockerfile  # which puts tini in front
     health = dockerfile.split("HEALTHCHECK", 1)[1].split("ENTRYPOINT", 1)[0]
     assert 'CMD ["python", "-c", ' in health  # exec form, not a shell command line
+
+
+def test_tini_goes_in_front_only_for_the_containers_pid_1(monkeypatch):
+    """After root was given up, so PID 1 is unprivileged too; not when something else is PID 1 already
+    (docker run --init), and not where tini isn't installed."""
+    monkeypatch.setattr(os.path, "exists", lambda p: p == container.INIT)
+    monkeypatch.setattr(os, "getpid", lambda: 1)
+    assert container.with_init(["uvicorn", "app"]) == ["/usr/bin/tini", "--", "uvicorn", "app"]
+    monkeypatch.setattr(os, "getpid", lambda: 7)
+    assert container.with_init(["uvicorn", "app"]) == ["uvicorn", "app"]
+    monkeypatch.setattr(os, "getpid", lambda: 1)
+    monkeypatch.setattr(os.path, "exists", lambda p: False)
+    assert container.with_init(["uvicorn", "app"]) == ["uvicorn", "app"]
