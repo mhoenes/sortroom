@@ -1,5 +1,6 @@
 import os
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -53,3 +54,13 @@ def test_as_root_it_gives_the_folders_away_and_drops_root(tmp_path, monkeypatch)
     monkeypatch.setattr(os, "geteuid", lambda: 1004)  # docker run --user: started as it is
     container.main(["uvicorn"])
     assert calls == [("exec", ["uvicorn"])]
+
+
+def test_the_image_has_an_init_and_a_health_check_without_a_shell():
+    """Without an init, uvicorn is PID 1 and leaves the processes that end after their parent as <defunct>; the
+    health check in shell form was one of them. (Static: the image isn't built in the tests.)"""
+    dockerfile = (Path(__file__).parent.parent / "Dockerfile").read_text(encoding="utf-8")
+    assert "apt-get install -y --no-install-recommends tini" in dockerfile
+    assert 'ENTRYPOINT ["/usr/bin/tini", "--", "python", "-m", "email_sorter.container"]' in dockerfile
+    health = dockerfile.split("HEALTHCHECK", 1)[1].split("ENTRYPOINT", 1)[0]
+    assert 'CMD ["python", "-c", ' in health  # exec form, not a shell command line
