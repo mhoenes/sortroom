@@ -2,8 +2,8 @@
 
 Docker starts the container as root. This gives the mounted folders to PUID:PGID (default 1000:1000,
 the image's own user) where their owner doesn't match yet, then gives up root for good and starts the
-command (uvicorn). Started as another user already (docker run --user, compose user:), it starts the
-command as it is and leaves the folders alone.
+command (uvicorn, behind tini as PID 1, see with_init). Started as another user already (docker run --user,
+compose user:), it starts the command as it is and leaves the folders alone.
 """
 from __future__ import annotations
 
@@ -47,6 +47,19 @@ def not_owned(folders: tuple[Path, ...], uid: int, gid: int) -> Iterator[Path]:
                     yield path
 
 
+INIT = "/usr/bin/tini"
+
+
+def with_init(argv: list[str]) -> list[str]:
+    """The command behind tini when this process is the container's PID 1 (and tini is there): PID 1 has to collect
+    the processes that end after their parent, which a web server doesn't, or they stay as <defunct> entries. It is
+    put in front after root was given up, so that PID 1 runs as the unprivileged user too. With `docker run --init`
+    this isn't PID 1 and the command is left alone."""
+    if os.getpid() == 1 and os.path.exists(INIT):
+        return [INIT, "--", *argv]
+    return argv
+
+
 def main(argv: list[str]) -> None:
     if not argv:
         sys.exit("usage: python -m email_sorter.container <command> [args]")
@@ -72,6 +85,7 @@ def main(argv: list[str]) -> None:
             os.setgid(gid)
             os.setuid(uid)  # for good: a process that isn't root can't get it back
             os.environ["HOME"] = "/app"
+    argv = with_init(argv)
     os.execvp(argv[0], argv)
 
 
