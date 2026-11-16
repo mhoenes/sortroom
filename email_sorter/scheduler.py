@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 from collections.abc import Callable
 
 from .config import ConfigError, Mailbox, imap_credentials, load_credentials
-from .runtime import single_instance
+from .runtime import single_instance, stopping
 from .sorter import run
 from .store import last_cleanup, last_reconcile
 
@@ -97,6 +97,8 @@ class Scheduler:
         """Start the runs and reconciles that are due. Returns the ids started, a reconcile as
         "<id>:reconcile" (for tests)."""
         now = now or datetime.now()
+        if stopping():
+            return []
         try:
             boxes = self._load_boxes()
         except ConfigError as e:

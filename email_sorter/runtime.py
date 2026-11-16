@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import threading
 import time
 from contextlib import contextmanager
 from logging.handlers import RotatingFileHandler
@@ -13,6 +14,38 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 log = logging.getLogger("email_sorter")
 
+
+
+# Set when the process is shutting down (the container was stopped): runs stop asking the model, apply what they
+# have classified and write it to the log, instead of being cut off in the middle of moving mail.
+_stop = threading.Event()
+
+
+def request_stop() -> None:
+    _stop.set()
+
+
+def reset_stop() -> None:
+    _stop.clear()
+
+
+def stopping() -> bool:
+    return _stop.is_set()
+
+
+def sleep_unless_stopping(seconds: float) -> bool:
+    """Sleep, but not through a shutdown. True when it was cut short."""
+    return _stop.wait(seconds)
+
+
+def wait_idle(lock_paths: list[Path], timeout: float) -> bool:
+    """Wait until none of the run locks is held, at most `timeout` seconds. Whether they all are free."""
+    deadline = time.monotonic() + timeout
+    while any(is_locked(p) for p in lock_paths):
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.2)
+    return True
 
 
 def default_config_path() -> Path:

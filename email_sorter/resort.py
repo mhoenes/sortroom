@@ -142,20 +142,35 @@ def run_resort(cfg: Config, creds: Credentials, base_dir: Path, folder: str, liv
                 for o in moving:
                     if o.folder:  # always set for a mail that moves
                         by_target[server_folder(o.folder, delim)].append(o)
-                for target, group in by_target.items():
+                source = cfg.source_folder.strip("/")
+
+                def logged(o: Outcome) -> Outcome:
+                    return replace(o, folder=None) if (o.folder or "").strip("/") == source else o
+
+                moving_keys = {o.key for o in moving}
+                for o in outcomes:  # staying where they are: nothing to wait for
+                    if o.key not in moving_keys:
+                        store.record(logged(o))
+                for target, group in by_target.items():  # each chunk is recorded as soon as it has moved
+                    done = 0
                     try:
                         ensure_folder(mb, target)
-                        for chunk in chunks([o.uid for o in group]):
-                            move_uids(mb, chunk, target)
-                        log.info("moved %d mail(s) %s -> %s", len(group), srv, target)
                     except Exception as e:
                         log.error("moving to %s failed: %s", target, e)
                         move_failures.update(o.key for o in group)
-                source = cfg.source_folder.strip("/")
-                for o in outcomes:
-                    if o.key in move_failures:
                         continue
-                    store.record(replace(o, folder=None) if (o.folder or "").strip("/") == source else o)
+                    for chunk in chunks(group):
+                        try:
+                            move_uids(mb, [o.uid for o in chunk], target)
+                        except Exception as e:
+                            log.error("moving to %s failed: %s", target, e)
+                            move_failures.update(o.key for o in group[done:])
+                            break
+                        for o in chunk:
+                            store.record(logged(o))
+                        done += len(chunk)
+                    if done:
+                        log.info("moved %d mail(s) %s -> %s", done, srv, target)
             elif outcomes and report:
                 log.info("dry run - nothing changed. Report: %s", report.path)
             mb.folder.set(cfg.source_folder)

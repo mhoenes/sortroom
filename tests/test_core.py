@@ -98,7 +98,7 @@ class FakeSession(requests.Session):
 
 @pytest.mark.parametrize("status", [429, 529])  # rate limit, overloaded
 def test_client_retries_on_rate_limit(monkeypatch, status):
-    monkeypatch.setattr(classifier_mod.time, "sleep", lambda s: None)
+    monkeypatch.setattr(classifier_mod, "sleep_unless_stopping", lambda s: False)
     session = FakeSession([FakeResponse(status), FakeResponse(200, SAMPLE_RESPONSE)])
     client = ClassifierClient("key", "https://example", "m", session=session)
     assert client.decide({}, CFG.descriptions).category == "finanzen"
@@ -107,7 +107,7 @@ def test_client_retries_on_rate_limit(monkeypatch, status):
 
 def test_client_honors_retry_after(monkeypatch):
     sleeps = []
-    monkeypatch.setattr(classifier_mod.time, "sleep", sleeps.append)
+    monkeypatch.setattr(classifier_mod, "sleep_unless_stopping", lambda s: sleeps.append(s) or False)
     session = FakeSession([FakeResponse(429, headers={"Retry-After": "7"}), FakeResponse(200, SAMPLE_RESPONSE)])
     ClassifierClient("key", "https://example", "m", session=session).decide({}, CFG.descriptions)
     assert sleeps == [7.0]
@@ -115,7 +115,7 @@ def test_client_honors_retry_after(monkeypatch):
 
 def test_client_backoff_is_capped(monkeypatch):
     sleeps = []
-    monkeypatch.setattr(classifier_mod.time, "sleep", sleeps.append)
+    monkeypatch.setattr(classifier_mod, "sleep_unless_stopping", lambda s: sleeps.append(s) or False)
     session = FakeSession([FakeResponse(429)] * 8)
     client = ClassifierClient("key", "https://example", "m", retries=8, session=session)
     with pytest.raises(ClassifierError, match="giving up after 8"):
@@ -230,13 +230,13 @@ class NoJson(FakeResponse):
 
 
 def test_client_retries_an_answer_without_json(monkeypatch):
-    monkeypatch.setattr(classifier_mod.time, "sleep", lambda s: None)
+    monkeypatch.setattr(classifier_mod, "sleep_unless_stopping", lambda s: False)
     session = FakeSession([NoJson(200, "<html>proxy error</html>"), FakeResponse(200, SAMPLE_RESPONSE)])
     assert ClassifierClient("key", "https://example", "m", session=session).decide({}, CFG.descriptions).category == "finanzen"
 
 
 def test_client_stops_after_failing_for_several_mails_in_a_row(monkeypatch):
-    monkeypatch.setattr(classifier_mod.time, "sleep", lambda s: None)
+    monkeypatch.setattr(classifier_mod, "sleep_unless_stopping", lambda s: False)
     down = [FakeResponse(503)] * 2
     session = FakeSession(down * 2 + [FakeResponse(200, SAMPLE_RESPONSE)] + down * 3)
     client = ClassifierClient("key", "https://example", "m", retries=2, session=session)
