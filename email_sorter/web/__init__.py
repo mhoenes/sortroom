@@ -23,7 +23,7 @@ from fastapi.templating import Jinja2Templates
 
 from .. import __version__, i18n
 from ..config import (INBOX_ACTION, SECRETS_FILE, ConfigError, Mailbox, classifier_key, default_label, imap_credentials,
-                      read_secrets)
+                      read_secrets, write_secrets)
 from ..i18n import _
 from ..sorter import expired_target
 from . import queries
@@ -56,13 +56,27 @@ def admin_password() -> str:
     return os.environ.get("ADMIN_PASSWORD", "")
 
 
-def session_secret() -> str:
-    """Stable across restarts without another setting; changes when the password or token changes."""
+def session_secret(secrets_path: Path) -> str:
+    """The key the session cookies are signed with: SESSION_SECRET if set, else a random one made once and kept in
+    the secrets.toml next to config.toml ([ui] session_secret), so logins survive a restart.
+
+    It is not derived from the admin password: whoever holds a signed cookie could then try passwords against
+    it at their own pace, past the lock after failed logins. Where the file can't be written, the key lasts
+    until the process ends (everybody logs in again after a restart)."""
     explicit = os.environ.get("SESSION_SECRET")
     if explicit:
         return explicit
-    seed = f"email-sorter-session:{admin_password()}:{os.environ.get('API_TOKEN', '')}"
-    return hashlib.sha256(seed.encode()).hexdigest()
+    try:
+        stored = (read_secrets(secrets_path).get("ui") or {}).get("session_secret")
+        if isinstance(stored, str) and len(stored) >= 32:
+            return stored
+        fresh = secrets.token_urlsafe(48)
+        write_secrets(secrets_path, "ui", {"session_secret": fresh})
+        return fresh
+    except (ConfigError, OSError) as e:
+        log.warning("the session key could not be kept in %s (%s): logins end when Sortroom restarts",
+                    secrets_path.name, e)
+        return secrets.token_urlsafe(48)
 
 
 async def language_middleware(request: Request, call_next):

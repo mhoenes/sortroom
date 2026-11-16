@@ -176,6 +176,45 @@ def test_a_reverse_proxy_whose_headers_are_not_trusted_is_noticed(client, monkey
     assert len(warnings) == 1 and "FORWARDED_ALLOW_IPS=testclient" in warnings[0]
 
 
+def test_the_error_page_with_the_sidebar_is_only_for_somebody_logged_in(client):
+    # an unknown address under /ui/ doesn't pass require_login by itself; the error page lists the mailboxes
+    r = client.get("/ui/nothing-here", headers={"Accept": "text/html"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/login?next=/ui/nothing-here"
+    assert "Privat" not in r.text  # no sidebar for somebody who is not logged in
+    # a missing static file is a plain 404 for everybody (no page, no sidebar)
+    r = client.get("/ui/static/nope.js", headers={"Accept": "text/html"})
+    assert r.status_code == 404 and "Privat" not in r.text
+    # logged in: the page of the UI, as before
+    _login(client)
+    r = client.get("/ui/nothing-here", headers={"Accept": "text/html"})
+    assert r.status_code == 404 and "Privat" in r.text and "Nicht gefunden" in r.text
+    assert client.get("/ui/nothing-here").json() == {"detail": "Not Found"}  # scripts still get JSON
+
+
+def test_the_session_key_is_random_kept_in_secrets_and_not_the_password(tmp_path, monkeypatch):
+    monkeypatch.delenv("SESSION_SECRET", raising=False)
+    monkeypatch.setenv("ADMIN_PASSWORD", PASSWORD)
+    path = tmp_path / "secrets.toml"
+    first = web.session_secret(path)
+    assert len(first) >= 32 and PASSWORD not in first
+    assert web.session_secret(path) == first  # kept: logins survive a restart
+    assert "session_secret" in path.read_text(encoding="utf-8")
+    other = web.session_secret(tmp_path / "other" / "secrets.toml")
+    assert other != first  # not derived from anything both share, such as the password
+    # a changed password doesn't change the key, and the key tells nothing about the password
+    monkeypatch.setenv("ADMIN_PASSWORD", "ein-ganz-anderes-passwort")
+    assert web.session_secret(path) == first
+    # set explicitly: that one, and nothing is written
+    monkeypatch.setenv("SESSION_SECRET", "fest-vorgegeben")
+    assert web.session_secret(tmp_path / "never" / "secrets.toml") == "fest-vorgegeben"
+    assert not (tmp_path / "never").exists()
+    # a file that can't be written: a key for this process only, said in the log
+    monkeypatch.delenv("SESSION_SECRET")
+    blocked = tmp_path / "blocked"
+    blocked.write_text("not a folder", encoding="utf-8")
+    assert len(web.session_secret(blocked / "secrets.toml")) >= 32
+
+
 def test_api_documentation_needs_the_login(client):
     for path in ("/docs", "/redoc", "/openapi.json"):
         r = client.get(path, follow_redirects=False)

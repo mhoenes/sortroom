@@ -30,7 +30,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from . import __version__, i18n, jobs
-from .config import ConfigError, Mailbox, load_credentials, load_mailboxes
+from .config import SECRETS_FILE, ConfigError, Mailbox, load_credentials, load_mailboxes
 from .i18n import _
 from .removal import MailboxBusy, delete_mailbox
 from .runtime import BASE_DIR, default_config_path, is_locked, setup_logging, single_instance
@@ -253,7 +253,8 @@ app.state.scheduler = Scheduler(
     digest_due=lambda now: digest.due(app.state.config_path, app.state.base_dir / "mailboxes", now),
     send_digest=lambda: digest.send_digest(app.state.config_path, app.state.load_mailboxes,
                                            app.state.base_dir / "mailboxes"))
-app.add_middleware(SessionMiddleware, secret_key=web.session_secret(), session_cookie="email_sorter_session",
+app.add_middleware(SessionMiddleware, secret_key=web.session_secret(CONFIG_PATH.with_name(SECRETS_FILE)),
+                   session_cookie="email_sorter_session",
                    max_age=web.SESSION_DAYS * 86400, same_site="lax",
                    https_only=os.environ.get("UI_SECURE_COOKIES") == "1")
 app.middleware("http")(web.language_middleware)
@@ -285,9 +286,15 @@ def _favicon():
 @app.exception_handler(StarletteHTTPException)
 async def _http_error(request: Request, exc: StarletteHTTPException):
     """A browser that opens a UI page and gets an error sees a page of the UI; everything else (the API, the
-    page's own scripts) gets the JSON it always did."""
-    wants_page = "text/html" in request.headers.get("accept", "")
-    if request.method == "GET" and request.url.path.startswith("/ui") and wants_page:
+    page's own scripts) gets the JSON it always did. The page has the sidebar with the mailboxes, so it is
+    only for somebody who is logged in: an unknown address under /ui/ doesn't pass require_login by itself, and
+    anybody else is sent to the login like for a page that exists."""
+    path, wants_page = request.url.path, "text/html" in request.headers.get("accept", "")
+    if request.method == "GET" and path.startswith("/ui") and not path.startswith("/ui/static/") and wants_page:
+        try:
+            web.require_login(request)
+        except web.LoginRequired as e:
+            return _to_login(request, e)
         try:
             return web.editor.error_page(request, exc.status_code, str(exc.detail))
         except Exception:  # the page itself needs the settings: without them the plain answer

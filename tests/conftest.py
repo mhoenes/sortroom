@@ -7,6 +7,8 @@ os.environ.setdefault("SORTROOM_SCHEDULER", "off")
 # Tests run the same everywhere: a local .env (loaded when email_sorter.api is imported) or a
 # login in the shell must not decide whether a credential counts as set. Tests that need one set it.
 os.environ["PYTHON_DOTENV_DISABLED"] = "1"
+# a fixed key for the session cookies: without it importing the app would write one into config/secrets.toml
+os.environ.setdefault("SESSION_SECRET", "tests-only-session-secret-0123456789abcdef")
 for _name in ("IMAP_USER", "IMAP_PASSWORD", "CLASSIFIER_API_KEY"):
     os.environ.pop(_name, None)
 
