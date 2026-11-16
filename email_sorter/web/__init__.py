@@ -89,6 +89,28 @@ async def language_middleware(request: Request, call_next):
         i18n.reset_language(token)
 
 
+async def security_headers_middleware(request: Request, call_next):
+    """Headers every response gets: no frame of another site may show the UI (a transparent page over its buttons
+    would click "Log out everywhere" or "Delete mailbox" for you), no guessing of content types, and no mail
+    keys in the Referer sent to other sites. The pages with mail subjects and senders aren't stored by the
+    browser, so the back button after logging out doesn't show them again (the static files keep their caching)."""
+    response = await call_next(request)
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "same-origin"
+    is_page = response.headers.get("content-type", "").startswith("text/html")
+    if is_page and not request.url.path.startswith("/ui/static/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def csrf_matches(sent: str, token: str) -> bool:
+    """Whether a form's CSRF token is the session's. Compared as bytes: compare_digest raises on a str with a
+    character outside ASCII, which would make a forged token a 500 instead of a refused form."""
+    return bool(sent) and secrets.compare_digest(sent.encode(), token.encode())
+
+
 class LoginRequired(Exception):
     def __init__(self, next_url: str):
         self.next_url = next_url
@@ -193,7 +215,7 @@ def login(request: Request, password: str = Form(""), next: str = Form("/ui")):
 async def logout(request: Request):
     """Log out; with the form's CSRF token, so another site can't log you out."""
     sent = str((await request.form()).get("csrf", ""))
-    if not sent or not secrets.compare_digest(sent, request.session.get("csrf", "")):
+    if not csrf_matches(sent, request.session.get("csrf", "")):
         raise HTTPException(403, _("Form expired – please reload the page."))
     request.session.clear()
     return RedirectResponse("/login", status_code=303)

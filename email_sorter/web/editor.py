@@ -30,7 +30,7 @@ from ..classifier import ClassifierAuthError
 from ..i18n import _
 from ..removal import MailboxBusy, delete_mailbox
 from ..trial import OTHER_SAMPLE, OWN_SAMPLE, run_trial
-from . import _box, _boxes, _sidebar, queries, require_login, router, rulecheck, run_problem, templates
+from . import _box, _boxes, _sidebar, csrf_matches, queries, require_login, router, rulecheck, run_problem, templates
 from .editing import (EditError, category_view, config_with_delete_rules, connection_from_form, delete_category,
                       key_from_label, move_category, save_category, save_rules, save_settings, secrets_writable,
                       writable)
@@ -54,8 +54,7 @@ def csrf_token(request: Request) -> str:
 async def _form(request: Request) -> dict:
     """The posted form, after checking its CSRF token."""
     form = await request.form()
-    sent = str(form.get("csrf", ""))
-    if not sent or not secrets.compare_digest(sent, request.session.get("csrf", "")):
+    if not csrf_matches(str(form.get("csrf", "")), request.session.get("csrf", "")):
         raise HTTPException(403, _("Form expired – please reload the page."))
     return {k: form.get(k) for k in form.keys()}
 

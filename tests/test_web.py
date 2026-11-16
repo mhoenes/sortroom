@@ -215,6 +215,39 @@ def test_the_session_key_is_random_kept_in_secrets_and_not_the_password(tmp_path
     assert len(web.session_secret(blocked / "secrets.toml")) >= 32
 
 
+def test_every_response_has_the_security_headers_and_the_pages_are_not_stored(client):
+    fixed = {"x-frame-options": "DENY", "content-security-policy": "frame-ancestors 'none'",
+             "x-content-type-options": "nosniff", "referrer-policy": "same-origin"}
+
+    def check(r, stored):
+        assert {k: r.headers.get(k) for k in fixed} == fixed, r.request.url
+        assert (r.headers.get("cache-control") == "no-store") is not stored, r.request.url
+
+    check(client.get("/login"), stored=False)                         # a page: not stored
+    check(client.get("/health"), stored=True)                         # JSON: the headers, no caching rule
+    check(client.get("/ui/static/app.css"), stored=True)              # static files keep their caching
+    _login(client)
+    check(client.get("/ui"), stored=False)
+    check(client.get("/ui/m/privat/mails?period=all"), stored=False)
+    check(client.get("/ui/nothing-here", headers={"Accept": "text/html"}), stored=False)  # the error page too
+    check(client.get("/ui/nothing-here"), stored=True)                # JSON error
+    check(client.post("/login", data={"password": "falsch"}), stored=False)
+
+
+def test_a_csrf_token_with_a_character_outside_ascii_is_refused_not_a_500(client):
+    c = _login(client)
+    html = c.get("/ui/m/privat/rules").text
+    for bad in ("ä", "tok\u20acen", "", "x" * 5000):
+        r = c.post("/ui/m/privat/rules", data={"csrf": bad, "rows": "0", "drows": "0"})
+        assert r.status_code == 403 and "Formular abgelaufen" in r.text
+        assert c.post("/logout", data={"csrf": bad}).status_code == 403
+    assert web.csrf_matches("abc", "abc") and not web.csrf_matches("abc", "abd") and not web.csrf_matches("", "")
+    assert not web.csrf_matches("ä", "abc") and not web.csrf_matches("abc", "")
+    # the real token still works
+    token = html.split('name="csrf" value="', 1)[1].split('"', 1)[0]
+    assert c.post("/logout", data={"csrf": token}, follow_redirects=False).status_code == 303
+
+
 def test_api_documentation_needs_the_login(client):
     for path in ("/docs", "/redoc", "/openapi.json"):
         r = client.get(path, follow_redirects=False)
