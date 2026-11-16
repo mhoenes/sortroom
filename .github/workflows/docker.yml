@@ -28,7 +28,8 @@ jobs:
           cache: pip
           cache-dependency-path: requirements*.txt
       - run: pip install -r requirements-dev.txt -c requirements-lock.txt
-      - run: python -m pytest -q
+      # the coverage figure (no threshold) shows in the job's log: paths no test touches stay visible
+      - run: python -m pytest -q --cov=email_sorter --cov-report=term-missing:skip-covered
       - name: lint (ruff)
         run: ruff check .
       - name: type check (mypy)

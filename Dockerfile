@@ -1,4 +1,6 @@
-FROM python:3.13-slim
+# The base image is pinned by digest, so a rebuild can't change what runs; Dependabot (.github/dependabot.yml) proposes
+# a new digest when the tag moves. (tini comes from this image's Debian release.)
+FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

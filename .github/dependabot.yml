@@ -1,4 +1,5 @@
-# Proposes updates of the GitHub Actions pinned in .github/workflows (a pull request a month at most).
+# Proposes updates of the GitHub Actions pinned in .github/workflows and of the Dockerfile's base image digest
+# (a pull request a month at most).
 # Python packages are pinned in requirements-lock.txt and updated by hand (see its header).
 version: 2
 updates:
@@ -9,3 +10,7 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly

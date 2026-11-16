@@ -111,8 +111,38 @@ def test_the_trash_is_found_by_its_special_use_first():
               SimpleNamespace(name="[Gmail]/Bin", delim="/", flags=("\\Trash",)),
               SimpleNamespace(name="[Gmail]/All Mail", delim="/", flags=("\\All",))]
     mb = SimpleNamespace(folder=SimpleNamespace(list=lambda *a: listed))
-    trash, protected = cleanup.trash_and_protected(mb, "INBOX")
+    trash, protected, ambiguous = cleanup.trash_and_protected(mb, "INBOX")
     assert trash == "[Gmail]/Bin" and {"INBOX", "Trash", "[Gmail]/Bin", "[Gmail]/All Mail"} <= protected
+    assert ambiguous == []
+
+
+def _trash_of(*names, delim="/"):
+    listed = [SimpleNamespace(name=n, delim=delim, flags=()) for n in names]
+    mb = SimpleNamespace(folder=SimpleNamespace(list=lambda *a: listed))
+    trash, _protected, ambiguous = cleanup.trash_and_protected(mb, "INBOX")
+    return trash, ambiguous
+
+
+def test_a_folder_of_your_own_called_trash_is_not_taken_for_the_trash():
+    # no \\Trash flag on the server: the top-level folder wins over a subfolder with the same name
+    assert _trash_of("INBOX", "Projekte/Papierkorb", "Trash") == ("Trash", [])
+    assert _trash_of("Projekte/Papierkorb", "Projekte", "Trash") == ("Trash", [])
+    # a server that keeps everything under INBOX: its trash is the shallowest one
+    assert _trash_of("INBOX", "INBOX.Trash", "INBOX.Projekte.Papierkorb", delim=".") == ("INBOX.Trash", [])
+    assert _trash_of("INBOX", "Drafts") == (None, [])
+
+
+def test_several_equally_likely_trash_folders_mean_no_trash():
+    assert _trash_of("INBOX", "Trash", "Papierkorb") == (None, ["Trash", "Papierkorb"])
+    assert _trash_of("INBOX", "Projekte/Trash", "Archiv/Papierkorb") == (None, ["Projekte/Trash", "Archiv/Papierkorb"])
+
+
+def test_with_two_trash_candidates_the_rules_do_not_run(tmp_path, mailbox):
+    mailbox.folders["Trash"] = []
+    mailbox.folder.list = lambda *a: [SimpleNamespace(name=n, delim="/", flags=()) for n in mailbox.folders]
+    result = cleanup.run_cleanup(_cfg(DeleteRule("INBOX/Promotions", 30)), CREDS, tmp_path, live=True, today=TODAY)
+    assert result["exit_code"] == 2 and result["moved"] == 0 and mailbox.keys("INBOX/Promotions") != []
+    assert "Trash" in result["summary"] and "Papierkorb" in result["summary"]
 
 
 def test_criteria_search_by_arrival_and_leave_starred_and_unread_alone():
