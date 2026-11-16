@@ -165,11 +165,9 @@ class RecheckRequest(BaseModel):
 
 @app.get("/health")
 def health() -> dict:
-    try:
-        busy = any(_busy(b) for b in load_mailboxes(BASE_DIR, CONFIG_PATH).values())
-    except ConfigError:
-        busy = False
-    return {"status": "ok", "busy": busy}
+    """For the container's health check: no login, so it says nothing but that the app answers (whether a mailbox
+    is busy is in /mailboxes)."""
+    return {"status": "ok"}
 
 
 @app.get("/mailboxes", dependencies=[Depends(_require_token)])

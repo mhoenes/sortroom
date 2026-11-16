@@ -36,19 +36,30 @@ def _leaf(name: str, delim: str | None) -> str:
     return (name.split(delim)[-1] if delim else name).lower()
 
 
-def trash_and_protected(mb: MailBox, source_folder: str) -> tuple[str | None, set[str]]:
-    """The server's trash folder (special-use \\Trash, else found by name), and the folders a rule
-    must not empty: the inbox, trash, spam, sent, drafts and views like Gmail's "All Mail"."""
+def trash_and_protected(mb: MailBox, source_folder: str) -> tuple[str | None, set[str], list[str]]:
+    """The server's trash folder (special-use \\Trash, else found by name), the folders a rule must not empty
+    (the inbox, trash, spam, sent, drafts and views like Gmail's "All Mail"), and the folders that could each be
+    the trash when the name alone doesn't say which (then there is no trash: a folder of your own such as
+    `Projekte/Papierkorb` must not be taken for it)."""
     folders = mb.folder.list()
     trash = next((f.name for f in folders if "\\trash" in {x.lower() for x in f.flags}), None)
+    ambiguous: list[str] = []
     if trash is None:
-        trash = next((f.name for f in folders if _leaf(f.name, f.delim) in TRASH_NAMES), None)
+        named = [f for f in folders if _leaf(f.name, f.delim) in TRASH_NAMES]
+        # the shallowest one: "INBOX.Trash" on a server that keeps everything under INBOX, never a subfolder of
+        # one's own; several equally shallow ones are a guess, so no guess
+        depth = min((f.name.count(f.delim) if f.delim else 0 for f in named), default=0)
+        top = [f.name for f in named if (f.name.count(f.delim) if f.delim else 0) == depth]
+        if len(top) == 1:
+            trash = top[0]
+        else:
+            ambiguous = top
     protected = {source_folder}
     for f in folders:
         flags = {x.lower() for x in f.flags}
         if flags & (SKIP_FLAGS | VIEW_FLAGS) or _leaf(f.name, f.delim) in SKIP_NAMES:
             protected.add(f.name)
-    return trash, protected
+    return trash, protected, ambiguous
 
 
 def criteria(rule: DeleteRule, today: date):
@@ -69,7 +80,14 @@ def run_cleanup(cfg: Config, creds: Credentials, base_dir: Path, live: bool, tod
     try:
         with connect(cfg, creds) as mb:
             delim = delimiter(mb)
-            trash, protected = trash_and_protected(mb, server_folder(cfg.source_folder, delim))
+            trash, protected, ambiguous = trash_and_protected(mb, server_folder(cfg.source_folder, delim))
+            if ambiguous:
+                log.error("several folders could be the trash (%s), so the deletion rules did not run; mark the "
+                          "right one as the trash in your mail program", ", ".join(ambiguous))
+                return {"ok": False, "live": live, "exit_code": 2, "moved": 0,
+                        "summary": _("Several folders could be the trash (%(folders)s), so the deletion rules did "
+                                     "not run. Mark the right one as the trash in your mail program.",
+                                     folders=", ".join(ambiguous))}
             if trash is None:
                 log.error("no trash folder found in this mailbox, so the deletion rules did not run")
                 return {"ok": False, "live": live, "exit_code": 2, "moved": 0,

@@ -14,6 +14,12 @@ select = ["E", "F", "W", "B", "UP"]
 "tests/*" = ["F401", "F811", "E501"]
 "tools/make_icons.py" = ["E501"]  # an SVG template
 
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+exclude_also = ["if __name__ == .__main__.:"]
+
 [tool.mypy]
 python_version = "3.13"
 files = ["email_sorter"]

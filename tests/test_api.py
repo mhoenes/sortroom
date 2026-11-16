@@ -58,7 +58,7 @@ def client(make_client):
 
 
 def test_health_needs_no_token(client):
-    assert client.get("/health").json() == {"status": "ok", "busy": False}
+    assert client.get("/health").json() == {"status": "ok"}
 
 
 def test_run_requires_valid_token(client):
@@ -102,8 +102,7 @@ def test_busy_mailbox_is_skipped_others_still_run(make_client):
         assert body["ok"] and body["results"]["privat"]["skipped"]
         assert c.calls == [("run", "gmail", True, None)]
         assert c.post("/run", headers=AUTH, json={"mailbox": "privat"}).status_code == 409
-        assert c.get("/health").json()["busy"] is True
-    assert c.get("/health").json()["busy"] is False  # released with its run
+    assert c.get("/mailboxes", headers=AUTH).json()[1]["busy"] is False  # released with its run
 
 
 def test_mailboxes_listing(make_client):
