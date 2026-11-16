@@ -12,6 +12,7 @@ from dataclasses import dataclass
 import requests
 
 from .expiry import WINDOWS
+from .runtime import sleep_unless_stopping, stopping
 
 log = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ class ClassifierOutage(ClassifierError):
 
 
 MAX_FAILURES_IN_A_ROW = 3
+STOP_REASON = "Sortroom is shutting down; the rest is left for the next run"
 
 
 @dataclass(frozen=True)
@@ -168,6 +170,9 @@ class ClassifierClient:
     def decide(self, state: dict, categories: dict[str, str]) -> Decision:
         if self.outage:
             raise ClassifierOutage(self.outage)
+        if stopping():  # what was classified is applied and logged; the rest follows in the next run
+            self.outage = STOP_REASON
+            raise ClassifierOutage(self.outage)
         payload = build_request(self.model, state, categories)
         last_error = ""
         for attempt in range(1, self.retries + 1):
@@ -195,7 +200,9 @@ class ClassifierClient:
             if attempt < self.retries:
                 delay = _retry_delay(r, attempt)
                 log.info("classifier request failed (%s), retrying in %.0fs", last_error, delay)
-                time.sleep(delay)
+                if sleep_unless_stopping(delay):
+                    self.outage = STOP_REASON
+                    raise ClassifierOutage(self.outage)
         self.failures_in_a_row += 1
         if self.failures_in_a_row >= MAX_FAILURES_IN_A_ROW:
             self.outage = (f"the classification endpoint failed for {self.failures_in_a_row} mails in a row "

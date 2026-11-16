@@ -19,3 +19,12 @@ def german_ui(monkeypatch):
     tests/test_i18n.py covers English and switching."""
     from email_sorter import i18n
     monkeypatch.setattr(i18n, "DEFAULT_LANGUAGE", "de")
+
+
+@pytest.fixture(autouse=True)
+def not_stopping():
+    """A test that stops the process (request_stop) must not stop the ones after it."""
+    from email_sorter import runtime
+    runtime.reset_stop()
+    yield
+    runtime.reset_stop()

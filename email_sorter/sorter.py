@@ -249,22 +249,32 @@ def apply(mb: MailBox, outcomes: list[Outcome], store: Store) -> int:
     for o in outcomes:
         if o.folder:
             by_folder[server_folder(o.folder, delim)].append(o)
+        else:  # stays in the inbox: nothing to move, so nothing to wait for
+            store.record(o)
 
-    failed: set[str] = set()
+    # A mail is recorded as soon as its chunk has moved, not after all of them: a run cut short in between (the
+    # container stopped, the connection lost) has logged what it did. Moved but not recorded, a mail would be
+    # missing from the Mails page, from Undo and from the correction rate, and nothing would bring it back.
     for folder, group in by_folder.items():
+        moved = 0
         try:
             ensure_folder(mb, folder)
-            for chunk in chunks([o.uid for o in group]):
-                move_uids(mb, chunk, folder)
-            log.info("moved %d mail(s) to %s", len(group), folder)
         except Exception as e:
             log.error("moving to %s failed, will retry next run: %s", folder, e)
             failures += len(group)
-            failed.update(o.key for o in group)
-
-    for o in outcomes:
-        if o.key not in failed:
-            store.record(o)
+            continue
+        for chunk in chunks(group):
+            try:
+                move_uids(mb, [o.uid for o in chunk], folder)
+            except Exception as e:
+                log.error("moving to %s failed, will retry next run: %s", folder, e)
+                failures += len(group) - moved
+                break
+            for o in chunk:
+                store.record(o)
+            moved += len(chunk)
+        if moved:
+            log.info("moved %d mail(s) to %s", moved, folder)
     return failures
 
 

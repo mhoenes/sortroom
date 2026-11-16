@@ -33,7 +33,8 @@ from . import __version__, i18n, jobs
 from .config import SECRETS_FILE, ConfigError, Mailbox, load_credentials, load_mailboxes
 from .i18n import _
 from .removal import MailboxBusy, delete_mailbox
-from .runtime import BASE_DIR, default_config_path, is_locked, setup_logging, single_instance
+from .runtime import (BASE_DIR, default_config_path, is_locked, request_stop, reset_stop, setup_logging,
+                      single_instance, wait_idle)
 from . import digest, notify
 from .scheduler import Scheduler, enabled_by_env
 from .sorter import run, run_backfill, run_recheck_expiry
@@ -52,8 +53,32 @@ def _mailboxes() -> dict[str, Mailbox]:
         raise HTTPException(500, f"configuration error: {e}") from None
 
 
+SHUTDOWN_WAIT = 25  # seconds a stopping container waits for runs; docker-compose.yml gives it 30 (stop_grace_period)
+
+
+def _stop_runs() -> None:
+    """On shutdown: tell the runs to stop asking the model and give them time to apply and log what they have
+    (a run cut off between moving mail and logging it leaves the mail out of the log). A container stopped with
+    the default 10 seconds of docker stop is killed before the wait is over, which only costs that time."""
+    request_stop()
+    try:
+        boxes = list(load_mailboxes(BASE_DIR, CONFIG_PATH).values())
+    except ConfigError:
+        return
+    busy = [b.id for b in boxes if _busy(b)]
+    if not busy:
+        return
+    log.info("shutting down: waiting up to %d s for %s to finish what they have", SHUTDOWN_WAIT, ", ".join(busy))
+    if wait_idle([b.lock_path for b in boxes], SHUTDOWN_WAIT):
+        log.info("shutting down: the runs are done")
+    else:
+        log.warning("shutting down: %s still running after %d s; mail moved but not logged yet is left for a reconcile",
+                    ", ".join(b.id for b in boxes if _busy(b)), SHUTDOWN_WAIT)
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
+    reset_stop()
     try:
         boxes = list(load_mailboxes(BASE_DIR, CONFIG_PATH).values())
     except ConfigError:
@@ -64,6 +89,7 @@ async def _lifespan(app: FastAPI):
         app.state.scheduler.start()
     yield
     app.state.scheduler.stop()
+    _stop_runs()
 
 
 # the API documentation is served below, only after logging in to the admin UI

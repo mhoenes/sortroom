@@ -32,7 +32,7 @@ def connect(cfg: Config, creds: Credentials):
         yield mb
 
 
-def chunks(items: list[str], size: int | None = None):
+def chunks(items: list, size: int | None = None) -> Iterator[list]:
     size = size or UID_CHUNK
     for i in range(0, len(items), size):
         yield items[i:i + size]
