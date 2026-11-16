@@ -308,3 +308,27 @@ def test_a_failing_step_changes_nothing_and_a_newer_log_is_refused(tmp_path, mon
     monkeypatch.undo()
     with pytest.raises(RuntimeError, match="newer Sortroom"):
         store_mod.Store(path)
+
+
+def test_the_log_has_indexes_the_pages_queries_use(tmp_path):
+    """The sidebar's counts and the lists by period must not read the whole table (see the migration's comment).
+    A query plan names the index when it is used; one that says SCAN would be a pass over every mail."""
+    from email_sorter.store import Store
+    from email_sorter.web import queries
+
+    Store(tmp_path / "data" / "state.db").close()
+    db = queries.connect(tmp_path)
+
+    def plan(sql, *args):
+        return " ".join(r[3] for r in db.execute("EXPLAIN QUERY PLAN " + sql, args))
+
+    names = {r[1] for r in db.execute("PRAGMA index_list(processed)")}
+    assert {"processed_received", "processed_at", "processed_moved_to", "processed_open"} <= names
+    # the mails to review: only the few that are still in the inbox, by date
+    assert "processed_open" in plan("SELECT COUNT(*) FROM processed WHERE moved_to IS NULL AND confidence < ? AND gone = 0 "
+                                    f"AND {queries.RECEIVED} >= julianday(?)", 0.7, "2026-01-01")
+    assert "processed_received" in plan(f"SELECT COUNT(*) FROM processed WHERE flagged = 1 AND {queries.RECEIVED} >= julianday(?)", "2026-01-01")
+    assert "processed_received" in plan(f"SELECT * FROM processed WHERE {queries.RECEIVED} >= julianday(?) ORDER BY {queries.RECEIVED} DESC LIMIT 50", "2026-01-01")
+    assert "processed_at" in plan("SELECT COUNT(*) FROM processed WHERE processed_at >= ?", "2026-01-01")
+    assert "processed_moved_to" in plan("SELECT DISTINCT moved_to FROM processed WHERE moved_to IS NOT NULL")
+    db.close()
